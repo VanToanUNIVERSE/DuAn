@@ -14,5 +14,18 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect('/suggest');
+});
+
+Route::get('/suggest', function () {
+    $subjects = App\Models\Subject::with(['subjectType', 'subjectGroup', 'semester'])
+        ->get()
+        ->groupBy(function ($subject) {
+            return $subject->semester?->name ?? 'Môn khác';
+        });
+
+    $academicYears = App\Models\TrainingProgram::distinct()->pluck('academic_year')->toArray();
+    $programTypes = App\Models\TrainingProgram::distinct()->pluck('program_type')->toArray();
+
+    return view('suggest', compact('subjects', 'academicYears', 'programTypes'));
 });
