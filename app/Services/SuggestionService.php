@@ -15,7 +15,7 @@ class SuggestionService
             ->pluck('subject_id')
             ->toArray();
 
-        $subjects = Subject::whereNotIn('id', $passedSubjects)->get();
+        $subjects = Subject::with('semester')->whereNotIn('id', $passedSubjects)->get();
         $suggestions = [];
         foreach ($subjects as $subject) {
             //lấy danh sách môn tiên quyết của môn học hiện tại
@@ -40,8 +40,8 @@ class SuggestionService
         }
         usort($suggestions, function ($a, $b) use ($currentSemester) {
             // 1. Tính khoảng cách học kỳ của từng môn so với học kỳ hiện tại
-            $distanceA = abs($a->subject_semester_id - $currentSemester);
-            $distanceB = abs($b->subject_semester_id - $currentSemester);
+            $distanceA = abs(($a->semester?->name ?? 1) - $currentSemester);
+            $distanceB = abs(($b->semester?->name ?? 1) - $currentSemester);
             // 2. So sánh khoảng cách bằng if - else
             if ($distanceA == $distanceB) {
                 return 0; // Nếu khoảng cách bằng nhau, giữ nguyên vị trí
