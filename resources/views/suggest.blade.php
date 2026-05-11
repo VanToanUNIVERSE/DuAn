@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gợi Ý Đăng Ký Môn Học - Hỗ Trợ Học Tập</title>
+    {{-- CSRF token cho các request POST từ JavaScript (fetch API) --}}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -719,12 +721,100 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+
+        /* ── Save indicator (góc trên bên phải ô nhập điểm) ── */
+        .save-indicator {
+            position: fixed;
+            top: 1rem;
+            right: 1.5rem;
+            z-index: 9998;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.4rem 0.9rem;
+            border-radius: 8px;
+            display: none;           /* ẩn mặc định */
+            align-items: center;
+            gap: 0.4rem;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.3s;
+        }
+        .save-indicator.saving {
+            display: flex;
+            background: rgba(99,102,241,0.18);
+            border: 1px solid rgba(99,102,241,0.4);
+            color: #a5b4fc;
+        }
+        .save-indicator.saved {
+            display: flex;
+            background: rgba(16,185,129,0.15);
+            border: 1px solid rgba(16,185,129,0.35);
+            color: #6ee7b7;
+        }
+        .save-indicator.error {
+            display: flex;
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #fca5a5;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
+<div style="
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: .65rem 1.25rem;
+    margin-bottom: 1.5rem;
+    backdrop-filter: blur(12px);
+">
+    <div style="display:flex; align-items:center; gap:.65rem;">
+        <div style="
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #7c6af7, #a855f7);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem;
+            box-shadow: 0 2px 10px rgba(124,106,247,.4);
+        ">👤</div>
+        <div>
+            <div style="font-size:.88rem; font-weight:600; color:#f1f1f5;">
+                {{ Auth::user()->fullName ?? Auth::user()->username }}
+            </div>
+            <div style="font-size:.75rem; color:rgba(241,241,245,.5);">
+                MSSV: {{ Auth::user()->student_code ?? '—' }} &nbsp;|&nbsp; {{ Auth::user()->email }}
+            </div>
+        </div>
+    </div>
+    <form method="POST" action="{{ route('logout') }}">
+        @csrf
+        <button type="submit" style="
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            background: rgba(239,68,68,.1);
+            border: 1px solid rgba(239,68,68,.3);
+            color: #f87171;
+            border-radius: 8px;
+            padding: .45rem .9rem;
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        " onmouseover="this.style.background='rgba(239,68,68,.22)'"
+           onmouseout="this.style.background='rgba(239,68,68,.1)'">
+            🚪 Đăng xuất
+        </button>
+    </form>
+</div>
+
     <header>
+
         <div class="logo-badge">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
               <path d="M2.5.5A.5.5 0 0 1 3 0h10a.5.5 0 0 1 .5.5c0 .538-.012 1.05-.034 1.536a3 3 0 1 1-1.133 5.89c-.011.121-.011.234-.011.33v3.244c0 .852-.149 1.658-.439 2.4H3.083c-.29-.742-.439-1.548-.439-2.4V7.926c0-.096 0-.21-.012-.33a3 3 0 1 1-1.132-5.89A35 35 0 0 1 2.5.5zm0 1.25C2.41 2.347 2.33 3.012 2.3 3.652a2 2 0 1 0 1.95 0c-.03-.64-.11-1.305-.182-1.902h-1.57zm11 0h-1.57c.072.597.152 1.262.182 1.902A2 2 0 1 0 13.7 3.652c-.03-.64-.11-1.305-.2-2.402z"/>
@@ -895,12 +985,220 @@
     </div>
 </div>
 
+{{-- Indicator DOM element — hiển thị trạng thái lưu điểm --}}
+<div class="save-indicator" id="save-indicator"></div>
+
 <script>
     // ─── State ──────────────────────────────────────────────────────────────────
-    let fetchTimer = null;
-    let currentCourses = [];
-    let syncLock = false; // Tránh vòng lặp sync vô hạn
+    let fetchTimer  = null;          // Timer debounce cho gọi API gợi ý
+    let saveTimer   = null;          // Timer debounce cho auto-save điểm
+    let currentCourses = [];         // Danh sách môn đang học kỳ này
+    let syncLock    = false;         // Tránh vòng lặp sync vô hạn
     const TOTAL_CREDITS = {{ $totalCredits }}; // Tổng tín chỉ toàn chương trình
+
+    // ─── CSRF token lấy từ <meta> tag, dùng cho mọi POST request ─────────────
+    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+    // =========================================================================
+    // PHẦN LƯU / TẢI ĐIỂM TỪ DATABASE
+    // =========================================================================
+
+    // =========================================================================
+    // PHẦN LƯU / TẢI CẤU HÌNH CHƯƠNG TRÌNH (DROPDOWN)
+    // =========================================================================
+
+    /** Timer debounce riêng cho việc lưu cấu hình (tách biệt với saveTimer của điểm) */
+    let prefTimer = null;
+
+    /**
+     * Lưu cấu hình chương trình hiện tại lên server (debounce 500ms).
+     * Lấy giá trị từ các dropdown trên trang và gửi POST tới /preferences/save.
+     */
+    function savePreferences() {
+        clearTimeout(prefTimer);
+        prefTimer = setTimeout(async () => {
+            try {
+                const payload = {
+                    academic_year:    document.getElementById('academic_year').value,
+                    program_type:     document.getElementById('program_type').value,
+                    current_semester: parseInt(document.getElementById('target_semester').value),
+                    target_years:     parseInt(document.getElementById('target_years').value),
+                };
+                const res = await fetch('/preferences/save', {
+                    method:  'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF_TOKEN,
+                        'Accept':       'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                // Lưu thành công — hiển thị indicator ngắn 1.5s
+                showSaveIndicator('saved', 'Đã lưu cấu hình ✓');
+            } catch (err) {
+                console.error('[Preference save error]', err);
+                showSaveIndicator('error', 'Lưu cấu hình thất bại');
+            }
+        }, 500); // Debounce 500ms — ngắn hơn điểm vì thao tác đơn giản hơn
+    }
+
+    /**
+     * Tải cấu hình đã lưu từ server và áp dụng vào các dropdown.
+     * Được gọi khi trang load lần đầu.
+     * Nếu server trả null (chưa từng lưu) thì giữ nguyên giá trị mặc định của dropdown.
+     */
+    async function loadPreferences() {
+        try {
+            const res = await fetch('/preferences', {
+                headers: { 'Accept': 'application/json' },
+            });
+            if (!res.ok) return; // Chưa đăng nhập hoặc lỗi → giữ default
+
+            const prefs = await res.json();
+            // Áp dụng từng giá trị nếu đã có dữ liệu (không ghi đè nếu null)
+            if (prefs.academic_year)    document.getElementById('academic_year').value    = prefs.academic_year;
+            if (prefs.program_type)     document.getElementById('program_type').value     = prefs.program_type;
+            if (prefs.current_semester) document.getElementById('target_semester').value  = prefs.current_semester;
+            if (prefs.target_years)     document.getElementById('target_years').value     = prefs.target_years;
+
+            // Cập nhật thống kê và gợi ý lại theo cấu hình vừa khôi phục
+            updateCreditStats();
+            fetchSuggestions();
+        } catch (err) {
+            console.warn('[Preference load error]', err);
+        }
+    }
+    /**
+     * Hiển thị indicator trạng thái lưu điểm ở góc trên phải màn hình.
+     * @param {'saving'|'saved'|'error'|'hide'} state
+     * @param {string} [msg] — nội dung hiển thị (tùy chọn)
+     */
+    function showSaveIndicator(state, msg) {
+        const el = document.getElementById('save-indicator');
+        if (!el) return;
+        el.className = 'save-indicator'; // reset
+        if (state === 'hide') { el.style.display = 'none'; return; }
+
+        const icons = { saving: '💾', saved: '✓', error: '⚠️' };
+        const texts = {
+            saving: 'Đang lưu...',
+            saved:  'Đã lưu',
+            error:  'Lưu thất bại',
+        };
+        el.classList.add(state);
+        el.textContent = `${icons[state]} ${msg || texts[state]}`;
+
+        // Tự ẩn sau 2.5 giây nếu đã lưu thành công
+        if (state === 'saved') {
+            setTimeout(() => showSaveIndicator('hide'), 2500);
+        }
+    }
+
+    /**
+     * Auto-save điểm của MỘT môn học lên server (debounce 800ms).  
+     * Được gọi mỗi khi người dùng thay đổi ô nhập điểm.
+     * @param {number} subjectId — ID môn học
+     * @param {number|null} grade  — Điểm (null nếu xóa trắng)
+     */
+    function autoSaveGrade(subjectId, grade) {
+        // Hủy timer cũ (nếu user đang gõ liên tục)
+        clearTimeout(saveTimer);
+
+        showSaveIndicator('saving');
+
+        saveTimer = setTimeout(async () => {
+            try {
+                // Gửi POST tới /grades/save (web route, có session + CSRF)
+                const res = await fetch('/grades/save', {
+                    method:  'POST',
+                    headers: {
+                        'Content-Type':  'application/json',
+                        'X-CSRF-TOKEN':  CSRF_TOKEN,  // Bắt buộc cho session auth
+                        'Accept':        'application/json',
+                    },
+                    // Body là mảng để tương thích với endpoint nhận nhiều điểm cùng lúc
+                    body: JSON.stringify([{ subject_id: subjectId, grade: grade }]),
+                });
+
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                showSaveIndicator('saved');
+            } catch (err) {
+                console.error('[Grade save error]', err);
+                showSaveIndicator('error');
+            }
+        }, 800); // Debounce 800ms — tránh spam server khi user đang gõ
+    }
+
+    /**
+     * Lưu nhiều điểm cùng lúc lên server (dùng khi "Hoàn tất học kỳ").  
+     * Không debounce — gửi ngay lập tức.
+     * @param {Array<{subject_id: number, grade: number|null}>} grades
+     * @returns {Promise<void>}
+     */
+    async function saveMultipleGrades(grades) {
+        if (!grades || grades.length === 0) return;
+
+        showSaveIndicator('saving', `Đang lưu ${grades.length} môn...`);
+        try {
+            // Đổi sang /grades/save (web route) thay vì /api/grades/save (api route)
+            const res = await fetch('/grades/save', {
+                method:  'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF_TOKEN,
+                    'Accept':       'application/json',
+                },
+                body: JSON.stringify(grades),
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            showSaveIndicator('saved', `Đã lưu ${grades.length} môn ✓`);
+        } catch (err) {
+            console.error('[Batch grade save error]', err);
+            showSaveIndicator('error', 'Lưu điểm thất bại — kiểm tra kết nối');
+        }
+    }
+
+    /**
+     * Tải toàn bộ điểm đã lưu của user từ database khi trang load.  
+     * Điền vào các ô input và cập nhật trạng thái UI (class pass/fail, label).
+     */
+    async function loadGradesFromDB() {
+        try {
+            // Gọi /grades (web route) thay vì /api/grades (api route thiếu session)
+            const res = await fetch('/grades', {
+                headers: { 'Accept': 'application/json' },
+            });
+
+            if (!res.ok) {
+                // 401 = chưa đăng nhập → bỏ qua, không cần log lỗi
+                if (res.status !== 401) console.warn('[Grade load] HTTP', res.status);
+                return;
+            }
+
+            const grades = await res.json(); // [{ subject_id, grade, status }, ...]
+
+            // Điền điểm vào từng ô input tương ứng và trigger cập nhật UI
+            grades.forEach(({ subject_id, grade }) => {
+                const input = document.getElementById(`grade-${subject_id}`);
+                if (!input) return; // Môn không hiển thị trên trang này → bỏ qua
+
+                if (grade !== null && grade !== undefined) {
+                    input.value = grade;
+                    // Gọi hàm cập nhật UI (class, status label) — không trigger auto-save
+                    onGradeChange(subject_id, input, /* skipSave= */ true);
+                }
+            });
+
+            // Cập nhật lại thống kê tín chỉ sau khi đã điền hết điểm
+            updateEarnedCredits();
+
+        } catch (err) {
+            // Lỗi mạng hoặc parse JSON — không hiển thị cho user, chỉ log
+            console.warn('[Grade load error]', err);
+        }
+    }
 
     // ─── Tính toán và cập nhật thống kê tín chỉ ─────────────────────────────────
     function updateCreditStats() {
@@ -940,14 +1238,18 @@
         document.getElementById('stat-credits-per-sem').textContent = perSem;
     }
 
-    // ─── Nhập điểm ở bảng LỊCH SỬ (cột trái) ───────────────────────────────────
-    function onGradeChange(id, input) {
+    // ─── Nhập điểm ở bảng LỊCH SỬ (cột trái) ────────────────────────────────────
+    // skipSave: true khi hàm được gọi nội bộ (vd: loadGradesFromDB) — không auto-save
+    function onGradeChange(id, input, skipSave = false) {
         const card   = document.getElementById(`lbl-sub-${id}`);
         const status = document.getElementById(`status-${id}`);
         const val    = parseFloat(input.value);
+
+        // Cập nhật class CSS của card và input
         card.classList.remove('pass','fail');
         input.classList.remove('is-pass','is-fail');
         status.classList.remove('pass','fail','empty');
+
         if (input.value === '' || isNaN(val)) {
             status.textContent = 'Chưa nhập'; status.classList.add('empty');
         } else if (val > 5.0) {
@@ -957,6 +1259,7 @@
             card.classList.add('fail'); input.classList.add('is-fail');
             status.textContent = '✗ Fail'; status.classList.add('fail');
         }
+
         // Đồng bộ sang panel Môn Đang Học nếu môn đó có mặt
         if (!syncLock) {
             syncLock = true;
@@ -967,6 +1270,13 @@
             }
             syncLock = false;
         }
+
+        // Auto-save điểm lên database (trừ khi được gọi từ nội bộ, vd: loadGradesFromDB)
+        if (!skipSave) {
+            const gradeValue = isNaN(val) ? null : val;
+            autoSaveGrade(id, gradeValue); // debounce 800ms
+        }
+
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(fetchSuggestions, 400);
         updateEarnedCredits();
@@ -1242,10 +1552,18 @@
                 const badge = wrap.querySelector('.studying-label');
                 if (badge) badge.remove();
             }
-            // Ghi điểm và cập nhật UI cột trái
+            // Ghi điểm và cập nhật UI cột trái (skipSave=true vì sẽ lưu hàng loạt bên dưới)
             input.value = grade;
-            onGradeChange(id, input);
+            onGradeChange(id, input, /* skipSave= */ true);
         });
+
+        // 3b. Lưu toàn bộ điểm của kỳ vừa hoàn tất vào database một lần duy nhất
+        //     (hiệu quả hơn gọi autoSaveGrade nhiều lần, tránh spam N requests)
+        const gradesToSave = snapshot.map(({ id, grade }) => ({
+            subject_id: id,
+            grade:      grade,
+        }));
+        saveMultipleGrades(gradesToSave); // async — không block UI
 
         // 4. Tăng học kỳ hiện tại +1
         const sel = document.getElementById('target_semester');
@@ -1274,15 +1592,40 @@
     }
 
     // ─── Event Listeners ────────────────────────────────────────────────────────
-    document.getElementById('academic_year').addEventListener('change', fetchSuggestions);
-    document.getElementById('program_type').addEventListener('change', fetchSuggestions);
+    // LUỔNG LƯU KHI ĐỔI DROPDOWN:
+    //   clearTimeout(saveTimer) — hủy grade auto-save đang chờ (tránh conflict)
+    //   savePreferences()      — debounce 500ms, lưu cấu hình lên DB
+    document.getElementById('academic_year').addEventListener('change', () => {
+        clearTimeout(saveTimer);    // Hủy grade auto-save đang chờ
+        showSaveIndicator('hide');
+        savePreferences();          // Lưu cấu hình mới
+        fetchSuggestions();
+    });
+    document.getElementById('program_type').addEventListener('change', () => {
+        clearTimeout(saveTimer);
+        showSaveIndicator('hide');
+        savePreferences();
+        fetchSuggestions();
+    });
     document.getElementById('target_semester').addEventListener('change', () => {
+        clearTimeout(saveTimer);
+        showSaveIndicator('hide');
+        savePreferences();
         updateEarnedCredits();
         fetchSuggestions();
     });
-    document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('target_years').addEventListener('change', () => {
+        clearTimeout(saveTimer);
+        showSaveIndicator('hide');
+        savePreferences();          // Lưu mục tiêu tốt nghiệp mới
         updateCreditStats();
-        fetchSuggestions();
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+        // Bước 1: Cập nhật thống kê với giá trị mặc định của dropdown
+        updateCreditStats();
+        // Bước 2: Tải cấu hình đã lưu (sẽ gọi fetchSuggestions + updateCreditStats lại bên trong)
+        // Tải cấu hình trước, sau đó mới tải điểm (vì điểm cần suggestion đã render xong)
+        loadPreferences().then(() => loadGradesFromDB());
     });
 </script>
 
