@@ -24,8 +24,10 @@ Route::get('/suggest', function () {
             return $subject->semester?->name ?? 'Môn khác';
         });
 
+    $totalCredits = App\Models\Subject::sum('credits');
     $academicYears = App\Models\TrainingProgram::distinct()->pluck('academic_year')->toArray();
     $programTypes = App\Models\TrainingProgram::distinct()->pluck('program_type')->toArray();
 
-    return view('suggest', compact('subjects', 'academicYears', 'programTypes'));
+    return view('suggest', compact('subjects', 'academicYears', 'programTypes', 'totalCredits'));
 });
+
