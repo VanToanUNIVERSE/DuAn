@@ -1019,7 +1019,79 @@
             to   { opacity: 1; transform: translateX(0); }
         }
         .ob-step-anim { animation: obFadeStep .3s ease-out; }
+
+        /* ═══════════════════════════════════════════════════════════
+           GRADE CHART CARD
+        ═══════════════════════════════════════════════════════════ */
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 320px;
+        }
+        .chart-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+            font-size: .92rem;
+            gap: .75rem;
+            min-height: 200px;
+        }
+        .chart-empty-icon { font-size: 2.5rem; }
+        .chart-legend {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+            margin-top: .75rem;
+            padding-top: .75rem;
+            border-top: 1px solid rgba(255,255,255,.06);
+        }
+        .chart-legend-item {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            font-size: .78rem;
+            color: var(--text-secondary);
+        }
+        .chart-legend-dot {
+            width: 12px; height: 12px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .chart-sem-filter {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .chart-sem-btn {
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.1);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            padding: .25rem .65rem;
+            font-size: .75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .chart-sem-btn:hover { background: rgba(99,102,241,.15); color: #a5b4fc; border-color: rgba(99,102,241,.4); }
+        .chart-sem-btn.active { background: rgba(99,102,241,.2); color: #fff; border-color: var(--primary); }
+        .chart-peer-info {
+            font-size: .75rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: .3rem;
+            margin-left: auto;
+        }
     </style>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1268,6 +1340,44 @@
                 </h2>
                 <div id="current-courses-list">
                     <div class="current-courses-empty">Chưa có môn nào — nhấn <strong>+ Thêm</strong> trên các môn gợi ý bên trên.</div>
+                </div>
+            </div>
+
+            {{-- Card: Biểu đồ điểm --}}
+            <div class="glass-card" id="chart-card">
+                <h2 class="card-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+                    </svg>
+                    Biểu Đồ Điểm Cá Nhân
+                    <span class="chart-peer-info" id="chart-peer-label"></span>
+                </h2>
+
+                <div class="chart-sem-filter" id="chart-sem-filter">
+                    <button class="chart-sem-btn active" data-sem="all" onclick="filterChartSem('all', this)">Tất cả HK</button>
+                </div>
+
+                <div class="chart-wrapper">
+                    <div class="chart-empty" id="chart-empty">
+                        <span class="chart-empty-icon">📊</span>
+                        <p>Nhập điểm môn học để xem biểu đồ so sánh với sinh viên cùng khóa</p>
+                    </div>
+                    <canvas id="gradeChart" style="display:none;"></canvas>
+                </div>
+
+                <div class="chart-legend" id="chart-legend" style="display:none;">
+                    <div class="chart-legend-item">
+                        <div class="chart-legend-dot" style="background:linear-gradient(135deg,#6366f1,#a855f7);"></div>
+                        Điểm của bạn
+                    </div>
+                    <div class="chart-legend-item">
+                        <div class="chart-legend-dot" style="background:rgba(245,158,11,.85);border-radius:50%;"></div>
+                        Điểm TB cùng khóa
+                    </div>
+                    <div class="chart-legend-item">
+                        <div class="chart-legend-dot" style="background:#ef4444;border-radius:50%;"></div>
+                        Ngưỡng Pass (5.0)
+                    </div>
                 </div>
             </div>
         </div>
@@ -1775,6 +1885,7 @@
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 showSaveIndicator('saved');
+                scheduleChartRefresh(); // Cập nhật biểu đồ sau 2s
             } catch (err) { showSaveIndicator('error'); }
         }, 800);
     }
@@ -2178,8 +2289,220 @@
             updateCreditStats();
             await loadGradesFromDB();
             fetchSuggestions();
+            fetchChartData();   // Tải biểu đồ sau khi có điểm
         }
     });
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// GRADE CHART (Chart.js)
+// ═══════════════════════════════════════════════════════════════
+let gradeChartInstance = null;
+let chartRawData = null;    // lưu data gốc để filter theo HK
+let chartTimer = null;
+
+async function fetchChartData() {
+    try {
+        const res = await fetch('/grades/chart-data', { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;
+        chartRawData = await res.json();
+        buildChartSemFilter(chartRawData.semesters);
+        renderGradeChart(chartRawData, 'all');
+    } catch (err) {
+        console.warn('[Chart error]', err);
+    }
+}
+
+function buildChartSemFilter(semesters) {
+    const uniqueSems = [...new Set(semesters)].sort((a, b) => parseInt(a) - parseInt(b));
+    const container = document.getElementById('chart-sem-filter');
+    if (!container) return;
+    // Xóa cũ (chỉ giữ nút "Tất cả")
+    container.innerHTML = '<button class="chart-sem-btn active" data-sem="all" onclick="filterChartSem(\'all\', this)">Tất cả HK</button>';
+    uniqueSems.forEach(sem => {
+        const btn = document.createElement('button');
+        btn.className = 'chart-sem-btn';
+        btn.dataset.sem = sem;
+        btn.textContent = `HK ${sem}`;
+        btn.onclick = function() { filterChartSem(sem, this); };
+        container.appendChild(btn);
+    });
+}
+
+function filterChartSem(sem, btn) {
+    document.querySelectorAll('.chart-sem-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (chartRawData) renderGradeChart(chartRawData, sem);
+}
+
+function renderGradeChart(data, semFilter = 'all') {
+    const { labels, my_grades, avg_grades, semesters, academic_year, peer_count } = data;
+
+    // Filter theo học kỳ nếu cần
+    let idxs = labels.map((_, i) => i);
+    if (semFilter !== 'all') {
+        idxs = idxs.filter(i => String(semesters[i]) === String(semFilter));
+    }
+
+    const filteredLabels   = idxs.map(i => labels[i]);
+    const filteredMy       = idxs.map(i => my_grades[i]);
+    const filteredAvg      = idxs.map(i => avg_grades[i]);
+
+    const emptyEl  = document.getElementById('chart-empty');
+    const canvas   = document.getElementById('gradeChart');
+    const legendEl = document.getElementById('chart-legend');
+    const peerEl   = document.getElementById('chart-peer-label');
+
+    if (!filteredLabels.length) {
+        emptyEl.style.display = 'flex';
+        canvas.style.display  = 'none';
+        if (legendEl) legendEl.style.display = 'none';
+        return;
+    }
+
+    emptyEl.style.display  = 'none';
+    canvas.style.display   = 'block';
+    if (legendEl) legendEl.style.display = 'flex';
+
+    // Peer info label
+    if (peerEl) {
+        if (peer_count > 1) {
+            peerEl.innerHTML = `👥 So sánh với <strong style="color:#fff">${peer_count}</strong> SV cùng khóa ${academic_year || ''}`;
+        } else {
+            peerEl.innerHTML = '<span style="color:rgba(255,255,255,.3)">Chưa có dữ liệu khóa khác</span>';
+        }
+    }
+
+    // Màu cột theo pass/fail
+    const barColors = filteredMy.map(v =>
+        v === null ? 'rgba(255,255,255,0.1)'
+        : v > 5.0  ? 'rgba(99,102,241,0.85)'
+        :            'rgba(239,68,68,0.8)'
+    );
+    const borderColors = filteredMy.map(v =>
+        v === null ? 'rgba(255,255,255,0.2)'
+        : v > 5.0  ? 'rgba(167,139,250,1)'
+        :            'rgba(252,165,165,1)'
+    );
+
+    // Destroy cũ trước khi render mới
+    if (gradeChartInstance) { gradeChartInstance.destroy(); gradeChartInstance = null; }
+
+    const ctx = canvas.getContext('2d');
+
+    // Gradient cho cột pass
+    const gradPass = ctx.createLinearGradient(0, 0, 0, 400);
+    gradPass.addColorStop(0, 'rgba(139,92,246,0.95)');
+    gradPass.addColorStop(1, 'rgba(99,102,241,0.6)');
+
+    const gradFail = ctx.createLinearGradient(0, 0, 0, 400);
+    gradFail.addColorStop(0, 'rgba(239,68,68,0.9)');
+    gradFail.addColorStop(1, 'rgba(239,68,68,0.4)');
+
+    const barBg = filteredMy.map(v => v > 5.0 ? gradPass : gradFail);
+
+    gradeChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: filteredLabels.map(l => l.length > 20 ? l.substring(0, 18) + '…' : l),
+            datasets: [
+                {
+                    label: 'Điểm của bạn',
+                    data: filteredMy,
+                    backgroundColor: barBg,
+                    borderColor: borderColors,
+                    borderWidth: 1.5,
+                    borderRadius: 6,
+                    borderSkipped: false,
+                    order: 2,
+                },
+                {
+                    label: 'Điểm TB cùng khóa',
+                    data: filteredAvg,
+                    type: 'line',
+                    borderColor: 'rgba(245,158,11,0.9)',
+                    backgroundColor: 'rgba(245,158,11,0.1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(245,158,11,1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    tension: 0.3,
+                    fill: false,
+                    order: 1,
+                    spanGaps: true,
+                },
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 600, easing: 'easeInOutQuart' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(10,14,30,0.95)',
+                    borderColor: 'rgba(99,102,241,0.4)',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        title: (items) => filteredLabels[items[0].dataIndex],
+                        label: (item) => {
+                            if (item.dataset.label === 'Điểm của bạn') {
+                                const v = item.raw;
+                                return v === null ? '  Chưa nhập' : `  Của bạn: ${v} ${v > 5 ? '✓ Pass' : '✗ Fail'}`;
+                            }
+                            return item.raw !== null ? `  TB khóa: ${item.raw}` : '  Chưa có dữ liệu TB';
+                        },
+                        afterBody: (items) => {
+                            const idx = items[0].dataIndex;
+                            const sem = semFilter === 'all' ? semesters[idxs[idx]] : semFilter;
+                            return [`  Học kỳ chuẩn: ${sem}`];
+                        },
+                    }
+                },
+                // Đường ngang ngưỡng Pass 5.0
+                annotation: undefined,
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: 'rgba(255,255,255,0.5)',
+                        font: { size: 10 },
+                        maxRotation: 40,
+                    },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    border: { color: 'rgba(255,255,255,0.08)' },
+                },
+                y: {
+                    min: 0, max: 10,
+                    ticks: {
+                        color: 'rgba(255,255,255,0.5)',
+                        font: { size: 11 },
+                        stepSize: 1,
+                        callback: (v) => v === 5 ? '5 ⚡' : v,
+                    },
+                    grid: {
+                        color: (ctx) => ctx.tick.value === 5
+                            ? 'rgba(239,68,68,0.5)'
+                            : 'rgba(255,255,255,0.05)',
+                        lineWidth: (ctx) => ctx.tick.value === 5 ? 2 : 1,
+                    },
+                    border: { color: 'rgba(255,255,255,0.08)' },
+                }
+            }
+        }
+    });
+}
+
+// Re-fetch chart sau khi nhập điểm xong (debounce 2s để không spam)
+let chartFetchTimer = null;
+function scheduleChartRefresh() {
+    clearTimeout(chartFetchTimer);
+    chartFetchTimer = setTimeout(fetchChartData, 2000);
+}
 </script>
 
 </body>

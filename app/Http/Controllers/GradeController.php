@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\UserGrade;
+use App\Models\User;
+use App\Models\Subject;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class GradeController extends Controller
 {
@@ -84,5 +87,79 @@ class GradeController extends Controller
         }
 
         return response()->json(['message' => 'Đã lưu thành công', 'count' => count($validated)]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /grades/chart-data
+    // Trả về dữ liệu cho biểu đồ cột so sánh điểm cá nhân vs. điểm TB cùng khóa.
+    //
+    // Response JSON:
+    // {
+    //   "labels":     ["Tên môn 1", ...],
+    //   "my_grades":  [8.5, null, 7.0, ...],        // null = chưa nhập
+    //   "avg_grades": [6.2, 5.8, 7.1, ...],         // TB tất cả SV cùng niên khóa
+    //   "semesters":  ["1", "1", "2", ...]           // học kỳ chuẩn
+    // }
+    // ─────────────────────────────────────────────────────────────────────────
+    public function chartData()
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        // Niên khóa của user (dùng để lọc "cùng khóa")
+        $academicYear = $user->pref_academic_year;
+
+        // Lấy tất cả môn học kèm học kỳ
+        $subjects = Subject::with('semester')->orderBy('id')->get();
+
+        // Điểm của user hiện tại (indexed by subject_id)
+        $myGradesRaw = UserGrade::where('user_id', $user->id)
+            ->whereNotNull('grade')
+            ->pluck('grade', 'subject_id');
+
+        // Điểm TB của SV cùng niên khóa cho mỗi môn
+        // → JOIN user_grades với users, lọc theo pref_academic_year
+        $peerAvgRaw = DB::table('user_grades')
+            ->join('users', 'user_grades.user_id', '=', 'users.id')
+            ->whereNotNull('user_grades.grade')
+            ->when($academicYear, fn($q) => $q->where('users.pref_academic_year', $academicYear))
+            ->groupBy('user_grades.subject_id')
+            ->select(
+                'user_grades.subject_id',
+                DB::raw('ROUND(AVG(user_grades.grade), 2) as avg_grade'),
+                DB::raw('COUNT(DISTINCT user_grades.user_id) as student_count')
+            )
+            ->get()
+            ->keyBy('subject_id');
+
+        // Chỉ lấy môn mà user đã nhập điểm
+        $filtered = $subjects->filter(fn($s) => isset($myGradesRaw[$s->id]));
+
+        $labels    = [];
+        $myGrades  = [];
+        $avgGrades = [];
+        $semesters = [];
+
+        foreach ($filtered as $subject) {
+            $labels[]    = $subject->name;
+            $myGrades[]  = (float) $myGradesRaw[$subject->id];
+            $avgGrades[] = isset($peerAvgRaw[$subject->id])
+                ? (float) $peerAvgRaw[$subject->id]->avg_grade
+                : null;
+            $semesters[] = $subject->semester?->name ?? '?';
+        }
+
+        return response()->json([
+            'labels'        => $labels,
+            'my_grades'     => $myGrades,
+            'avg_grades'    => $avgGrades,
+            'semesters'     => $semesters,
+            'academic_year' => $academicYear,
+            'peer_count'    => $peerAvgRaw->isNotEmpty()
+                ? (int) $peerAvgRaw->first()->student_count
+                : 0,
+        ]);
     }
 }

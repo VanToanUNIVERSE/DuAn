@@ -63,6 +63,9 @@ Route::middleware('auth')->group(function () {
     // POST /grades/save   → Lưu (upsert) một hoặc nhiều điểm vào DB
     Route::post('/grades/save', [GradeController::class, 'save'])->name('grades.save');
 
+    // GET  /grades/chart-data → Dữ liệu biểu đồ so sánh điểm cá nhân vs. TB khóa
+    Route::get('/grades/chart-data', [GradeController::class, 'chartData'])->name('grades.chart');
+
     // ── Routes cấu hình chương trình (Niên khóa, Hệ đào tạo, Học kỳ, Mục tiêu) ─
     // Lưu lựa chọn dropdown của user để khôi phục khi đăng nhập lại.
 
