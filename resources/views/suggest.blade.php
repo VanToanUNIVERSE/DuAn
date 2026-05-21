@@ -1,4 +1,4 @@
-?<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -10,9 +10,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
+
     <style>
-        /* CSS Reset & Variable Tokens */
+        /* ═══════════════════════════════════════════════════════════
+           CSS RESET & DESIGN TOKENS
+        ═══════════════════════════════════════════════════════════ */
         :root {
             --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
             --panel-bg: rgba(30, 41, 59, 0.7);
@@ -30,11 +32,7 @@
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: 'Inter', sans-serif;
@@ -46,31 +44,24 @@
             background-attachment: fixed;
         }
 
-        h1, h2, h3, h4 {
-            font-family: 'Outfit', sans-serif;
-        }
+        h1, h2, h3, h4 { font-family: 'Outfit', sans-serif; }
 
-        /* Container & Layout */
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            width: 100%;
-        }
+        /* ═══════════════════════════════════════════════════════════
+           LAYOUT
+        ═══════════════════════════════════════════════════════════ */
+        .container { max-width: 1400px; margin: 0 auto; width: 100%; }
 
         header {
             text-align: center;
             margin-bottom: 3rem;
             position: relative;
         }
-
         header::after {
             content: '';
             position: absolute;
-            top: -100px;
-            left: 50%;
+            top: -100px; left: 50%;
             transform: translateX(-50%);
-            width: 300px;
-            height: 300px;
+            width: 300px; height: 300px;
             background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
             z-index: -1;
             pointer-events: none;
@@ -109,21 +100,18 @@
             margin: 0 auto;
         }
 
-        /* Main Grid */
         .main-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 2rem;
             align-items: start;
+            max-width: 860px;
+            margin: 0 auto;
         }
 
-        @media (max-width: 1024px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Cards & Glassmorphism */
+        /* ═══════════════════════════════════════════════════════════
+           GLASS CARDS
+        ═══════════════════════════════════════════════════════════ */
         .glass-card {
             background: var(--panel-bg);
             border: 1px solid var(--panel-border);
@@ -135,7 +123,6 @@
             margin-bottom: 2rem;
             transition: var(--transition);
         }
-
         .glass-card:hover {
             border-color: rgba(255, 255, 255, 0.15);
             box-shadow: 0 15px 35px rgba(99, 102, 241, 0.05);
@@ -152,647 +139,95 @@
             padding-bottom: 1rem;
             color: #fff;
         }
+        .card-title svg { color: var(--primary); width: 24px; height: 24px; }
 
-        .card-title svg {
-            color: var(--primary);
-            width: 24px;
-            height: 24px;
-        }
-
-        /* Dropdowns & Forms */
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 1rem;
-        }
-
-        @media (max-width: 640px) {
-            .form-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .input-group {
+        /* ═══════════════════════════════════════════════════════════
+           NAVBAR
+        ═══════════════════════════════════════════════════════════ */
+        .navbar {
             display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .input-group label {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-        }
-
-        .form-select {
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: var(--radius-md);
-            color: #fff;
-            padding: 0.75rem 1rem;
-            font-size: 0.95rem;
-            font-weight: 500;
-            outline: none;
-            cursor: pointer;
-            transition: var(--transition);
-            width: 100%;
-        }
-
-        .form-select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 10px var(--primary-glow);
-        }
-
-        /* Checklist Subjects */
-        .semester-group {
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: .65rem 1.25rem;
             margin-bottom: 1.5rem;
-        }
-
-        .semester-header {
-            font-size: 1rem;
-            font-weight: 700;
-            color: #818cf8;
-            margin-bottom: 0.75rem;
-            background: rgba(99, 102, 241, 0.05);
-            padding: 0.4rem 0.8rem;
-            border-radius: var(--radius-md);
-            display: inline-block;
-        }
-
-        .subjects-list {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-        }
-
-        @media (max-width: 640px) {
-            .subjects-list {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .subject-grade-card {
-            background: rgba(15, 23, 42, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            border-radius: var(--radius-md);
-            padding: 0.75rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.75rem;
-            transition: var(--transition);
-        }
-
-        .subject-grade-card:hover {
-            background: rgba(255, 255, 255, 0.03);
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-
-        .subject-grade-card.pass {
-            border-color: var(--accent-success);
-            background: rgba(16, 185, 129, 0.08);
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
-        }
-
-        .subject-grade-card.fail {
-            border-color: #ef4444;
-            background: rgba(239, 68, 68, 0.07);
-        }
-
-        .grade-input-wrap {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.2rem;
-            flex-shrink: 0;
-        }
-
-        .grade-input {
-            width: 56px;
-            background: rgba(255,255,255,0.06);
-            border: 1.5px solid rgba(255,255,255,0.15);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 1rem;
-            font-weight: 700;
-            text-align: center;
-            padding: 0.3rem 0.2rem;
-            outline: none;
-            transition: var(--transition);
-        }
-
-        .grade-input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 8px var(--primary-glow);
-        }
-
-        .grade-input.is-pass { border-color: var(--accent-success); color: #6ee7b7; }
-        .grade-input.is-fail { border-color: #ef4444; color: #fca5a5; }
-
-        .grade-status-label {
-            font-size: 0.65rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-        .grade-status-label.pass { color: var(--accent-success); }
-        .grade-status-label.fail { color: #f87171; }
-        .grade-status-label.empty { color: var(--text-secondary); }
-
-        .subject-info {
-            display: flex;
-            flex-direction: column;
-            gap: 0.15rem;
-        }
-
-        .subject-name {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .subject-meta {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .subject-badge {
-            background: rgba(255, 255, 255, 0.08);
-            padding: 0.1rem 0.4rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-        }
-
-        /* Right Column Results */
-        .results-container {
-            position: sticky;
-            top: 2rem;
-        }
-
-        .loader {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 4rem 0;
-            gap: 1.5rem;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.05);
-            border-radius: 50%;
-            border-top-color: var(--primary);
-            animation: spin 1s linear infinite;
-        }
-
-        .suggestions-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .suggestion-card {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: var(--radius-md);
-            padding: 1.25rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-            transition: var(--transition);
-            animation: fadeIn 0.4s ease-out;
-        }
-
-        .suggestion-card:hover {
-            transform: translateX(5px);
-            background: rgba(255, 255, 255, 0.04);
-            border-color: rgba(99, 102, 241, 0.3);
-            box-shadow: -4px 0 0 var(--primary);
-        }
-
-        .suggestion-details {
-            display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
-        }
-
-        .suggestion-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .suggestion-tags {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-
-        .tag {
-            font-size: 0.75rem;
-            font-weight: 600;
-            padding: 0.2rem 0.6rem;
-            border-radius: 50px;
-            text-transform: uppercase;
-        }
-
-        .tag-credits {
-            background: rgba(99, 102, 241, 0.15);
-            color: #a5b4fc;
-            border: 1px solid rgba(99, 102, 241, 0.3);
-        }
-
-        .tag-type {
-            background: rgba(168, 85, 247, 0.15);
-            color: #d8b4fe;
-            border: 1px solid rgba(168, 85, 247, 0.3);
-        }
-
-        .tag-group {
-            background: rgba(245, 158, 11, 0.1);
-            color: #fde047;
-            border: 1px solid rgba(245, 158, 11, 0.2);
-        }
-
-        .suggestion-right {
-            text-align: right;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.5rem;
-            flex-shrink: 0;
-        }
-
-        .btn-add {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3rem;
-            background: rgba(99, 102, 241, 0.15);
-            border: 1px solid rgba(99, 102, 241, 0.4);
-            color: #a5b4fc;
-            border-radius: 50px;
-            padding: 0.3rem 0.75rem;
-            font-size: 0.75rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: var(--transition);
-            white-space: nowrap;
-        }
-        .btn-add:hover {
-            background: rgba(99, 102, 241, 0.3);
-            color: #fff;
-            border-color: var(--primary);
-        }
-        .btn-add.added {
-            background: rgba(16, 185, 129, 0.15);
-            border-color: var(--accent-success);
-            color: #6ee7b7;
-            pointer-events: none;
-        }
-
-        /* Panel Môn Đang Học */
-        .current-courses-empty {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-
-        .current-course-item {
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: var(--radius-md);
-            padding: 0.85rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            transition: var(--transition);
-            animation: fadeIn 0.3s ease-out;
-        }
-        .current-course-item.cc-pass {
-            border-color: var(--accent-success);
-            background: rgba(16,185,129,0.07);
-        }
-        .current-course-item.cc-fail {
-            border-color: #ef4444;
-            background: rgba(239,68,68,0.06);
-        }
-        .current-course-info { display:flex; flex-direction:column; gap:0.2rem; flex:1; min-width:0; }
-        .current-course-name { font-weight:700; font-size:0.95rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .current-course-meta { font-size:0.75rem; color:var(--text-secondary); }
-        .current-course-right { display:flex; align-items:center; gap:0.6rem; flex-shrink:0; }
-        .cc-grade-input {
-            width: 60px;
-            background: rgba(255,255,255,0.06);
-            border: 1.5px solid rgba(255,255,255,0.15);
-            border-radius: 8px;
-            color:#fff;
-            font-size:0.95rem;
-            font-weight:700;
-            text-align:center;
-            padding: 0.3rem 0.2rem;
-            outline:none;
-            transition: var(--transition);
-        }
-        .cc-grade-input:focus { border-color:var(--primary); box-shadow:0 0 6px var(--primary-glow); }
-        .cc-grade-input.is-pass { border-color:var(--accent-success); color:#6ee7b7; }
-        .cc-grade-input.is-fail { border-color:#ef4444; color:#fca5a5; }
-        .cc-status { font-size:0.7rem; font-weight:700; text-transform:uppercase; min-width:40px; text-align:center; }
-        .cc-status.pass { color:var(--accent-success); }
-        .cc-status.fail { color:#f87171; }
-        .cc-status.empty { color:var(--text-secondary); }
-        .btn-remove {
-            background: rgba(239,68,68,0.1);
-            border: 1px solid rgba(239,68,68,0.3);
-            color: #f87171;
-            border-radius: 6px;
-            width:28px; height:28px;
-            display:flex; align-items:center; justify-content:center;
-            cursor:pointer;
-            font-size:1rem;
-            line-height:1;
-            transition: var(--transition);
-            flex-shrink:0;
-        }
-        .btn-remove:hover { background:rgba(239,68,68,0.25); color:#fff; }
-
-        /* Trạng thái Đang học — khóa ô nhập điểm bên trái */
-        .grade-input.is-studying {
-            opacity: 0;
-            pointer-events: none;
-            position: absolute;
-        }
-        .studying-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3rem;
-            font-size: 0.72rem;
-            font-weight: 700;
-            color: #818cf8;
-            background: rgba(99,102,241,0.12);
-            border: 1px solid rgba(99,102,241,0.3);
-            border-radius: 6px;
-            padding: 0.25rem 0.6rem;
-            white-space: nowrap;
-            animation: pulse-studying 2s ease-in-out infinite;
-        }
-        @keyframes pulse-studying {
-            0%, 100% { opacity: 1; }
-            50%       { opacity: 0.6; }
-        }
-        .grade-input-wrap.is-locked {
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
-
-        .btn-complete {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            background: linear-gradient(135deg, var(--accent-success), #059669);
-            border: none;
-            color: #fff;
-            border-radius: 50px;
-            padding: 0.45rem 1rem;
-            font-size: 0.8rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: var(--transition);
-            margin-left: auto;
-            box-shadow: 0 4px 12px rgba(16,185,129,0.3);
-            white-space: nowrap;
-        }
-        .btn-complete:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 18px rgba(16,185,129,0.45);
-        }
-        .btn-complete:disabled {
-            background: rgba(255,255,255,0.08);
-            color: var(--text-secondary);
-            box-shadow: none;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* Toast */
-        .toast {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            z-index: 9999;
-            padding: 0.9rem 1.4rem;
-            border-radius: var(--radius-md);
-            font-weight: 600;
-            font-size: 0.9rem;
-            animation: slideUp 0.3s ease-out;
             backdrop-filter: blur(12px);
-            max-width: 340px;
-        }
-        .toast.success {
-            background: rgba(16,185,129,0.15);
-            border: 1px solid var(--accent-success);
-            color: #6ee7b7;
-        }
-        .toast.error {
-            background: rgba(239,68,68,0.12);
-            border: 1px solid #ef4444;
-            color: #fca5a5;
-        }
-        @keyframes slideUp {
-            from { opacity:0; transform: translateY(20px); }
-            to   { opacity:1; transform: translateY(0); }
-        }
-
-        .counter-badge {
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            background: var(--primary);
-            color:#fff;
-            border-radius:50%;
-            width:20px; height:20px;
-            font-size:0.7rem;
-            font-weight:800;
-            margin-left:0.4rem;
-        }
-
-        /* Stats Card */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-top: 1.25rem;
-        }
-        @media (max-width: 640px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
-
-        .stat-item {
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid rgba(255,255,255,0.07);
-            border-radius: var(--radius-md);
-            padding: 0.85rem 1rem;
-            text-align: center;
-            transition: var(--transition);
-        }
-        .stat-item:hover { border-color: rgba(255,255,255,0.15); }
-        .stat-value {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.6rem;
-            font-weight: 800;
-            line-height: 1.1;
-            background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .stat-value.highlight {
-            background: linear-gradient(135deg, var(--accent-success), #34d399);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .stat-label {
-            font-size: 0.72rem;
-            color: var(--text-secondary);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-top: 0.25rem;
-        }
-
-        .semester-badge {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            color: #fff;
-            padding: 0.35rem 0.85rem;
-            border-radius: 50px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
-        }
-
-        .distance-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-secondary);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             gap: 1rem;
         }
-
-        .empty-state svg {
-            width: 60px;
-            height: 60px;
-            color: rgba(255, 255, 255, 0.1);
-        }
-
-        .empty-state h3 {
-            color: #fff;
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-
-        /* Animations */
-        @keyframes spin {
-            100% { transform: rotate(360deg); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        /* ── Save indicator (góc trên bên phải ô nhập điểm) ── */
-        .save-indicator {
-            position: fixed;
-            top: 1rem;
-            right: 1.5rem;
-            z-index: 9998;
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 0.4rem 0.9rem;
-            border-radius: 8px;
-            display: none;           /* ẩn mặc định */
-            align-items: center;
-            gap: 0.4rem;
-            backdrop-filter: blur(10px);
-            transition: opacity 0.3s;
-        }
-        .save-indicator.saving {
-            display: flex;
-            background: rgba(99,102,241,0.18);
-            border: 1px solid rgba(99,102,241,0.4);
-            color: #a5b4fc;
-        }
-        .save-indicator.saved {
-            display: flex;
-            background: rgba(16,185,129,0.15);
-            border: 1px solid rgba(16,185,129,0.35);
-            color: #6ee7b7;
-        }
-        .save-indicator.error {
-            display: flex;
-            background: rgba(239,68,68,0.12);
-            border: 1px solid rgba(239,68,68,0.3);
-            color: #fca5a5;
-        }
-    </style>
-</head>
-<body>
-
-<div class="container">
-<div style="
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 14px;
-    padding: .65rem 1.25rem;
-    margin-bottom: 1.5rem;
-    backdrop-filter: blur(12px);
-">
-    <div style="display:flex; align-items:center; gap:.65rem;">
-        <div style="
+        .navbar-left { display: flex; align-items: center; gap: .65rem; }
+        .navbar-avatar {
             width: 36px; height: 36px;
             background: linear-gradient(135deg, #7c6af7, #a855f7);
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             font-size: 1rem;
             box-shadow: 0 2px 10px rgba(124,106,247,.4);
-        ">👤</div>
-        <div>
-            <div style="font-size:.88rem; font-weight:600; color:#f1f1f5;">
-                {{ Auth::user()->fullName ?? Auth::user()->username }}
-            </div>
-            <div style="font-size:.75rem; color:rgba(241,241,245,.5);">
-                MSSV: {{ Auth::user()->student_code ?? '—' }} &nbsp;|&nbsp; {{ Auth::user()->email }}
-            </div>
-        </div>
-    </div>
-    <form method="POST" action="{{ route('logout') }}">
-        @csrf
-        <button type="submit" style="
+        }
+        .navbar-info .name { font-size:.88rem; font-weight:600; color:#f1f1f5; }
+        .navbar-info .meta { font-size:.75rem; color:rgba(241,241,245,.5); }
+        .navbar-right { display: flex; align-items: center; gap: .6rem; }
+
+        /* ── Nút Cấu Hình ── */
+        .btn-config {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            background: rgba(99,102,241,.12);
+            border: 1px solid rgba(99,102,241,.35);
+            color: #a5b4fc;
+            border-radius: 8px;
+            padding: .45rem .9rem;
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .btn-config:hover { background: rgba(99,102,241,.25); color: #fff; }
+        .btn-config .config-dot {
+            width: 7px; height: 7px;
+            background: var(--accent-warning);
+            border-radius: 50%;
+            position: absolute;
+            top: -2px; right: -2px;
+            animation: pulse 1.5s infinite;
+        }
+
+        /* ── Nút Nhập Điểm ── */
+        .btn-grades {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            background: rgba(16,185,129,.1);
+            border: 1px solid rgba(16,185,129,.3);
+            color: #6ee7b7;
+            border-radius: 8px;
+            padding: .45rem .9rem;
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .btn-grades:hover { background: rgba(16,185,129,.22); color: #fff; }
+        .btn-grades .grade-badge {
+            background: var(--accent-success);
+            color: #fff;
+            border-radius: 50px;
+            font-size: .65rem;
+            font-weight: 800;
+            padding: .05rem .4rem;
+            min-width: 18px;
+            text-align: center;
+            display: none;
+        }
+        .btn-grades .grade-badge.visible { display: inline-block; }
+
+        .btn-logout {
             display: inline-flex;
             align-items: center;
             gap: .4rem;
@@ -806,15 +241,990 @@
             font-weight: 600;
             cursor: pointer;
             transition: all .2s;
-        " onmouseover="this.style.background='rgba(239,68,68,.22)'"
-           onmouseout="this.style.background='rgba(239,68,68,.1)'">
-            🚪 Đăng xuất
-        </button>
-    </form>
+        }
+        .btn-logout:hover { background: rgba(239,68,68,.22); }
+
+        /* ═══════════════════════════════════════════════════════════
+           CONFIG PANEL (dropdown từ nút menu)
+        ═══════════════════════════════════════════════════════════ */
+        .config-panel-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 400;
+            background: transparent;
+        }
+        .config-panel-overlay.open { display: block; }
+
+        .config-panel {
+            position: fixed;
+            top: 70px; right: 20px;
+            width: 400px;
+            max-width: calc(100vw - 40px);
+            background: rgba(15, 23, 42, 0.97);
+            border: 1px solid rgba(99,102,241,.3);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            z-index: 500;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(99,102,241,.1);
+            transform: translateY(-10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .config-panel.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           GRADE DRAWER (slide-in từ bên trái)
+        ═══════════════════════════════════════════════════════════ */
+        .grade-drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 600;
+            background: rgba(7, 11, 26, 0.65);
+            backdrop-filter: blur(4px);
+        }
+        .grade-drawer-overlay.open { display: block; }
+
+        .grade-drawer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 480px;
+            max-width: 95vw;
+            height: 100vh;
+            background: linear-gradient(160deg, rgba(13,19,38,0.99), rgba(20,14,45,0.99));
+            border-right: 1px solid rgba(99,102,241,.25);
+            z-index: 700;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(-100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 6px 0 40px rgba(0,0,0,.5);
+        }
+        .grade-drawer.open { transform: translateX(0); }
+
+        .grade-drawer-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,.07);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            background: rgba(99,102,241,.06);
+        }
+        .grade-drawer-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex; align-items: center; gap: .6rem;
+        }
+        .grade-drawer-subtitle {
+            font-size: .75rem;
+            color: var(--text-secondary);
+            margin-top: .15rem;
+        }
+        .grade-drawer-close {
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.12);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1.1rem; transition: var(--transition);
+            flex-shrink: 0;
+        }
+        .grade-drawer-close:hover { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.3); color: #f87171; }
+
+        .grade-drawer-search {
+            padding: .85rem 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,.05);
+            flex-shrink: 0;
+        }
+        .grade-drawer-search input {
+            width: 100%;
+            background: rgba(15,23,42,.7);
+            border: 1px solid rgba(255,255,255,.1);
+            border-radius: 8px;
+            color: #fff;
+            padding: .6rem 1rem;
+            font-size: .88rem;
+            outline: none;
+            transition: var(--transition);
+        }
+        .grade-drawer-search input::placeholder { color: var(--text-secondary); }
+        .grade-drawer-search input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+
+        .grade-drawer-stats {
+            padding: .65rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: .85rem;
+            border-bottom: 1px solid rgba(255,255,255,.05);
+            flex-shrink: 0;
+        }
+        .grade-drawer-stat {
+            display: flex; align-items: center; gap: .4rem;
+            font-size: .78rem; color: var(--text-secondary);
+        }
+        .grade-drawer-stat strong { color: #fff; }
+        .grade-drawer-stat.pass strong { color: var(--accent-success); }
+        .grade-drawer-stat.fail strong { color: #f87171; }
+
+        .grade-drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1.5rem;
+        }
+        .grade-drawer-body::-webkit-scrollbar { width: 4px; }
+        .grade-drawer-body::-webkit-scrollbar-track { background: transparent; }
+        .grade-drawer-body::-webkit-scrollbar-thumb { background: rgba(99,102,241,.4); border-radius: 2px; }
+
+        /* Subject cards bên trong drawer — compact hơn */
+        .drawer-semester-group { margin-bottom: 1.25rem; }
+        .drawer-semester-header {
+            font-size: .78rem; font-weight: 700; color: #818cf8;
+            text-transform: uppercase; letter-spacing: .05em;
+            margin-bottom: .6rem;
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .drawer-semester-header::after { content:''; flex:1; height:1px; background:rgba(99,102,241,.15); }
+
+        .drawer-subjects-list { display: flex; flex-direction: column; gap: .45rem; }
+
+        .drawer-subject-card {
+            background: rgba(15,23,42,.45);
+            border: 1px solid rgba(255,255,255,.06);
+            border-radius: 9px;
+            padding: .6rem .9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+            transition: var(--transition);
+        }
+        .drawer-subject-card:hover { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.12); }
+        .drawer-subject-card.pass { border-color: rgba(16,185,129,.4); background: rgba(16,185,129,.06); }
+        .drawer-subject-card.fail { border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.05); }
+        .drawer-subject-card.hidden-search { display: none; }
+
+        .drawer-subject-info { flex: 1; min-width: 0; }
+        .drawer-subject-name { font-size: .88rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .drawer-subject-meta { font-size: .7rem; color: var(--text-secondary); margin-top: .1rem; }
+
+        .drawer-grade-wrap { display: flex; align-items: center; gap: .35rem; flex-shrink: 0; }
+        .drawer-grade-input {
+            width: 58px;
+            background: rgba(255,255,255,.06);
+            border: 1.5px solid rgba(255,255,255,.15);
+            border-radius: 7px;
+            color: #fff; font-size: .95rem; font-weight: 700;
+            text-align: center; padding: .28rem .2rem;
+            outline: none; transition: var(--transition);
+        }
+        .drawer-grade-input:focus { border-color: var(--primary); box-shadow: 0 0 6px var(--primary-glow); }
+        .drawer-grade-input.is-pass { border-color: var(--accent-success); color: #6ee7b7; }
+        .drawer-grade-input.is-fail { border-color: #ef4444; color: #fca5a5; }
+        .drawer-grade-status { font-size: .62rem; font-weight: 700; min-width: 32px; text-align: center; }
+        .drawer-grade-status.pass { color: var(--accent-success); }
+        .drawer-grade-status.fail { color: #f87171; }
+        .drawer-grade-status.empty { color: var(--text-secondary); }
+
+        .config-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.85rem;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .config-panel-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .config-panel-close {
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.12);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1rem; transition: var(--transition);
+        }
+        .config-panel-close:hover { background: rgba(255,255,255,.14); color: #fff; }
+
+        .config-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.85rem;
+            margin-bottom: 1.1rem;
+        }
+
+        /* ── Stats mini ── */
+        .config-stats {
+            display: grid;
+            grid-template-columns: repeat(4,1fr);
+            gap: .5rem;
+            margin-top: .85rem;
+            padding-top: .85rem;
+            border-top: 1px solid rgba(255,255,255,.06);
+        }
+        .config-stat {
+            background: rgba(15,23,42,.5);
+            border: 1px solid rgba(255,255,255,.07);
+            border-radius: var(--radius-md);
+            padding: .6rem .5rem;
+            text-align: center;
+        }
+        .config-stat-val {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .config-stat-val.highlight {
+            background: linear-gradient(135deg, var(--accent-success), #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .config-stat-label {
+            font-size: .6rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-top: .2rem;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           FORMS & INPUTS
+        ═══════════════════════════════════════════════════════════ */
+        .input-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .input-group label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .form-select {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-md);
+            color: #fff;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            outline: none;
+            cursor: pointer;
+            transition: var(--transition);
+            width: 100%;
+        }
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           CHECKLIST SUBJECTS
+        ═══════════════════════════════════════════════════════════ */
+        .semester-group { margin-bottom: 1.5rem; }
+        .semester-header {
+            font-size: 1rem; font-weight: 700; color: #818cf8;
+            margin-bottom: 0.75rem;
+            background: rgba(99, 102, 241, 0.05);
+            padding: 0.4rem 0.8rem;
+            border-radius: var(--radius-md);
+            display: inline-block;
+        }
+        .subjects-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+        @media (max-width: 640px) { .subjects-list { grid-template-columns: 1fr; } }
+
+        .subject-grade-card {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            transition: var(--transition);
+        }
+        .subject-grade-card:hover { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.15); }
+        .subject-grade-card.pass { border-color: var(--accent-success); background: rgba(16,185,129,.08); box-shadow: 0 0 10px rgba(16,185,129,.15); }
+        .subject-grade-card.fail { border-color: #ef4444; background: rgba(239,68,68,.07); }
+
+        .grade-input-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; flex-shrink: 0; }
+        .grade-input {
+            width: 56px;
+            background: rgba(255,255,255,.06);
+            border: 1.5px solid rgba(255,255,255,.15);
+            border-radius: 8px;
+            color: #fff; font-size: 1rem; font-weight: 700;
+            text-align: center; padding: .3rem .2rem;
+            outline: none; transition: var(--transition);
+        }
+        .grade-input:focus { border-color: var(--primary); box-shadow: 0 0 8px var(--primary-glow); }
+        .grade-input.is-pass { border-color: var(--accent-success); color: #6ee7b7; }
+        .grade-input.is-fail { border-color: #ef4444; color: #fca5a5; }
+
+        .grade-status-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+        .grade-status-label.pass { color: var(--accent-success); }
+        .grade-status-label.fail { color: #f87171; }
+        .grade-status-label.empty { color: var(--text-secondary); }
+
+        .subject-info { display: flex; flex-direction: column; gap: .15rem; }
+        .subject-name { font-size: 0.9rem; font-weight: 600; color: #fff; }
+        .subject-meta { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: .5rem; }
+        .subject-badge { background: rgba(255,255,255,.08); padding: .1rem .4rem; border-radius: 4px; font-size: .7rem; }
+
+        /* ═══════════════════════════════════════════════════════════
+           RIGHT COLUMN (suggestions)
+        ═══════════════════════════════════════════════════════════ */
+        .results-container { position: sticky; top: 2rem; }
+        .loader { display: none; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 0; gap: 1.5rem; }
+        .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,.05); border-radius: 50%; border-top-color: var(--primary); animation: spin 1s linear infinite; }
+        .suggestions-grid { display: flex; flex-direction: column; gap: 1rem; }
+
+        .suggestion-card {
+            background: rgba(255,255,255,.02);
+            border: 1px solid rgba(255,255,255,.05);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+            transition: var(--transition);
+            animation: fadeIn .4s ease-out;
+        }
+        .suggestion-card:hover { transform: translateX(5px); background: rgba(255,255,255,.04); border-color: rgba(99,102,241,.3); box-shadow: -4px 0 0 var(--primary); }
+
+        .suggestion-details { display: flex; flex-direction: column; gap: .4rem; }
+        .suggestion-title { font-size: 1.1rem; font-weight: 700; color: #fff; }
+        .suggestion-tags { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+        .tag { font-size: .75rem; font-weight: 600; padding: .2rem .6rem; border-radius: 50px; text-transform: uppercase; }
+        .tag-credits { background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.3); }
+        .tag-type { background: rgba(168,85,247,.15); color: #d8b4fe; border: 1px solid rgba(168,85,247,.3); }
+        .tag-group { background: rgba(245,158,11,.1); color: #fde047; border: 1px solid rgba(245,158,11,.2); }
+
+        .suggestion-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; flex-shrink: 0; }
+        .btn-add {
+            display: inline-flex; align-items: center; gap: .3rem;
+            background: rgba(99,102,241,.15); border: 1px solid rgba(99,102,241,.4);
+            color: #a5b4fc; border-radius: 50px; padding: .3rem .75rem;
+            font-size: .75rem; font-weight: 700; cursor: pointer; transition: var(--transition); white-space: nowrap;
+        }
+        .btn-add:hover { background: rgba(99,102,241,.3); color: #fff; border-color: var(--primary); }
+        .btn-add.added { background: rgba(16,185,129,.15); border-color: var(--accent-success); color: #6ee7b7; pointer-events: none; }
+
+        /* ═══════════════════════════════════════════════════════════
+           CURRENT COURSES PANEL
+        ═══════════════════════════════════════════════════════════ */
+        .current-courses-empty { text-align: center; padding: 2rem; color: var(--text-secondary); font-size: .9rem; }
+        .current-course-item {
+            background: rgba(15,23,42,.5); border: 1px solid rgba(255,255,255,.07);
+            border-radius: var(--radius-md); padding: .85rem 1rem;
+            display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+            transition: var(--transition); animation: fadeIn .3s ease-out;
+        }
+        .current-course-item.cc-pass { border-color: var(--accent-success); background: rgba(16,185,129,.07); }
+        .current-course-item.cc-fail { border-color: #ef4444; background: rgba(239,68,68,.06); }
+        .current-course-info { display:flex; flex-direction:column; gap:.2rem; flex:1; min-width:0; }
+        .current-course-name { font-weight:700; font-size:.95rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .current-course-meta { font-size:.75rem; color:var(--text-secondary); }
+        .current-course-right { display:flex; align-items:center; gap:.6rem; flex-shrink:0; }
+        .cc-grade-input {
+            width:60px; background:rgba(255,255,255,.06); border:1.5px solid rgba(255,255,255,.15);
+            border-radius:8px; color:#fff; font-size:.95rem; font-weight:700; text-align:center;
+            padding:.3rem .2rem; outline:none; transition:var(--transition);
+        }
+        .cc-grade-input:focus { border-color:var(--primary); box-shadow:0 0 6px var(--primary-glow); }
+        .cc-grade-input.is-pass { border-color:var(--accent-success); color:#6ee7b7; }
+        .cc-grade-input.is-fail { border-color:#ef4444; color:#fca5a5; }
+        .cc-status { font-size:.7rem; font-weight:700; text-transform:uppercase; min-width:40px; text-align:center; }
+        .cc-status.pass { color:var(--accent-success); }
+        .cc-status.fail { color:#f87171; }
+        .cc-status.empty { color:var(--text-secondary); }
+        .btn-remove {
+            background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); color:#f87171;
+            border-radius:6px; width:28px; height:28px;
+            display:flex; align-items:center; justify-content:center;
+            cursor:pointer; font-size:1rem; line-height:1; transition:var(--transition); flex-shrink:0;
+        }
+        .btn-remove:hover { background:rgba(239,68,68,.25); color:#fff; }
+
+        /* ── Trạng thái Đang học ── */
+        .grade-input.is-studying { opacity:0; pointer-events:none; position:absolute; }
+        .studying-label {
+            display:inline-flex; align-items:center; gap:.3rem;
+            font-size:.72rem; font-weight:700; color:#818cf8;
+            background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.3);
+            border-radius:6px; padding:.25rem .6rem; white-space:nowrap;
+            animation: pulse-studying 2s ease-in-out infinite;
+        }
+        @keyframes pulse-studying { 0%,100%{opacity:1} 50%{opacity:.6} }
+        .grade-input-wrap.is-locked { position:relative; display:flex; align-items:center; }
+
+        .btn-complete {
+            display:inline-flex; align-items:center; gap:.4rem;
+            background: linear-gradient(135deg, var(--accent-success), #059669);
+            border:none; color:#fff; border-radius:50px; padding:.45rem 1rem;
+            font-size:.8rem; font-weight:700; cursor:pointer; transition:var(--transition);
+            margin-left:auto; box-shadow:0 4px 12px rgba(16,185,129,.3); white-space:nowrap;
+        }
+        .btn-complete:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(16,185,129,.45); }
+        .btn-complete:disabled { background:rgba(255,255,255,.08); color:var(--text-secondary); box-shadow:none; cursor:not-allowed; transform:none; }
+
+        .counter-badge {
+            display:inline-flex; align-items:center; justify-content:center;
+            background:var(--primary); color:#fff; border-radius:50%;
+            width:20px; height:20px; font-size:.7rem; font-weight:800; margin-left:.4rem;
+        }
+
+        .semester-badge {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color:#fff; padding:.35rem .85rem; border-radius:50px;
+            font-size:.85rem; font-weight:700; box-shadow:0 4px 10px rgba(99,102,241,.3);
+        }
+        .distance-label { font-size:.75rem; color:var(--text-secondary); font-weight:500; }
+
+        /* ── Empty State ── */
+        .empty-state { text-align:center; padding:4rem 2rem; color:var(--text-secondary); display:flex; flex-direction:column; align-items:center; gap:1rem; }
+        .empty-state svg { width:60px; height:60px; color:rgba(255,255,255,.1); }
+        .empty-state h3 { color:#fff; font-size:1.2rem; font-weight:600; }
+
+        /* ═══════════════════════════════════════════════════════════
+           TOAST & SAVE INDICATOR
+        ═══════════════════════════════════════════════════════════ */
+        .toast {
+            position:fixed; bottom:2rem; right:2rem; z-index:9999;
+            padding:.9rem 1.4rem; border-radius:var(--radius-md);
+            font-weight:600; font-size:.9rem; animation:slideUp .3s ease-out;
+            backdrop-filter:blur(12px); max-width:340px;
+        }
+        .toast.success { background:rgba(16,185,129,.15); border:1px solid var(--accent-success); color:#6ee7b7; }
+        .toast.error { background:rgba(239,68,68,.12); border:1px solid #ef4444; color:#fca5a5; }
+        @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+        .save-indicator {
+            position:fixed; top:1rem; right:1.5rem; z-index:9998;
+            font-size:.8rem; font-weight:600; padding:.4rem .9rem; border-radius:8px;
+            display:none; align-items:center; gap:.4rem;
+            backdrop-filter:blur(10px); transition:opacity .3s;
+        }
+        .save-indicator.saving { display:flex; background:rgba(99,102,241,.18); border:1px solid rgba(99,102,241,.4); color:#a5b4fc; }
+        .save-indicator.saved  { display:flex; background:rgba(16,185,129,.15); border:1px solid rgba(16,185,129,.35); color:#6ee7b7; }
+        .save-indicator.error  { display:flex; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.3); color:#fca5a5; }
+
+        /* ═══════════════════════════════════════════════════════════
+           ✨ ONBOARDING WIZARD
+        ═══════════════════════════════════════════════════════════ */
+        .ob-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(7, 11, 26, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .ob-overlay.hidden { display: none; }
+
+        .ob-modal {
+            background: linear-gradient(145deg, rgba(20, 28, 58, 0.98), rgba(30, 20, 60, 0.98));
+            border: 1px solid rgba(99,102,241,.35);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 620px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(99,102,241,.1), inset 0 1px 0 rgba(255,255,255,.05);
+            animation: obSlideIn .5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes obSlideIn {
+            from { opacity: 0; transform: translateY(40px) scale(0.95); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .ob-header {
+            padding: 2rem 2rem 0;
+            text-align: center;
+        }
+
+        .ob-step-dots {
+            display: flex;
+            justify-content: center;
+            gap: .5rem;
+            margin-bottom: 1.5rem;
+        }
+        .ob-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.2);
+            transition: all .3s;
+        }
+        .ob-dot.active { background: var(--primary); width: 24px; border-radius: 4px; }
+        .ob-dot.done   { background: var(--accent-success); }
+
+        .ob-step-label {
+            font-size: .75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            color: #818cf8;
+            margin-bottom: .5rem;
+        }
+
+        .ob-icon {
+            width: 72px; height: 72px;
+            margin: 0 auto 1rem;
+            border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem;
+            position: relative;
+        }
+        .ob-icon::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 24px;
+            background: conic-gradient(from 0deg, var(--primary), var(--secondary), var(--primary));
+            z-index: -1;
+            opacity: .4;
+            animation: spin 4s linear infinite;
+        }
+
+        .ob-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #ffffff, #c7d2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: .5rem;
+        }
+
+        .ob-desc {
+            color: var(--text-secondary);
+            font-size: .95rem;
+            line-height: 1.6;
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        .ob-body { padding: 1.5rem 2rem; }
+
+        .ob-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        @media (max-width: 500px) { .ob-form-grid { grid-template-columns: 1fr; } }
+
+        .ob-input-group { display: flex; flex-direction: column; gap: .5rem; }
+        .ob-input-group label {
+            font-size: .82rem; font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase; letter-spacing: .04em;
+        }
+        .ob-select {
+            background: rgba(15,23,42,.7);
+            border: 1.5px solid rgba(99,102,241,.25);
+            border-radius: var(--radius-md);
+            color: #fff;
+            padding: .8rem 1rem;
+            font-size: .95rem; font-weight: 500;
+            outline: none; cursor: pointer; transition: var(--transition); width: 100%;
+        }
+        .ob-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+
+        /* ── Semester picker ── */
+        .ob-semester-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: .65rem;
+        }
+        .ob-sem-btn {
+            background: rgba(15,23,42,.6);
+            border: 1.5px solid rgba(255,255,255,.1);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            padding: .75rem .5rem;
+            font-family: 'Outfit', sans-serif;
+            font-size: .9rem; font-weight: 700;
+            cursor: pointer; transition: var(--transition);
+            text-align: center;
+        }
+        .ob-sem-btn:hover { border-color: rgba(99,102,241,.5); color: #a5b4fc; background: rgba(99,102,241,.1); }
+        .ob-sem-btn.selected { border-color: var(--primary); background: rgba(99,102,241,.2); color: #fff; box-shadow: 0 0 12px var(--primary-glow); }
+
+        /* ── Target year picker ── */
+        .ob-year-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: .65rem;
+        }
+        .ob-year-btn {
+            background: rgba(15,23,42,.6);
+            border: 1.5px solid rgba(255,255,255,.1);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            padding: 1rem .5rem;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem; font-weight: 700;
+            cursor: pointer; transition: var(--transition);
+            text-align: center; display: flex; flex-direction: column; gap: .2rem; align-items: center;
+        }
+        .ob-year-btn:hover { border-color: rgba(16,185,129,.5); color: #6ee7b7; background: rgba(16,185,129,.08); }
+        .ob-year-btn.selected { border-color: var(--accent-success); background: rgba(16,185,129,.15); color: #fff; box-shadow: 0 0 12px var(--accent-success-glow); }
+        .ob-year-btn small { font-size: .65rem; color: var(--text-secondary); font-weight: 500; }
+
+        /* ── Grade warning ── */
+        .ob-warning {
+            background: rgba(245,158,11,.08);
+            border: 1px solid rgba(245,158,11,.3);
+            border-radius: var(--radius-md);
+            padding: .9rem 1.1rem;
+            display: flex; align-items: flex-start; gap: .75rem;
+            margin-bottom: 1.25rem;
+        }
+        .ob-warning-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: .05rem; }
+        .ob-warning p { font-size: .88rem; color: #fde68a; line-height: 1.5; font-weight: 500; }
+        .ob-warning strong { color: #fbbf24; }
+
+        /* ── Scrollable subject list in wizard ── */
+        .ob-subjects-scroll {
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: .25rem;
+        }
+        .ob-subjects-scroll::-webkit-scrollbar { width: 4px; }
+        .ob-subjects-scroll::-webkit-scrollbar-track { background: transparent; }
+        .ob-subjects-scroll::-webkit-scrollbar-thumb { background: rgba(99,102,241,.4); border-radius: 2px; }
+
+        .ob-semester-section { margin-bottom: 1rem; }
+        .ob-semester-section-title {
+            font-size: .78rem; font-weight: 700; color: #818cf8;
+            text-transform: uppercase; letter-spacing: .05em;
+            margin-bottom: .5rem;
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .ob-semester-section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(99,102,241,.2);
+        }
+
+        .ob-subject-row {
+            display: flex; align-items: center;
+            justify-content: space-between;
+            background: rgba(15,23,42,.4);
+            border: 1px solid rgba(255,255,255,.06);
+            border-radius: 8px;
+            padding: .6rem .85rem;
+            margin-bottom: .4rem;
+            transition: var(--transition);
+        }
+        .ob-subject-row:hover { background: rgba(255,255,255,.03); }
+        .ob-subject-row.has-grade { border-color: rgba(99,102,241,.3); }
+        .ob-subject-info { flex: 1; min-width: 0; }
+        .ob-subject-name { font-size: .88rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ob-subject-meta { font-size: .72rem; color: var(--text-secondary); }
+        .ob-grade-wrap { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+        .ob-grade-input {
+            width: 60px;
+            background: rgba(255,255,255,.06);
+            border: 1.5px solid rgba(255,255,255,.15);
+            border-radius: 8px;
+            color: #fff; font-size: .9rem; font-weight: 700;
+            text-align: center; padding: .3rem .25rem;
+            outline: none; transition: var(--transition);
+        }
+        .ob-grade-input:focus { border-color: var(--primary); box-shadow: 0 0 6px var(--primary-glow); }
+        .ob-grade-input.pass { border-color: var(--accent-success); color: #6ee7b7; }
+        .ob-grade-input.fail { border-color: #ef4444; color: #fca5a5; }
+        .ob-grade-status { font-size: .65rem; font-weight: 700; min-width: 34px; text-align: center; }
+        .ob-grade-status.pass { color: var(--accent-success); }
+        .ob-grade-status.fail { color: #f87171; }
+
+        /* ── Footer nav ── */
+        .ob-footer {
+            padding: 1.25rem 2rem 2rem;
+            display: flex; align-items: center; justify-content: space-between;
+            border-top: 1px solid rgba(255,255,255,.06);
+        }
+
+        .ob-btn-back {
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.12);
+            color: var(--text-secondary);
+            border-radius: 10px;
+            padding: .65rem 1.25rem;
+            font-size: .88rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+        }
+        .ob-btn-back:hover { background: rgba(255,255,255,.1); color: #fff; }
+        .ob-btn-back:disabled { opacity: .3; cursor: not-allowed; }
+
+        .ob-btn-next {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            color: #fff;
+            border-radius: 10px;
+            padding: .65rem 1.75rem;
+            font-size: .92rem; font-weight: 700;
+            cursor: pointer; transition: var(--transition);
+            box-shadow: 0 4px 15px var(--primary-glow);
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .ob-btn-next:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--primary-glow); }
+        .ob-btn-next.finish {
+            background: linear-gradient(135deg, var(--accent-success), #059669);
+            box-shadow: 0 4px 15px var(--accent-success-glow);
+        }
+        .ob-btn-next.finish:hover { box-shadow: 0 6px 20px rgba(16,185,129,.5); }
+
+        .ob-progress-text {
+            font-size: .78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           ANIMATIONS
+        ═══════════════════════════════════════════════════════════ */
+        @keyframes spin     { 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn   { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.7} }
+        @keyframes obFadeStep {
+            from { opacity: 0; transform: translateX(20px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+        .ob-step-anim { animation: obFadeStep .3s ease-out; }
+    </style>
+</head>
+<body>
+
+{{-- ══════════════════════════════════════════════════════════════════
+     ONBOARDING WIZARD OVERLAY
+══════════════════════════════════════════════════════════════════ --}}
+<div class="ob-overlay hidden" id="ob-overlay">
+    <div class="ob-modal" id="ob-modal">
+
+        {{-- Header --}}
+        <div class="ob-header" id="ob-header">
+            <div class="ob-step-dots" id="ob-dots">
+                <div class="ob-dot active" data-step="0"></div>
+                <div class="ob-dot" data-step="1"></div>
+                <div class="ob-dot" data-step="2"></div>
+                <div class="ob-dot" data-step="3"></div>
+            </div>
+            {{-- Step label, icon, title, desc được render bởi JS --}}
+            <div id="ob-header-content"></div>
+        </div>
+
+        {{-- Body --}}
+        <div class="ob-body" id="ob-body-content"></div>
+
+        {{-- Footer --}}
+        <div class="ob-footer">
+            <button class="ob-btn-back" id="ob-btn-back" onclick="obPrev()">← Quay lại</button>
+            <span class="ob-progress-text" id="ob-progress-text">Bước 1 / 4</span>
+            <button class="ob-btn-next" id="ob-btn-next" onclick="obNext()">
+                Tiếp theo →
+            </button>
+        </div>
+    </div>
 </div>
 
-    <header>
+{{-- ══════════════════════════════════════════════════════════════════
+     CONFIG PANEL OVERLAY (click ngoài để đóng)
+══════════════════════════════════════════════════════════════════ --}}
+<div class="config-panel-overlay" id="config-overlay" onclick="closeConfigPanel()"></div>
 
+{{-- Config Panel --}}
+<div class="config-panel" id="config-panel">
+    <div class="config-panel-header">
+        <div class="config-panel-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+            </svg>
+            Cấu Hình Chương Trình
+        </div>
+        <button class="config-panel-close" onclick="closeConfigPanel()">✕</button>
+    </div>
+
+    <div class="config-form-grid">
+        <div class="input-group">
+            <label for="academic_year">Niên khóa</label>
+            <select id="academic_year" class="form-select">
+                @foreach($academicYears as $year)
+                    <option value="{{ $year }}" {{ $year == '2022-2026' ? 'selected' : '' }}>{{ $year }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="program_type">Hệ đào tạo</label>
+            <select id="program_type" class="form-select">
+                @foreach($programTypes as $type)
+                    <option value="{{ $type }}" {{ $type == 'Chính quy' ? 'selected' : '' }}>{{ $type }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="target_semester">Học kỳ hiện tại</label>
+            <select id="target_semester" class="form-select">
+                @for($i = 1; $i <= 8; $i++)
+                    <option value="{{ $i }}" {{ $i == 3 ? 'selected' : '' }}>Học kỳ {{ $i }}</option>
+                @endfor
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="target_years">Mục tiêu tốt nghiệp</label>
+            <select id="target_years" class="form-select" onchange="updateCreditStats()">
+                @for($y = 3; $y <= 6; $y++)
+                    <option value="{{ $y }}" {{ $y == 4 ? 'selected' : '' }}>{{ $y }} năm</option>
+                @endfor
+            </select>
+        </div>
+    </div>
+
+    {{-- Mini stats --}}
+    <div class="config-stats">
+        <div class="config-stat">
+            <div class="config-stat-val" id="stat-total-credits">{{ $totalCredits }}</div>
+            <div class="config-stat-label">Tổng TC</div>
+        </div>
+        <div class="config-stat">
+            <div class="config-stat-val" id="stat-total-semesters">8</div>
+            <div class="config-stat-label">Số kỳ</div>
+        </div>
+        <div class="config-stat">
+            <div class="config-stat-val highlight" id="stat-credits-per-sem">—</div>
+            <div class="config-stat-label">TC/kỳ</div>
+        </div>
+        <div class="config-stat">
+            <div class="config-stat-val" id="stat-earned-credits">0</div>
+            <div class="config-stat-label">Đã tích lũy</div>
+        </div>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════════
+     GRADE DRAWER — Slide-in từ bên trái
+══════════════════════════════════════════════════════════════════ --}}
+<div class="grade-drawer-overlay" id="grade-drawer-overlay" onclick="closeGradeDrawer()"></div>
+<div class="grade-drawer" id="grade-drawer">
+    <div class="grade-drawer-header">
+        <div>
+            <div class="grade-drawer-title">
+                📝 Nhập Điểm Môn Học
+            </div>
+            <div class="grade-drawer-subtitle">Điểm &gt; 5.0 được tính là Pass ✅</div>
+        </div>
+        <button class="grade-drawer-close" onclick="closeGradeDrawer()">✕</button>
+    </div>
+
+    <div class="grade-drawer-search">
+        <input type="text" id="grade-search" placeholder="🔍 Tìm kiếm môn học..." oninput="filterGradeSearch(this.value)">
+    </div>
+
+    <div class="grade-drawer-stats">
+        <div class="grade-drawer-stat pass">✓ Pass: <strong id="drawer-pass-count">0</strong></div>
+        <div class="grade-drawer-stat fail">✗ Fail: <strong id="drawer-fail-count">0</strong></div>
+        <div class="grade-drawer-stat">Chưa nhập: <strong id="drawer-empty-count">0</strong></div>
+    </div>
+
+    <div class="grade-drawer-body" id="grade-drawer-body">
+        @foreach($subjects as $semName => $semSubjects)
+            <div class="drawer-semester-group">
+                <div class="drawer-semester-header">Học kỳ chuẩn {{ $semName }}</div>
+                <div class="drawer-subjects-list">
+                    @foreach($semSubjects as $sub)
+                        <div class="drawer-subject-card" id="lbl-sub-{{ $sub->id }}" data-name="{{ strtolower($sub->name) }}">
+                            <div class="drawer-subject-info">
+                                <div class="drawer-subject-name">{{ $sub->name }}</div>
+                                <div class="drawer-subject-meta">{{ $sub->credits }} tín chỉ · {{ $sub->subjectType?->name }}</div>
+                            </div>
+                            <div class="drawer-grade-wrap">
+                                <input type="number"
+                                       class="drawer-grade-input grade-input"
+                                       id="grade-{{ $sub->id }}"
+                                       data-subject-id="{{ $sub->id }}"
+                                       data-credits="{{ $sub->credits }}"
+                                       min="0" max="10" step="0.1"
+                                       placeholder="—"
+                                       oninput="onGradeChange({{ $sub->id }}, this)">
+                                <span class="drawer-grade-status empty" id="status-{{ $sub->id }}">—</span>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endforeach
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════════
+     MAIN APP
+══════════════════════════════════════════════════════════════════ --}}
+<div class="container">
+
+    {{-- Navbar --}}
+    <div class="navbar">
+        <div class="navbar-left">
+            <div class="navbar-avatar">👤</div>
+            <div>
+                <div class="navbar-info name">{{ Auth::user()->fullName ?? Auth::user()->username }}</div>
+                <div class="navbar-info meta">MSSV: {{ Auth::user()->student_code ?? '—' }} &nbsp;|&nbsp; {{ Auth::user()->email }}</div>
+            </div>
+        </div>
+        <div class="navbar-right">
+            {{-- Nút nhập điểm --}}
+            <button class="btn-grades" id="btn-grades" onclick="toggleGradeDrawer()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+                </svg>
+                📝 Nhập điểm
+                <span class="grade-badge" id="grade-count-badge">0</span>
+            </button>
+
+            {{-- Nút cấu hình --}}
+            <button class="btn-config" id="btn-config" onclick="toggleConfigPanel()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+                </svg>
+                ⚙ Cấu hình
+                <span class="config-dot" id="config-dot"></span>
+            </button>
+
+            {{-- Đăng xuất --}}
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="btn-logout">🚪 Đăng xuất</button>
+            </form>
+        </div>
+    </div>
+
+    <header>
         <div class="logo-badge">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
               <path d="M2.5.5A.5.5 0 0 1 3 0h10a.5.5 0 0 1 .5.5c0 .538-.012 1.05-.034 1.536a3 3 0 1 1-1.133 5.89c-.011.121-.011.234-.011.33v3.244c0 .852-.149 1.658-.439 2.4H3.083c-.29-.742-.439-1.548-.439-2.4V7.926c0-.096 0-.21-.012-.33a3 3 0 1 1-1.132-5.89A35 35 0 0 1 2.5.5zm0 1.25C2.41 2.347 2.33 3.012 2.3 3.652a2 2 0 1 0 1.95 0c-.03-.64-.11-1.305-.182-1.902h-1.57zm11 0h-1.57c.072.597.152 1.262.182 1.902A2 2 0 1 0 13.7 3.652c-.03-.64-.11-1.305-.2-2.402z"/>
@@ -822,150 +1232,29 @@
             Smart Planner
         </div>
         <h1>Gợi Ý Học Tập Thông Minh</h1>
-        <p>Chọn chương trình, học kỳ mong muốn và tích chọn các môn học bạn đã thi đỗ để nhận ngay lộ trình đề xuất tối ưu nhất thời gian thực.</p>
+        <p>Nhập điểm các môn đã học và nhận ngay lộ trình đề xuất tối ưu theo tiến độ của bạn.</p>
     </header>
 
     <div class="main-grid">
-        <!-- Cột Bên Trái: Cấu Hình và Bộ Chọn Môn Đã Đỗ -->
-        <div>
-            <!-- Card 1: Chọn Khung Chương Trình -->
-            <div class="glass-card">
-                <h2 class="card-title">
-                    <!-- Icon: Adjustments -->
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
-                    </svg>
-                    Cấu Hình Chương Trình
-                </h2>
-                <div class="form-grid">
-                    <!-- Niên khóa -->
-                    <div class="input-group">
-                        <label for="academic_year">Niên khóa</label>
-                        <select id="academic_year" class="form-select">
-                            @foreach($academicYears as $year)
-                                <option value="{{ $year }}" {{ $year == '2022-2026' ? 'selected' : '' }}>{{ $year }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <!-- Loại chương trình -->
-                    <div class="input-group">
-                        <label for="program_type">Hệ đào tạo</label>
-                        <select id="program_type" class="form-select">
-                            @foreach($programTypes as $type)
-                                <option value="{{ $type }}" {{ $type == 'Chính quy' ? 'selected' : '' }}>{{ $type }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <!-- Học kỳ mong muốn -->
-                    <div class="input-group">
-                        <label for="target_semester">Học kỳ hiện tại</label>
-                        <select id="target_semester" class="form-select">
-                            @for($i = 1; $i <= 8; $i++)
-                                <option value="{{ $i }}" {{ $i == 3 ? 'selected' : '' }}>Học kỳ {{ $i }}</option>
-                            @endfor
-                        </select>
-                    </div>
-                    <!-- Số năm học mục tiêu -->
-                    <div class="input-group">
-                        <label for="target_years">Mục tiêu tốt nghiệp</label>
-                        <select id="target_years" class="form-select" onchange="updateCreditStats()">
-                            @for($y = 3; $y <= 6; $y++)
-                                <option value="{{ $y }}" {{ $y == 4 ? 'selected' : '' }}>{{ $y }} năm</option>
-                            @endfor
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Stats: Tín chỉ cần đạt -->
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <div class="stat-value" id="stat-total-credits">{{ $totalCredits }}</div>
-                        <div class="stat-label">Tổng tín chỉ</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="stat-total-semesters">8</div>
-                        <div class="stat-label">Số học kỳ</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value highlight" id="stat-credits-per-sem">—</div>
-                        <div class="stat-label">Tín chỉ / kỳ cần đạt</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="stat-earned-credits">0</div>
-                        <div class="stat-label">Tín chỉ đã tích lũy</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card 2: Checklist Các Môn Đã Hoàn Thành -->
-            <div class="glass-card">
-                <h2 class="card-title">
-                    <!-- Icon: Pencil Square -->
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-                    </svg>
-                    Nhập Điểm Môn Học
-                    <span style="font-size:0.75rem;font-weight:500;color:var(--text-secondary);margin-left:auto;">Điểm &gt; 5.0 = Pass ✅</span>
-                </h2>
-
-                <div id="checklist-container">
-                    @foreach($subjects as $semName => $semSubjects)
-                        <div class="semester-group">
-                            <span class="semester-header">Học kỳ chuẩn {{ $semName }}</span>
-                            <div class="subjects-list">
-                                @foreach($semSubjects as $sub)
-                                    <div class="subject-grade-card" id="lbl-sub-{{ $sub->id }}">
-                                        <div class="subject-info">
-                                            <span class="subject-name">{{ $sub->name }}</span>
-                                            <div class="subject-meta">
-                                                <span class="subject-badge">{{ $sub->credits }} tín</span>
-                                                <span class="subject-badge">{{ $sub->subjectType?->name }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="grade-input-wrap">
-                                            <input type="number"
-                                                   class="grade-input"
-                                                   id="grade-{{ $sub->id }}"
-                                                   data-subject-id="{{ $sub->id }}"
-                                                   data-credits="{{ $sub->credits }}"
-                                                   min="0" max="10" step="0.1"
-                                                   placeholder="—"
-                                                   oninput="onGradeChange({{ $sub->id }}, this)">
-                                            <span class="grade-status-label empty" id="status-{{ $sub->id }}">Chưa nhập</span>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-
-        <!-- Cột Bên Phải: Danh Sách Môn Đề Xuất -->
+        {{-- Cột phải: Gợi ý --}}
         <div class="results-container">
             <div class="glass-card">
                 <h2 class="card-title">
-                    <!-- Icon: Academic Cap -->
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.228-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.57 50.57 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84a50.53 50.53 0 0 0-2.658.814m-15.482 0A50.697 50.697 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.512A5.985 5.985 0 0 0 6 18v-3m12 3a5.985 5.985 0 0 0 1.007-3.045m-4.257-2.625A55.385 55.385 0 0 1 12 8.443M12 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
                     </svg>
                     Môn Học Đề Xuất Học Kỳ Mới
                 </h2>
 
-                <!-- Loader -->
                 <div class="loader" id="loader">
                     <div class="spinner"></div>
                     <p style="color: var(--text-secondary); font-size: 0.95rem;">Hệ thống đang phân tích và lập lộ trình...</p>
                 </div>
 
-                <!-- Suggested List -->
-                <div id="suggestions-list" class="suggestions-grid">
-                    <!-- Dữ liệu render động qua JS -->
-                </div>
+                <div id="suggestions-list" class="suggestions-grid"></div>
             </div>
 
-            <!-- Panel: Môn Đang Học -->
+            {{-- Panel: Môn Đang Học --}}
             <div class="glass-card" id="current-courses-card">
                 <h2 class="card-title">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -985,35 +1274,442 @@
     </div>
 </div>
 
-{{-- Indicator DOM element — hiển thị trạng thái lưu điểm --}}
+@php
+    $subjectsBySem = $subjects->map(function($group) {
+        return $group->map(function($sub) {
+            return [
+                'id'       => $sub->id,
+                'name'     => $sub->name,
+                'credits'  => $sub->credits,
+                'semName'  => $sub->semester?->name ?? '?',
+                'typeName' => $sub->subjectType?->name ?? '',
+            ];
+        })->values();
+    });
+@endphp
+
+{{-- Save indicator --}}
 <div class="save-indicator" id="save-indicator"></div>
 
+{{-- Data cho onboarding wizard (từ Blade) --}}
 <script>
-    // ─── State ──────────────────────────────────────────────────────────────────
-    let fetchTimer  = null;          // Timer debounce cho gọi API gợi ý
-    let saveTimer   = null;          // Timer debounce cho auto-save điểm
-    let currentCourses = [];         // Danh sách môn đang học kỳ này
-    let syncLock    = false;         // Tránh vòng lặp sync vô hạn
-    const TOTAL_CREDITS = {{ $totalCredits }}; // Tổng tín chỉ toàn chương trình
+    // ─── Dữ liệu truyền từ server ────────────────────────────────────────────────
+    const ACADEMIC_YEARS  = @json($academicYears);
+    const PROGRAM_TYPES   = @json($programTypes);
+    const SUBJECTS_BY_SEM = @json($subjectsBySem);
+    const TOTAL_CREDITS   = {{ $totalCredits }};
+    const CSRF_TOKEN      = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
-    // ─── CSRF token lấy từ <meta> tag, dùng cho mọi POST request ─────────────
-    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    // ─── State chính ─────────────────────────────────────────────────────────────
+    let fetchTimer    = null;
+    let saveTimer     = null;
+    let prefTimer     = null;
+    let currentCourses = [];
+    let syncLock      = false;
 
-    // =========================================================================
-    // PHẦN LƯU / TẢI ĐIỂM TỪ DATABASE
-    // =========================================================================
+    // ─── State Onboarding ─────────────────────────────────────────────────────────
+    let obStep       = 0;          // bước hiện tại (0-3)
+    let obData = {
+        academic_year:    null,
+        program_type:     null,
+        current_semester: null,
+        target_years:     null,
+        grades: {}   // { subject_id: grade_value }
+    };
 
-    // =========================================================================
-    // PHẦN LƯU / TẢI CẤU HÌNH CHƯƠNG TRÌNH (DROPDOWN)
-    // =========================================================================
+    // ═══════════════════════════════════════════════════════════════
+    // ONBOARDING WIZARD
+    // ═══════════════════════════════════════════════════════════════
+    const OB_STEPS = [
+        {
+            label: 'Bước 1 / 4',
+            icon: '🎓',
+            iconBg: 'rgba(99,102,241,.2)',
+            title: 'Chào mừng bạn!',
+            desc: 'Hãy cho chúng tôi biết bạn đang theo học chương trình nào để hệ thống gợi ý chính xác nhất.',
+        },
+        {
+            label: 'Bước 2 / 4',
+            icon: '📅',
+            iconBg: 'rgba(168,85,247,.2)',
+            title: 'Bạn đang học kỳ nào?',
+            desc: 'Chọn học kỳ hiện tại của bạn để hệ thống xác định các môn phù hợp với tiến độ.',
+        },
+        {
+            label: 'Bước 3 / 4',
+            icon: '📝',
+            iconBg: 'rgba(245,158,11,.15)',
+            title: 'Điểm số của bạn',
+            desc: 'Nhập điểm các môn bạn đã học. Chỉ nhập những môn đã có điểm.',
+        },
+        {
+            label: 'Bước 4 / 4',
+            icon: '🏆',
+            iconBg: 'rgba(16,185,129,.15)',
+            title: 'Mục tiêu tốt nghiệp',
+            desc: 'Bạn muốn hoàn thành chương trình trong bao nhiêu năm?',
+        },
+    ];
 
-    /** Timer debounce riêng cho việc lưu cấu hình (tách biệt với saveTimer của điểm) */
-    let prefTimer = null;
+    function renderObDots() {
+        document.querySelectorAll('.ob-dot').forEach((dot, i) => {
+            dot.classList.remove('active', 'done');
+            if (i < obStep)      dot.classList.add('done');
+            else if (i === obStep) dot.classList.add('active');
+        });
+    }
 
-    /**
-     * Lưu cấu hình chương trình hiện tại lên server (debounce 500ms).
-     * Lấy giá trị từ các dropdown trên trang và gửi POST tới /preferences/save.
-     */
+    function renderObHeader() {
+        const s = OB_STEPS[obStep];
+        document.getElementById('ob-header-content').innerHTML = `
+            <div class="ob-step-label">${s.label}</div>
+            <div class="ob-icon" style="background:${s.iconBg}">${s.icon}</div>
+            <div class="ob-title">${s.title}</div>
+            <p class="ob-desc">${s.desc}</p>
+        `;
+    }
+
+    function renderObBody() {
+        const body = document.getElementById('ob-body-content');
+        body.classList.remove('ob-step-anim');
+        void body.offsetWidth; // reflow để restart animation
+        body.classList.add('ob-step-anim');
+
+        if (obStep === 0) {
+            // ── Bước 1: Niên khóa + Hệ đào tạo ──
+            const yearOpts  = ACADEMIC_YEARS.map(y =>
+                `<option value="${y}" ${obData.academic_year === y ? 'selected' : ''}>${y}</option>`
+            ).join('');
+            const typeOpts  = PROGRAM_TYPES.map(t =>
+                `<option value="${t}" ${obData.program_type === t ? 'selected' : ''}>${t}</option>`
+            ).join('');
+            body.innerHTML = `
+                <div class="ob-form-grid">
+                    <div class="ob-input-group">
+                        <label>Niên khóa</label>
+                        <select class="ob-select" id="ob-academic-year" onchange="obData.academic_year=this.value">
+                            <option value="">-- Chọn niên khóa --</option>
+                            ${yearOpts}
+                        </select>
+                    </div>
+                    <div class="ob-input-group">
+                        <label>Hệ đào tạo</label>
+                        <select class="ob-select" id="ob-program-type" onchange="obData.program_type=this.value">
+                            <option value="">-- Chọn hệ đào tạo --</option>
+                            ${typeOpts}
+                        </select>
+                    </div>
+                </div>`;
+
+        } else if (obStep === 1) {
+            // ── Bước 2: Chọn học kỳ ──
+            const btns = Array.from({length: 8}, (_, i) => i+1).map(i => `
+                <button class="ob-sem-btn ${obData.current_semester === i ? 'selected' : ''}"
+                        onclick="obSelectSem(${i}, this)">
+                    Học kỳ ${i}
+                </button>`).join('');
+            body.innerHTML = `<div class="ob-semester-grid">${btns}</div>`;
+
+        } else if (obStep === 2) {
+            // ── Bước 3: Nhập điểm ──
+            let sectionsHtml = '';
+            for (const [semName, subjects] of Object.entries(SUBJECTS_BY_SEM)) {
+                const rows = subjects.map(sub => {
+                    const g = obData.grades[sub.id];
+                    const cls = g === undefined ? '' : (g > 5 ? 'pass' : 'fail');
+                    const statusTxt = g === undefined ? '' : (g > 5 ? '✓ Pass' : '✗ Fail');
+                    const statusCls = g === undefined ? '' : (g > 5 ? 'pass' : 'fail');
+                    return `
+                        <div class="ob-subject-row ${g !== undefined ? 'has-grade' : ''}" id="ob-row-${sub.id}">
+                            <div class="ob-subject-info">
+                                <div class="ob-subject-name">${sub.name}</div>
+                                <div class="ob-subject-meta">${sub.credits} tín chỉ · HK chuẩn ${sub.semName}</div>
+                            </div>
+                            <div class="ob-grade-wrap">
+                                <input type="number" class="ob-grade-input ${cls}"
+                                       id="ob-grade-${sub.id}"
+                                       min="0" max="10" step="0.1" placeholder="—"
+                                       value="${g !== undefined ? g : ''}"
+                                       oninput="obGradeChange(${sub.id}, this)">
+                                <span class="ob-grade-status ${statusCls}" id="ob-gstatus-${sub.id}">${statusTxt}</span>
+                            </div>
+                        </div>`;
+                }).join('');
+                sectionsHtml += `
+                    <div class="ob-semester-section">
+                        <div class="ob-semester-section-title">Học kỳ chuẩn ${semName}</div>
+                        ${rows}
+                    </div>`;
+            }
+            body.innerHTML = `
+                <div class="ob-warning">
+                    <span class="ob-warning-icon">⚠️</span>
+                    <p><strong>Lưu ý quan trọng:</strong> Chỉ nhập điểm những môn bạn <strong>đã học và có kết quả</strong>. Dữ liệu này ảnh hưởng trực tiếp đến độ chính xác của các đề xuất môn học.</p>
+                </div>
+                <div class="ob-subjects-scroll">${sectionsHtml}</div>`;
+
+        } else if (obStep === 3) {
+            // ── Bước 4: Mục tiêu tốt nghiệp ──
+            const years = [3, 4, 5, 6];
+            const descs = { 3: 'Rất nhanh', 4: 'Tiêu chuẩn', 5: 'Bình thường', 6: 'Linh hoạt' };
+            const btns = years.map(y => `
+                <button class="ob-year-btn ${obData.target_years === y ? 'selected' : ''}"
+                        onclick="obSelectYear(${y}, this)">
+                    ${y} năm
+                    <small>${descs[y]}</small>
+                </button>`).join('');
+            body.innerHTML = `
+                <div class="ob-year-grid">${btns}</div>
+                <p style="margin-top:1rem; font-size:.82rem; color:var(--text-secondary); text-align:center;">
+                    Thông thường chương trình Đại học 4 năm gồm 8 học kỳ.
+                </p>`;
+        }
+
+        // Footer buttons
+        const btnBack = document.getElementById('ob-btn-back');
+        const btnNext = document.getElementById('ob-btn-next');
+        const progText = document.getElementById('ob-progress-text');
+        btnBack.disabled = obStep === 0;
+        progText.textContent = `Bước ${obStep + 1} / 4`;
+
+        if (obStep === 3) {
+            btnNext.textContent = '🎉 Hoàn thành!';
+            btnNext.className = 'ob-btn-next finish';
+        } else {
+            btnNext.innerHTML = 'Tiếp theo →';
+            btnNext.className = 'ob-btn-next';
+        }
+    }
+
+    function obSelectSem(i, el) {
+        obData.current_semester = i;
+        document.querySelectorAll('.ob-sem-btn').forEach(b => b.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    function obSelectYear(y, el) {
+        obData.target_years = y;
+        document.querySelectorAll('.ob-year-btn').forEach(b => b.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    function obGradeChange(id, input) {
+        const val = parseFloat(input.value);
+        const status = document.getElementById(`ob-gstatus-${id}`);
+        const row = document.getElementById(`ob-row-${id}`);
+        input.classList.remove('pass', 'fail');
+        status.classList.remove('pass', 'fail');
+        row.classList.remove('has-grade');
+
+        if (input.value === '' || isNaN(val)) {
+            delete obData.grades[id];
+            status.textContent = '';
+        } else {
+            obData.grades[id] = val;
+            row.classList.add('has-grade');
+            if (val > 5) {
+                input.classList.add('pass');
+                status.classList.add('pass');
+                status.textContent = '✓ Pass';
+            } else {
+                input.classList.add('fail');
+                status.classList.add('fail');
+                status.textContent = '✗ Fail';
+            }
+        }
+    }
+
+    function obNext() {
+        // Validate từng bước
+        if (obStep === 0) {
+            const yr = document.getElementById('ob-academic-year')?.value;
+            const pt = document.getElementById('ob-program-type')?.value;
+            if (!yr || !pt) { showToast('Vui lòng chọn đầy đủ niên khóa và hệ đào tạo!', 'error'); return; }
+            obData.academic_year = yr;
+            obData.program_type  = pt;
+        }
+        if (obStep === 1 && !obData.current_semester) {
+            showToast('Vui lòng chọn học kỳ hiện tại!', 'error'); return;
+        }
+        if (obStep === 3) {
+            if (!obData.target_years) { showToast('Vui lòng chọn mục tiêu tốt nghiệp!', 'error'); return; }
+            obFinish();
+            return;
+        }
+        obStep++;
+        renderObDots();
+        renderObHeader();
+        renderObBody();
+    }
+
+    function obPrev() {
+        if (obStep === 0) return;
+        obStep--;
+        renderObDots();
+        renderObHeader();
+        renderObBody();
+    }
+
+    async function obFinish() {
+        const btnNext = document.getElementById('ob-btn-next');
+        btnNext.disabled = true;
+        btnNext.textContent = '⏳ Đang lưu...';
+
+        try {
+            // 1. Lưu preferences
+            await fetch('/preferences/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
+                body: JSON.stringify({
+                    academic_year:    obData.academic_year,
+                    program_type:     obData.program_type,
+                    current_semester: obData.current_semester,
+                    target_years:     obData.target_years,
+                }),
+            });
+
+            // 2. Lưu điểm số nếu có
+            const gradesToSave = Object.entries(obData.grades).map(([sid, grade]) => ({
+                subject_id: parseInt(sid),
+                grade: grade,
+            }));
+            if (gradesToSave.length > 0) {
+                await fetch('/grades/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
+                    body: JSON.stringify(gradesToSave),
+                });
+            }
+
+            // 3. Đóng wizard và áp dụng lên UI chính
+            closeOnboarding();
+            applyPreferencesToUI(obData);
+            showToast('Chào mừng! Đã thiết lập chương trình của bạn 🎉', 'success');
+
+        } catch(err) {
+            showToast('Có lỗi xảy ra, vui lòng thử lại!', 'error');
+            btnNext.disabled = false;
+            btnNext.textContent = '🎉 Hoàn thành!';
+        }
+    }
+
+    function openOnboarding() {
+        obStep = 0;
+        const overlay = document.getElementById('ob-overlay');
+        overlay.classList.remove('hidden');
+        renderObDots();
+        renderObHeader();
+        renderObBody();
+    }
+
+    function closeOnboarding() {
+        document.getElementById('ob-overlay').classList.add('hidden');
+    }
+
+    function applyPreferencesToUI(data) {
+        if (data.academic_year)    document.getElementById('academic_year').value    = data.academic_year;
+        if (data.program_type)     document.getElementById('program_type').value     = data.program_type;
+        if (data.current_semester) document.getElementById('target_semester').value  = data.current_semester;
+        if (data.target_years)     document.getElementById('target_years').value     = data.target_years;
+
+        // Áp dụng điểm từ wizard vào UI chính
+        Object.entries(data.grades).forEach(([sid, grade]) => {
+            const input = document.getElementById(`grade-${sid}`);
+            if (input) { input.value = grade; onGradeChange(parseInt(sid), input, true); }
+        });
+
+        // Ẩn dot "chưa cấu hình"
+        document.getElementById('config-dot')?.remove();
+
+        updateCreditStats();
+        fetchSuggestions();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CONFIG PANEL
+    // ═══════════════════════════════════════════════════════════════
+    function toggleConfigPanel() {
+        const panel   = document.getElementById('config-panel');
+        const overlay = document.getElementById('config-overlay');
+        const isOpen  = panel.classList.contains('open');
+        if (isOpen) {
+            panel.classList.remove('open');
+            overlay.classList.remove('open');
+        } else {
+            panel.classList.add('open');
+            overlay.classList.add('open');
+        }
+    }
+
+    function closeConfigPanel() {
+        document.getElementById('config-panel').classList.remove('open');
+        document.getElementById('config-overlay').classList.remove('open');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GRADE DRAWER
+    // ═══════════════════════════════════════════════════════════════
+    function toggleGradeDrawer() {
+        const drawer  = document.getElementById('grade-drawer');
+        const overlay = document.getElementById('grade-drawer-overlay');
+        const isOpen  = drawer.classList.contains('open');
+        if (isOpen) {
+            drawer.classList.remove('open');
+            overlay.classList.remove('open');
+        } else {
+            drawer.classList.add('open');
+            overlay.classList.add('open');
+            // Reset search khi mở
+            const searchEl = document.getElementById('grade-search');
+            if (searchEl) { searchEl.value = ''; filterGradeSearch(''); }
+        }
+    }
+
+    function closeGradeDrawer() {
+        document.getElementById('grade-drawer').classList.remove('open');
+        document.getElementById('grade-drawer-overlay').classList.remove('open');
+    }
+
+    function filterGradeSearch(query) {
+        const q = query.toLowerCase().trim();
+        document.querySelectorAll('.drawer-subject-card').forEach(card => {
+            const name = card.dataset.name || '';
+            card.classList.toggle('hidden-search', q !== '' && !name.includes(q));
+        });
+        // Ẩn/hiện tiêu đề nhóm nếu không còn môn nào hiển thị
+        document.querySelectorAll('.drawer-semester-group').forEach(group => {
+            const visible = group.querySelectorAll('.drawer-subject-card:not(.hidden-search)').length > 0;
+            group.style.display = visible ? '' : 'none';
+        });
+    }
+
+    function updateDrawerStats() {
+        let pass = 0, fail = 0, empty = 0;
+        document.querySelectorAll('.grade-input').forEach(input => {
+            const val = parseFloat(input.value);
+            if (input.value === '' || isNaN(val)) empty++;
+            else if (val > 5.0) pass++;
+            else fail++;
+        });
+        const passEl  = document.getElementById('drawer-pass-count');
+        const failEl  = document.getElementById('drawer-fail-count');
+        const emptyEl = document.getElementById('drawer-empty-count');
+        if (passEl)  passEl.textContent  = pass;
+        if (failEl)  failEl.textContent  = fail;
+        if (emptyEl) emptyEl.textContent = empty;
+
+        // Badge trên nút navbar
+        const badge = document.getElementById('grade-count-badge');
+        if (badge) {
+            const filled = pass + fail;
+            badge.textContent = filled;
+            badge.classList.toggle('visible', filled > 0);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PREFERENCES (lưu & tải)
+    // ═══════════════════════════════════════════════════════════════
     function savePreferences() {
         clearTimeout(prefTimer);
         prefTimer = setTimeout(async () => {
@@ -1025,271 +1721,180 @@
                     target_years:     parseInt(document.getElementById('target_years').value),
                 };
                 const res = await fetch('/preferences/save', {
-                    method:  'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': CSRF_TOKEN,
-                        'Accept':       'application/json',
-                    },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
                     body: JSON.stringify(payload),
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                // Lưu thành công — hiển thị indicator ngắn 1.5s
                 showSaveIndicator('saved', 'Đã lưu cấu hình ✓');
             } catch (err) {
-                console.error('[Preference save error]', err);
                 showSaveIndicator('error', 'Lưu cấu hình thất bại');
             }
-        }, 500); // Debounce 500ms — ngắn hơn điểm vì thao tác đơn giản hơn
+        }, 500);
     }
 
-    /**
-     * Tải cấu hình đã lưu từ server và áp dụng vào các dropdown.
-     * Được gọi khi trang load lần đầu.
-     * Nếu server trả null (chưa từng lưu) thì giữ nguyên giá trị mặc định của dropdown.
-     */
     async function loadPreferences() {
         try {
-            const res = await fetch('/preferences', {
-                headers: { 'Accept': 'application/json' },
-            });
-            if (!res.ok) return; // Chưa đăng nhập hoặc lỗi → giữ default
-
+            const res = await fetch('/preferences', { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) return null;
             const prefs = await res.json();
-            // Áp dụng từng giá trị nếu đã có dữ liệu (không ghi đè nếu null)
-            if (prefs.academic_year)    document.getElementById('academic_year').value    = prefs.academic_year;
-            if (prefs.program_type)     document.getElementById('program_type').value     = prefs.program_type;
-            if (prefs.current_semester) document.getElementById('target_semester').value  = prefs.current_semester;
-            if (prefs.target_years)     document.getElementById('target_years').value     = prefs.target_years;
-
-            // Cập nhật thống kê và gợi ý lại theo cấu hình vừa khôi phục
-            updateCreditStats();
-            fetchSuggestions();
+            return prefs;
         } catch (err) {
             console.warn('[Preference load error]', err);
+            return null;
         }
     }
-    /**
-     * Hiển thị indicator trạng thái lưu điểm ở góc trên phải màn hình.
-     * @param {'saving'|'saved'|'error'|'hide'} state
-     * @param {string} [msg] — nội dung hiển thị (tùy chọn)
-     */
+
+    // ═══════════════════════════════════════════════════════════════
+    // SAVE INDICATOR
+    // ═══════════════════════════════════════════════════════════════
     function showSaveIndicator(state, msg) {
         const el = document.getElementById('save-indicator');
         if (!el) return;
-        el.className = 'save-indicator'; // reset
+        el.className = 'save-indicator';
         if (state === 'hide') { el.style.display = 'none'; return; }
-
         const icons = { saving: '💾', saved: '✓', error: '⚠️' };
-        const texts = {
-            saving: 'Đang lưu...',
-            saved:  'Đã lưu',
-            error:  'Lưu thất bại',
-        };
+        const texts = { saving: 'Đang lưu...', saved: 'Đã lưu', error: 'Lưu thất bại' };
         el.classList.add(state);
         el.textContent = `${icons[state]} ${msg || texts[state]}`;
-
-        // Tự ẩn sau 2.5 giây nếu đã lưu thành công
-        if (state === 'saved') {
-            setTimeout(() => showSaveIndicator('hide'), 2500);
-        }
+        if (state === 'saved') setTimeout(() => showSaveIndicator('hide'), 2500);
     }
 
-    /**
-     * Auto-save điểm của MỘT môn học lên server (debounce 800ms).  
-     * Được gọi mỗi khi người dùng thay đổi ô nhập điểm.
-     * @param {number} subjectId — ID môn học
-     * @param {number|null} grade  — Điểm (null nếu xóa trắng)
-     */
+    // ═══════════════════════════════════════════════════════════════
+    // GRADE SAVE / LOAD
+    // ═══════════════════════════════════════════════════════════════
     function autoSaveGrade(subjectId, grade) {
-        // Hủy timer cũ (nếu user đang gõ liên tục)
         clearTimeout(saveTimer);
-
         showSaveIndicator('saving');
-
         saveTimer = setTimeout(async () => {
             try {
-                // Gửi POST tới /grades/save (web route, có session + CSRF)
                 const res = await fetch('/grades/save', {
-                    method:  'POST',
-                    headers: {
-                        'Content-Type':  'application/json',
-                        'X-CSRF-TOKEN':  CSRF_TOKEN,  // Bắt buộc cho session auth
-                        'Accept':        'application/json',
-                    },
-                    // Body là mảng để tương thích với endpoint nhận nhiều điểm cùng lúc
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
                     body: JSON.stringify([{ subject_id: subjectId, grade: grade }]),
                 });
-
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 showSaveIndicator('saved');
-            } catch (err) {
-                console.error('[Grade save error]', err);
-                showSaveIndicator('error');
-            }
-        }, 800); // Debounce 800ms — tránh spam server khi user đang gõ
+            } catch (err) { showSaveIndicator('error'); }
+        }, 800);
     }
 
-    /**
-     * Lưu nhiều điểm cùng lúc lên server (dùng khi "Hoàn tất học kỳ").  
-     * Không debounce — gửi ngay lập tức.
-     * @param {Array<{subject_id: number, grade: number|null}>} grades
-     * @returns {Promise<void>}
-     */
     async function saveMultipleGrades(grades) {
         if (!grades || grades.length === 0) return;
-
         showSaveIndicator('saving', `Đang lưu ${grades.length} môn...`);
         try {
-            // Đổi sang /grades/save (web route) thay vì /api/grades/save (api route)
             const res = await fetch('/grades/save', {
-                method:  'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': CSRF_TOKEN,
-                    'Accept':       'application/json',
-                },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
                 body: JSON.stringify(grades),
             });
-
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             showSaveIndicator('saved', `Đã lưu ${grades.length} môn ✓`);
-        } catch (err) {
-            console.error('[Batch grade save error]', err);
-            showSaveIndicator('error', 'Lưu điểm thất bại — kiểm tra kết nối');
-        }
+        } catch (err) { showSaveIndicator('error', 'Lưu điểm thất bại'); }
     }
 
-    /**
-     * Tải toàn bộ điểm đã lưu của user từ database khi trang load.  
-     * Điền vào các ô input và cập nhật trạng thái UI (class pass/fail, label).
-     */
     async function loadGradesFromDB() {
         try {
-            // Gọi /grades (web route) thay vì /api/grades (api route thiếu session)
-            const res = await fetch('/grades', {
-                headers: { 'Accept': 'application/json' },
-            });
-
-            if (!res.ok) {
-                // 401 = chưa đăng nhập → bỏ qua, không cần log lỗi
-                if (res.status !== 401) console.warn('[Grade load] HTTP', res.status);
-                return;
-            }
-
-            const grades = await res.json(); // [{ subject_id, grade, status }, ...]
-
-            // Điền điểm vào từng ô input tương ứng và trigger cập nhật UI
+            const res = await fetch('/grades', { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) return;
+            const grades = await res.json();
             grades.forEach(({ subject_id, grade }) => {
                 const input = document.getElementById(`grade-${subject_id}`);
-                if (!input) return; // Môn không hiển thị trên trang này → bỏ qua
-
+                if (!input) return;
                 if (grade !== null && grade !== undefined) {
                     input.value = grade;
-                    // Gọi hàm cập nhật UI (class, status label) — không trigger auto-save
-                    onGradeChange(subject_id, input, /* skipSave= */ true);
+                    onGradeChange(subject_id, input, true);
                 }
             });
-
-            // Cập nhật lại thống kê tín chỉ sau khi đã điền hết điểm
             updateEarnedCredits();
-
-        } catch (err) {
-            // Lỗi mạng hoặc parse JSON — không hiển thị cho user, chỉ log
-            console.warn('[Grade load error]', err);
-        }
+            updateDrawerStats();
+        } catch (err) { console.warn('[Grade load error]', err); }
     }
 
-    // ─── Tính toán và cập nhật thống kê tín chỉ ─────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // CREDIT STATS
+    // ═══════════════════════════════════════════════════════════════
     function updateCreditStats() {
-        const years    = parseInt(document.getElementById('target_years').value);
+        const years   = parseInt(document.getElementById('target_years').value);
         const totalSem = years * 2;
         document.getElementById('stat-total-semesters').textContent = totalSem;
-        // Cập nhật tín chỉ còn lại / kỳ còn lại (sẽ gọi trong updateEarnedCredits)
         updateEarnedCredits();
     }
 
-    // ─── Tính tổng tín chỉ đã tích lũy + cập nhật tín chỉ/kỳ cần đạt ───────────
     function updateEarnedCredits() {
         let earned = 0;
-        // Từ bảng nhập điểm lịch sử (cột trái)
         document.querySelectorAll('.grade-input').forEach(input => {
             const val = parseFloat(input.value);
-            if (!isNaN(val) && val > 5.0) {
-                const credits = parseInt(input.dataset.credits || 0);
-                earned += credits;
-            }
+            if (!isNaN(val) && val > 5.0) earned += parseInt(input.dataset.credits || 0);
         });
-        // Từ bảng môn đang học
-        currentCourses.forEach(c => {
-            if (c.grade !== null && c.grade > 5.0) earned += (c.credits || 0);
-        });
+        currentCourses.forEach(c => { if (c.grade !== null && c.grade > 5.0) earned += (c.credits || 0); });
         document.getElementById('stat-earned-credits').textContent = earned;
 
-        // ── Tín chỉ / kỳ cần đạt (động) ─────────────────────────────────────────
-        // Công thức: ceil( tín_chỉ_còn_lại / học_kỳ_còn_lại )
-        const years       = parseInt(document.getElementById('target_years').value);
-        const totalSem    = years * 2;
-        const currentSem  = parseInt(document.getElementById('target_semester').value);
-        const remaining   = Math.max(0, TOTAL_CREDITS - earned);
-        // Học kỳ còn lại = tổng kỳ - (kỳ hiện tại - 1), tối thiểu 1
-        const remSem      = Math.max(1, totalSem - (currentSem - 1));
-        const perSem      = remaining === 0 ? 0 : Math.ceil(remaining / remSem);
+        const years      = parseInt(document.getElementById('target_years').value);
+        const totalSem   = years * 2;
+        const currentSem = parseInt(document.getElementById('target_semester').value);
+        const remaining  = Math.max(0, TOTAL_CREDITS - earned);
+        const remSem     = Math.max(1, totalSem - (currentSem - 1));
+        const perSem     = remaining === 0 ? 0 : Math.ceil(remaining / remSem);
         document.getElementById('stat-credits-per-sem').textContent = perSem;
     }
 
-    // ─── Nhập điểm ở bảng LỊCH SỬ (cột trái) ────────────────────────────────────
-    // skipSave: true khi hàm được gọi nội bộ (vd: loadGradesFromDB) — không auto-save
+    // ═══════════════════════════════════════════════════════════════
+    // GRADE CHANGE HANDLERS
+    // ═══════════════════════════════════════════════════════════════
     function onGradeChange(id, input, skipSave = false) {
         const card   = document.getElementById(`lbl-sub-${id}`);
         const status = document.getElementById(`status-${id}`);
         const val    = parseFloat(input.value);
+        const isInDrawer = input.classList.contains('drawer-grade-input');
 
-        // Cập nhật class CSS của card và input
-        card.classList.remove('pass','fail');
-        input.classList.remove('is-pass','is-fail');
-        status.classList.remove('pass','fail','empty');
-
-        if (input.value === '' || isNaN(val)) {
-            status.textContent = 'Chưa nhập'; status.classList.add('empty');
-        } else if (val > 5.0) {
-            card.classList.add('pass'); input.classList.add('is-pass');
-            status.textContent = '✓ Pass'; status.classList.add('pass');
-        } else {
-            card.classList.add('fail'); input.classList.add('is-fail');
-            status.textContent = '✗ Fail'; status.classList.add('fail');
+        // ── Cập nhật card wrapper ─────────────────────────────────────
+        if (card) {
+            card.classList.remove('pass', 'fail');
+            if (!isNaN(val) && val > 5.0) card.classList.add('pass');
+            else if (!isNaN(val) && val <= 5.0 && input.value !== '') card.classList.add('fail');
         }
 
-        // Đồng bộ sang panel Môn Đang Học nếu môn đó có mặt
+        // ── Cập nhật input styling ────────────────────────────────────
+        input.classList.remove('is-pass', 'is-fail');
+
+        // ── Cập nhật status label ─────────────────────────────────────
+        if (status) {
+            status.classList.remove('pass', 'fail', 'empty');
+            if (input.value === '' || isNaN(val)) {
+                status.textContent = isInDrawer ? '—' : 'Chưa nhập';
+                status.classList.add('empty');
+            } else if (val > 5.0) {
+                input.classList.add('is-pass');
+                status.textContent = '✓ Pass'; status.classList.add('pass');
+            } else {
+                input.classList.add('is-fail');
+                status.textContent = '✗ Fail'; status.classList.add('fail');
+            }
+        }
+
+        // ── Sync sang panel Môn Đang Học ─────────────────────────────
         if (!syncLock) {
             syncLock = true;
             const ccInput = document.getElementById(`cc-grade-${id}`);
-            if (ccInput && ccInput.value !== input.value) {
-                ccInput.value = input.value;
-                onCCGradeChange(id, ccInput);
-            }
+            if (ccInput && ccInput.value !== input.value) { ccInput.value = input.value; onCCGradeChange(id, ccInput); }
             syncLock = false;
         }
 
-        // Auto-save điểm lên database (trừ khi được gọi từ nội bộ, vd: loadGradesFromDB)
-        if (!skipSave) {
-            const gradeValue = isNaN(val) ? null : val;
-            autoSaveGrade(id, gradeValue); // debounce 800ms
-        }
-
+        if (!skipSave) { const gradeValue = isNaN(val) ? null : val; autoSaveGrade(id, gradeValue); }
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(fetchSuggestions, 400);
         updateEarnedCredits();
+        updateDrawerStats();
     }
 
-    // ─── Nhập điểm ở bảng MÔN ĐANG HỌC ────────────────────────────────────────
     function onCCGradeChange(id, input) {
-        const val = parseFloat(input.value);
-        const item = document.getElementById(`cc-item-${id}`);
+        const val    = parseFloat(input.value);
+        const item   = document.getElementById(`cc-item-${id}`);
         const status = document.getElementById(`cc-status-${id}`);
-        item.classList.remove('cc-pass','cc-fail');
-        input.classList.remove('is-pass','is-fail');
-        status.classList.remove('pass','fail','empty');
+        item.classList.remove('cc-pass', 'cc-fail');
+        input.classList.remove('is-pass', 'is-fail');
+        status.classList.remove('pass', 'fail', 'empty');
         const course = currentCourses.find(c => c.id == id);
         if (course) course.grade = isNaN(val) ? null : val;
         if (input.value === '' || isNaN(val)) {
@@ -1301,51 +1906,42 @@
             item.classList.add('cc-fail'); input.classList.add('is-fail');
             status.textContent = 'Fail'; status.classList.add('fail');
         }
-        // ⚠️ KHÔNG sync sang cột trái ngay — chỉ chuyển khi bấm "Hoàn tất học kỳ"
-        // Cập nhật trạng thái nút Hoàn tất (bật khi tất cả môn đã có điểm)
         updateCompleteButton();
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(fetchSuggestions, 400);
         updateEarnedCredits();
     }
 
-    // ─── Cập nhật trạng thái nút Hoàn tất học kỳ ────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // CURRENT COURSES
+    // ═══════════════════════════════════════════════════════════════
     function updateCompleteButton() {
         const btn = document.getElementById('btn-complete');
         if (!btn) return;
-        // Bật nút khi: có ít nhất 1 môn VÀ tất cả đã điền điểm (kể cả 0 hay fail)
-        const allFilled = currentCourses.length > 0
-            && currentCourses.every(c => c.grade !== null && c.grade !== undefined);
+        const allFilled = currentCourses.length > 0 && currentCourses.every(c => c.grade !== null && c.grade !== undefined);
         btn.disabled = !allFilled;
     }
 
-    // ─── Thêm môn vào danh sách đang học ────────────────────────────────────────
     function addToCurrentCourses(subject) {
         if (currentCourses.find(c => c.id == subject.id)) return;
         currentCourses.push({ id: subject.id, name: subject.name, credits: subject.credits, semesterName: subject.semester?.name || '?', grade: null });
         renderCurrentCourses();
-        // Đổi nút thành "Đã thêm"
         const btn = document.getElementById(`btn-add-${subject.id}`);
         if (btn) { btn.textContent = '✓ Đã thêm'; btn.classList.add('added'); }
-        // Khóa ô nhập điểm bên trái
         lockLeftInput(subject.id);
     }
 
-    // ─── Xóa môn khỏi danh sách đang học ───────────────────────────────────────
     function removeCourse(id) {
         currentCourses = currentCourses.filter(c => c.id != id);
         renderCurrentCourses();
-        // Khôi phục nút + trên suggestion card nếu có
         const btn = document.getElementById(`btn-add-${id}`);
         if (btn) { btn.innerHTML = '+ Thêm'; btn.classList.remove('added'); }
-        // Mở lại ô nhập điểm bên trái
         unlockLeftInput(id);
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(fetchSuggestions, 400);
         updateEarnedCredits();
     }
 
-    // ─── Khóa / Mở ô nhập điểm bên trái khi môn đang được thêm vào panel phải ─────────
     function lockLeftInput(id) {
         const input = document.getElementById(`grade-${id}`);
         if (!input) return;
@@ -1353,7 +1949,6 @@
         const wrap = input.parentElement;
         if (wrap) {
             wrap.classList.add('is-locked');
-            // Thêm badge nếu chưa có
             if (!wrap.querySelector('.studying-label')) {
                 const badge = document.createElement('span');
                 badge.className = 'studying-label';
@@ -1361,7 +1956,6 @@
                 wrap.appendChild(badge);
             }
         }
-        // Ẩn status cũ
         const status = document.getElementById(`status-${id}`);
         if (status) { status.dataset.prevText = status.textContent; status.textContent = ''; }
     }
@@ -1371,16 +1965,10 @@
         if (!input) return;
         input.classList.remove('is-studying');
         const wrap = input.parentElement;
-        if (wrap) {
-            wrap.classList.remove('is-locked');
-            const badge = wrap.querySelector('.studying-label');
-            if (badge) badge.remove();
-        }
-        // Khôi phục status dựa theo giá trị hiện tại của input
+        if (wrap) { wrap.classList.remove('is-locked'); const badge = wrap.querySelector('.studying-label'); if (badge) badge.remove(); }
         onGradeChange(id, input);
     }
 
-    // ─── Render bảng Môn Đang Học ────────────────────────────────────────────────
     function renderCurrentCourses() {
         const container = document.getElementById('current-courses-list');
         const counter   = document.getElementById('cc-count');
@@ -1398,9 +1986,7 @@
                 </div>
                 <div class="current-course-right">
                     <input type="number" class="cc-grade-input${c.grade !== null && c.grade > 5 ? ' is-pass' : c.grade !== null ? ' is-fail' : ''}"
-                           id="cc-grade-${c.id}"
-                           min="0" max="10" step="0.1"
-                           placeholder="Điểm"
+                           id="cc-grade-${c.id}" min="0" max="10" step="0.1" placeholder="Điểm"
                            value="${c.grade !== null ? c.grade : ''}"
                            oninput="onCCGradeChange(${c.id}, this)">
                     <span class="cc-status ${c.grade !== null && c.grade > 5 ? 'pass' : c.grade !== null ? 'fail' : 'empty'}" id="cc-status-${c.id}">${c.grade !== null && c.grade > 5 ? 'Pass' : c.grade !== null ? 'Fail' : '—'}</span>
@@ -1410,22 +1996,29 @@
         `).join('');
     }
 
-    // ─── Lấy tất cả môn học đã Pass (từ cả 2 bảng) ──────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // SUGGESTIONS
+    // ═══════════════════════════════════════════════════════════════
     function getPassedSubjectIds() {
         const passed = new Set();
-        // Từ bảng lịch sử điểm (cột trái)
         document.querySelectorAll('.grade-input').forEach(input => {
             const val = parseFloat(input.value);
             if (!isNaN(val) && val > 5.0) passed.add(input.dataset.subjectId);
         });
-        // Từ bảng môn đang học
-        currentCourses.forEach(c => {
-            if (c.grade !== null && c.grade > 5.0) passed.add(String(c.id));
-        });
+        currentCourses.forEach(c => { if (c.grade !== null && c.grade > 5.0) passed.add(String(c.id)); });
         return [...passed].join(',');
     }
 
-    // ─── Gọi API lấy dữ liệu đề xuất ───────────────────────────────────────────
+    function getFailedSubjectIds() {
+        const failed = new Set();
+        document.querySelectorAll('.grade-input').forEach(input => {
+            const val = parseFloat(input.value);
+            if (!isNaN(val) && val > 0 && val <= 5.0) failed.add(parseInt(input.dataset.subjectId));
+        });
+        currentCourses.forEach(c => { if (c.grade !== null && c.grade > 0 && c.grade <= 5.0) failed.add(c.id); });
+        return failed;
+    }
+
     async function fetchSuggestions() {
         const academicYear   = document.getElementById('academic_year').value;
         const programType    = document.getElementById('program_type').value;
@@ -1449,24 +2042,6 @@
         }
     }
 
-    // ─── Lấy danh sách môn đã thi Fail (có điểm ≤ 5.0) ──────────────────────────────────
-    function getFailedSubjectIds() {
-        const failed = new Set();
-        // Từ cột trái
-        document.querySelectorAll('.grade-input').forEach(input => {
-            const val = parseFloat(input.value);
-            if (!isNaN(val) && val > 0 && val <= 5.0)
-                failed.add(parseInt(input.dataset.subjectId));
-        });
-        // Từ panel Môn Đang Học
-        currentCourses.forEach(c => {
-            if (c.grade !== null && c.grade > 0 && c.grade <= 5.0)
-                failed.add(c.id);
-        });
-        return failed;
-    }
-
-    // ─── Render danh sách gợi ý ─────────────────────────────────────────────────
     function renderSuggestions(subjects, targetSemester) {
         const container = document.getElementById('suggestions-list');
         if (subjects.length === 0) {
@@ -1486,10 +2061,8 @@
             const isAdded   = currentCourses.find(c => c.id == subject.id);
             const failedIds = getFailedSubjectIds();
             const isFailed  = failedIds.has(subject.id);
-
             let distLabel = '';
             if (isFailed) {
-                // Môn đã thi nhưng trượt → cần học lại
                 distLabel = '<span style="color:#f87171;font-weight:600;">Học lại 🔄</span>';
             } else if (subSem === targetSem) {
                 distLabel = '<span style="color:var(--accent-success);font-weight:600;">Đúng tiến độ 🎯</span>';
@@ -1519,67 +2092,39 @@
         }).join('');
     }
 
-    // ─── Hoàn tất học kỳ: tăng học kỳ +1, chuyển điểm sang lịch sử ────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // COMPLETE SEMESTER
+    // ═══════════════════════════════════════════════════════════════
     function completeSemester() {
-        // Kiểm tra tất cả đã có điểm
         const unfilled = currentCourses.filter(c => c.grade === null || c.grade === undefined);
-        if (unfilled.length > 0) {
-            showToast(`Còn ${unfilled.length} môn chưa điền điểm!`, 'error');
-            return;
-        }
-        if (currentCourses.length === 0) {
-            showToast('Chưa có môn nào trong danh sách!', 'error');
-            return;
-        }
-
-        // 1. Chụp lại danh sách điểm TRƯỚC khi xóa (tránh mất dữ liệu)
+        if (unfilled.length > 0) { showToast(`Còn ${unfilled.length} môn chưa điền điểm!`, 'error'); return; }
+        if (currentCourses.length === 0) { showToast('Chưa có môn nào trong danh sách!', 'error'); return; }
         const snapshot = currentCourses.map(c => ({ id: c.id, grade: c.grade }));
-
-        // 2. Xóa currentCourses và re-render NGAY — điều này loại cc-grade-${id} khỏi DOM
-        //    → khi ghi điểm sang cột trái, sync ngược không còn nơi để ghi đè về null
         currentCourses = [];
         renderCurrentCourses();
-
-        // 3. Ghi điểm vào cột trái (cc-grade không còn tồn tại → không có sync ngược)
         snapshot.forEach(({ id, grade }) => {
-            // Mở khóa badge "📖 Đang học" (không trigger sync vì cc-grade đã bị xóa)
             const input = document.getElementById(`grade-${id}`);
             if (!input) return;
             input.classList.remove('is-studying');
             const wrap = input.parentElement;
-            if (wrap) {
-                wrap.classList.remove('is-locked');
-                const badge = wrap.querySelector('.studying-label');
-                if (badge) badge.remove();
-            }
-            // Ghi điểm và cập nhật UI cột trái (skipSave=true vì sẽ lưu hàng loạt bên dưới)
+            if (wrap) { wrap.classList.remove('is-locked'); const badge = wrap.querySelector('.studying-label'); if (badge) badge.remove(); }
             input.value = grade;
-            onGradeChange(id, input, /* skipSave= */ true);
+            onGradeChange(id, input, true);
         });
-
-        // 3b. Lưu toàn bộ điểm của kỳ vừa hoàn tất vào database một lần duy nhất
-        //     (hiệu quả hơn gọi autoSaveGrade nhiều lần, tránh spam N requests)
-        const gradesToSave = snapshot.map(({ id, grade }) => ({
-            subject_id: id,
-            grade:      grade,
-        }));
-        saveMultipleGrades(gradesToSave); // async — không block UI
-
-        // 4. Tăng học kỳ hiện tại +1
+        const gradesToSave = snapshot.map(({ id, grade }) => ({ subject_id: id, grade: grade }));
+        saveMultipleGrades(gradesToSave);
         const sel = document.getElementById('target_semester');
         const cur = parseInt(sel.value);
-        if (cur < 8) {
-            sel.value = cur + 1;
-        } else {
-            showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success');
-        }
-
+        if (cur < 8) { sel.value = cur + 1; } else { showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success'); }
+        savePreferences();
         fetchSuggestions();
         updateEarnedCredits();
         showToast(`Hoàn tất học kỳ ${cur}! Đã chuyển sang học kỳ ${Math.min(cur + 1, 8)}.`, 'success');
     }
 
-    // ─── Hiển thị thông báo toast ────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // TOAST
+    // ═══════════════════════════════════════════════════════════════
     function showToast(msg, type = 'success') {
         const existing = document.getElementById('app-toast');
         if (existing) existing.remove();
@@ -1591,41 +2136,49 @@
         setTimeout(() => t.remove(), 3500);
     }
 
-    // ─── Event Listeners ────────────────────────────────────────────────────────
-    // LUỔNG LƯU KHI ĐỔI DROPDOWN:
-    //   clearTimeout(saveTimer) — hủy grade auto-save đang chờ (tránh conflict)
-    //   savePreferences()      — debounce 500ms, lưu cấu hình lên DB
+    // ═══════════════════════════════════════════════════════════════
+    // EVENT LISTENERS (config panel dropdowns)
+    // ═══════════════════════════════════════════════════════════════
     document.getElementById('academic_year').addEventListener('change', () => {
-        clearTimeout(saveTimer);    // Hủy grade auto-save đang chờ
-        showSaveIndicator('hide');
-        savePreferences();          // Lưu cấu hình mới
-        fetchSuggestions();
+        clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); fetchSuggestions();
     });
     document.getElementById('program_type').addEventListener('change', () => {
-        clearTimeout(saveTimer);
-        showSaveIndicator('hide');
-        savePreferences();
-        fetchSuggestions();
+        clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); fetchSuggestions();
     });
     document.getElementById('target_semester').addEventListener('change', () => {
-        clearTimeout(saveTimer);
-        showSaveIndicator('hide');
-        savePreferences();
-        updateEarnedCredits();
-        fetchSuggestions();
+        clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); updateEarnedCredits(); fetchSuggestions();
     });
     document.getElementById('target_years').addEventListener('change', () => {
-        clearTimeout(saveTimer);
-        showSaveIndicator('hide');
-        savePreferences();          // Lưu mục tiêu tốt nghiệp mới
-        updateCreditStats();
+        clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); updateCreditStats();
     });
-    document.addEventListener('DOMContentLoaded', () => {
-        // Bước 1: Cập nhật thống kê với giá trị mặc định của dropdown
+
+    // ═══════════════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', async () => {
         updateCreditStats();
-        // Bước 2: Tải cấu hình đã lưu (sẽ gọi fetchSuggestions + updateCreditStats lại bên trong)
-        // Tải cấu hình trước, sau đó mới tải điểm (vì điểm cần suggestion đã render xong)
-        loadPreferences().then(() => loadGradesFromDB());
+        const prefs = await loadPreferences();
+
+        // Kiểm tra xem user đã từng cấu hình chưa (có ít nhất academic_year)
+        const hasConfig = prefs && prefs.academic_year;
+
+        if (!hasConfig) {
+            // Lần đầu vào → mở onboarding wizard
+            openOnboarding();
+        } else {
+            // Đã có config → áp dụng preferences và tải điểm
+            if (prefs.academic_year)    document.getElementById('academic_year').value    = prefs.academic_year;
+            if (prefs.program_type)     document.getElementById('program_type').value     = prefs.program_type;
+            if (prefs.current_semester) document.getElementById('target_semester').value  = prefs.current_semester;
+            if (prefs.target_years)     document.getElementById('target_years').value     = prefs.target_years;
+
+            // Ẩn dot "chưa cấu hình"
+            document.getElementById('config-dot')?.remove();
+
+            updateCreditStats();
+            await loadGradesFromDB();
+            fetchSuggestions();
+        }
     });
 </script>
 
