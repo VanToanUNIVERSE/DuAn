@@ -227,6 +227,37 @@
         }
         .btn-grades .grade-badge.visible { display: inline-block; }
 
+        /* ── Nút Lịch sử ── */
+        .btn-history {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            background: rgba(251,191,36,.1);
+            border: 1px solid rgba(251,191,36,.3);
+            color: #fcd34d;
+            border-radius: 8px;
+            padding: .45rem .9rem;
+            font-family: 'Inter', sans-serif;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .btn-history:hover { background: rgba(251,191,36,.2); color: #fff; }
+        .btn-history .history-badge {
+            background: #f59e0b;
+            color: #000;
+            border-radius: 50px;
+            font-size: .65rem;
+            font-weight: 800;
+            padding: .05rem .4rem;
+            min-width: 18px;
+            text-align: center;
+            display: none;
+        }
+        .btn-history .history-badge.visible { display: inline-block; }
+
         .btn-logout {
             display: inline-flex;
             align-items: center;
@@ -243,6 +274,146 @@
             transition: all .2s;
         }
         .btn-logout:hover { background: rgba(239,68,68,.22); }
+
+        /* ═══════════════════════════════════════════════════════════
+           HISTORY DRAWER (slide-in từ bên phải)
+        ═══════════════════════════════════════════════════════════ */
+        .history-drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 600;
+            background: rgba(7,11,26,0.6);
+            backdrop-filter: blur(4px);
+        }
+        .history-drawer-overlay.open { display: block; }
+
+        .history-drawer {
+            position: fixed;
+            top: 0; right: 0;
+            width: 520px;
+            max-width: 96vw;
+            height: 100vh;
+            background: linear-gradient(160deg, rgba(13,19,38,0.99), rgba(26,18,50,0.99));
+            border-left: 1px solid rgba(251,191,36,.2);
+            z-index: 700;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: -6px 0 40px rgba(0,0,0,.5);
+        }
+        .history-drawer.open { transform: translateX(0); }
+
+        .history-drawer-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,.07);
+            display: flex; align-items: center; justify-content: space-between;
+            flex-shrink: 0;
+            background: rgba(251,191,36,.05);
+        }
+        .history-drawer-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem; font-weight: 700; color: #fff;
+            display: flex; align-items: center; gap: .6rem;
+        }
+        .history-drawer-subtitle {
+            font-size: .75rem; color: var(--text-secondary); margin-top: .15rem;
+        }
+        .history-drawer-close {
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.12);
+            color: var(--text-secondary);
+            border-radius: 8px; width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1.1rem; transition: var(--transition); flex-shrink: 0;
+        }
+        .history-drawer-close:hover { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.3); color: #f87171; }
+
+        .history-drawer-body {
+            flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem;
+        }
+        .history-drawer-body::-webkit-scrollbar { width: 4px; }
+        .history-drawer-body::-webkit-scrollbar-track { background: transparent; }
+        .history-drawer-body::-webkit-scrollbar-thumb { background: rgba(251,191,36,.3); border-radius: 2px; }
+
+        .history-empty {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 4rem 1rem; gap: .75rem;
+            color: var(--text-secondary); font-size: .9rem; text-align: center;
+        }
+        .history-empty-icon { font-size: 2.8rem; }
+
+        /* — Từng học kỳ — */
+        .history-sem-block {
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(251,191,36,.15);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .history-sem-header {
+            background: rgba(251,191,36,.08);
+            padding: .8rem 1.1rem;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: .75rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .history-sem-header:hover { background: rgba(251,191,36,.14); }
+        .history-sem-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem; font-weight: 700; color: #fcd34d;
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .history-sem-meta {
+            display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+        }
+        .history-sem-pill {
+            font-size: .7rem; font-weight: 700;
+            padding: .2rem .55rem; border-radius: 50px;
+            border: 1px solid;
+        }
+        .history-sem-pill.gpa {
+            color: #a5f3fc; border-color: rgba(34,211,238,.4); background: rgba(34,211,238,.08);
+        }
+        .history-sem-pill.credits {
+            color: #bbf7d0; border-color: rgba(74,222,128,.35); background: rgba(74,222,128,.07);
+        }
+        .history-sem-pill.date {
+            color: var(--text-secondary); border-color: rgba(255,255,255,.1); background: transparent;
+        }
+        .history-sem-chevron {
+            color: var(--text-secondary); transition: transform .25s; flex-shrink: 0; font-size: 1rem;
+        }
+        .history-sem-block.open .history-sem-chevron { transform: rotate(180deg); }
+
+        .history-sem-body {
+            display: none; border-top: 1px solid rgba(255,255,255,.05);
+        }
+        .history-sem-block.open .history-sem-body { display: block; }
+
+        .history-subject-list { display: flex; flex-direction: column; gap: 0; }
+        .history-subject-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: .6rem 1.1rem; gap: .75rem;
+            border-bottom: 1px solid rgba(255,255,255,.04);
+            transition: var(--transition);
+        }
+        .history-subject-row:last-child { border-bottom: none; }
+        .history-subject-row:hover { background: rgba(255,255,255,.025); }
+        .history-subject-row.pass { border-left: 3px solid rgba(52,211,153,.5); }
+        .history-subject-row.fail { border-left: 3px solid rgba(239,68,68,.45); }
+        .history-subject-name { font-size: .85rem; font-weight: 500; color: #e2e8f0; flex: 1; }
+        .history-subject-credits { font-size: .72rem; color: var(--text-secondary); min-width: 42px; text-align: right; }
+        .history-subject-grade {
+            min-width: 48px; text-align: center;
+            font-size: .9rem; font-weight: 800;
+            font-family: 'Outfit', sans-serif;
+        }
+        .history-subject-grade.pass { color: #6ee7b7; }
+        .history-subject-grade.fail { color: #fca5a5; }
+        .history-subject-grade.empty { color: var(--text-secondary); }
 
         /* ═══════════════════════════════════════════════════════════
            CONFIG PANEL (dropdown từ nút menu)
@@ -1201,6 +1372,29 @@
 </div>
 
 {{-- ══════════════════════════════════════════════════════════════════
+     HISTORY DRAWER — Slide-in từ bên phải
+══════════════════════════════════════════════════════════════════ --}}
+<div class="history-drawer-overlay" id="history-drawer-overlay" onclick="closeHistoryDrawer()"></div>
+<div class="history-drawer" id="history-drawer">
+    <div class="history-drawer-header">
+        <div>
+            <div class="history-drawer-title">
+                📚 Lịch Sử Học Kỳ
+            </div>
+            <div class="history-drawer-subtitle">Các học kỳ bạn đã hoàn tất</div>
+        </div>
+        <button class="history-drawer-close" onclick="closeHistoryDrawer()">✕</button>
+    </div>
+    <div class="history-drawer-body" id="history-drawer-body">
+        <div class="history-empty" id="history-empty">
+            <span class="history-empty-icon">📖</span>
+            <p>Chưa có học kỳ nào được hoàn tất.<br>Ấn <strong>✓ Hoàn tất học kỳ</strong> sau khi kết thúc mỗi kỳ học.</p>
+        </div>
+        <div id="history-list"></div>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════════
      GRADE DRAWER — Slide-in từ bên trái
 ══════════════════════════════════════════════════════════════════ --}}
 <div class="grade-drawer-overlay" id="grade-drawer-overlay" onclick="closeGradeDrawer()"></div>
@@ -1286,6 +1480,15 @@
                 </svg>
                 ⚙ Cấu hình
                 <span class="config-dot" id="config-dot"></span>
+            </button>
+
+            {{-- Nút lịch sử học kỳ --}}
+            <button class="btn-history" id="btn-history" onclick="toggleHistoryDrawer()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+                </svg>
+                📚 Lịch sử
+                <span class="history-badge" id="history-count-badge"></span>
             </button>
 
             {{-- Đăng xuất --}}
@@ -2210,7 +2413,14 @@
         const unfilled = currentCourses.filter(c => c.grade === null || c.grade === undefined);
         if (unfilled.length > 0) { showToast(`Còn ${unfilled.length} môn chưa điền điểm!`, 'error'); return; }
         if (currentCourses.length === 0) { showToast('Chưa có môn nào trong danh sách!', 'error'); return; }
+
         const snapshot = currentCourses.map(c => ({ id: c.id, grade: c.grade }));
+        const sel = document.getElementById('target_semester');
+        const cur = parseInt(sel.value);
+
+        // Lưu lịch sử học kỳ vào DB
+        saveSemesterHistory(cur, snapshot);
+
         currentCourses = [];
         renderCurrentCourses();
         snapshot.forEach(({ id, grade }) => {
@@ -2224,13 +2434,34 @@
         });
         const gradesToSave = snapshot.map(({ id, grade }) => ({ subject_id: id, grade: grade }));
         saveMultipleGrades(gradesToSave);
-        const sel = document.getElementById('target_semester');
-        const cur = parseInt(sel.value);
         if (cur < 8) { sel.value = cur + 1; } else { showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success'); }
         savePreferences();
         fetchSuggestions();
         updateEarnedCredits();
+        scheduleChartRefresh();
         showToast(`Hoàn tất học kỳ ${cur}! Đã chuyển sang học kỳ ${Math.min(cur + 1, 8)}.`, 'success');
+    }
+
+    async function saveSemesterHistory(semesterNumber, snapshot) {
+        try {
+            const courses = snapshot.map(({ id, grade }) => ({ subject_id: id, grade: grade }));
+            const payload = {
+                semester_number: semesterNumber,
+                academic_year: document.getElementById('academic_year')?.value || null,
+                program_type:  document.getElementById('program_type')?.value  || null,
+                courses,
+            };
+            const res = await fetch('/semester-history/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            // Reload panel lịch sử
+            loadSemesterHistory();
+        } catch (err) {
+            console.warn('[Lưu lịch sử thất bại]', err);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2503,6 +2734,139 @@ function scheduleChartRefresh() {
     clearTimeout(chartFetchTimer);
     chartFetchTimer = setTimeout(fetchChartData, 2000);
 }
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// SEMESTER HISTORY DRAWER
+// ═══════════════════════════════════════════════════════════════
+
+function toggleHistoryDrawer() {
+    const drawer  = document.getElementById('history-drawer');
+    const overlay = document.getElementById('history-drawer-overlay');
+    const isOpen  = drawer.classList.contains('open');
+    if (isOpen) {
+        drawer.classList.remove('open');
+        overlay.classList.remove('open');
+    } else {
+        drawer.classList.add('open');
+        overlay.classList.add('open');
+        loadSemesterHistory(); // Luôn reload khi mở
+    }
+}
+
+function closeHistoryDrawer() {
+    document.getElementById('history-drawer').classList.remove('open');
+    document.getElementById('history-drawer-overlay').classList.remove('open');
+}
+
+async function loadSemesterHistory() {
+    try {
+        const res = await fetch('/semester-history', {
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        renderHistoryDrawer(data);
+        updateHistoryBadge(data.length);
+    } catch (err) {
+        console.warn('[History load error]', err);
+    }
+}
+
+function updateHistoryBadge(count) {
+    const badge = document.getElementById('history-count-badge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent = count;
+        badge.classList.add('visible');
+    } else {
+        badge.classList.remove('visible');
+    }
+}
+
+function renderHistoryDrawer(histories) {
+    const emptyEl = document.getElementById('history-empty');
+    const listEl  = document.getElementById('history-list');
+    if (!listEl) return;
+
+    if (!histories || histories.length === 0) {
+        emptyEl.style.display = 'flex';
+        listEl.innerHTML = '';
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+
+    // Sắp xếp mới nhất trước
+    const sorted = [...histories].sort((a, b) => b.semester_number - a.semester_number);
+
+    listEl.innerHTML = sorted.map((h, idx) => {
+        const gpaColor = h.gpa >= 8 ? '#6ee7b7' : h.gpa >= 6.5 ? '#a5f3fc' : h.gpa >= 5 ? '#fcd34d' : '#fca5a5';
+        const passRate = h.total_credits > 0
+            ? Math.round((h.passed_credits / h.total_credits) * 100)
+            : 0;
+
+        const itemsHtml = (h.items || []).map(item => {
+            const gradeClass = item.grade === null ? 'empty'
+                : item.status === 'pass' ? 'pass' : 'fail';
+            const gradeText = item.grade !== null ? item.grade : '—';
+            return `
+                <div class="history-subject-row ${item.status || ''}">
+                    <span class="history-subject-name">${item.subject_name || '?'}</span>
+                    <span class="history-subject-credits">${item.credits ?? '?'} TC</span>
+                    <span class="history-subject-grade ${gradeClass}">${gradeText}</span>
+                </div>`;
+        }).join('');
+
+        return `
+        <div class="history-sem-block" id="history-block-${h.id}">
+            <div class="history-sem-header" onclick="toggleSemBlock(${h.id})">
+                <div>
+                    <div class="history-sem-title">
+                        🎓 Học kỳ ${h.semester_number}
+                        ${h.academic_year ? `<span style="font-size:.75rem;font-weight:500;color:rgba(255,255,255,.4);">(${h.academic_year})</span>` : ''}
+                    </div>
+                    <div class="history-sem-meta" style="margin-top:.3rem;">
+                        ${h.gpa !== null ? `<span class="history-sem-pill gpa">GPA: ${h.gpa}</span>` : ''}
+                        <span class="history-sem-pill credits">✓ ${h.passed_credits}/${h.total_credits} TC</span>
+                        ${h.completed_at ? `<span class="history-sem-pill date">📅 ${h.completed_at}</span>` : ''}
+                    </div>
+                </div>
+                <span class="history-sem-chevron">▼</span>
+            </div>
+            <div class="history-sem-body">
+                <div class="history-subject-list">
+                    <div class="history-subject-row" style="background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.07);">
+                        <span style="font-size:.72rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em;">Môn học</span>
+                        <span style="font-size:.72rem;font-weight:700;color:var(--text-secondary);min-width:42px;text-align:right;">TC</span>
+                        <span style="font-size:.72rem;font-weight:700;color:var(--text-secondary);min-width:48px;text-align:center;">Điểm</span>
+                    </div>
+                    ${itemsHtml || '<div style="padding:.8rem 1.1rem;color:var(--text-secondary);font-size:.85rem;">Không có dữ liệu môn học</div>'}
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:.65rem 1.1rem;background:rgba(255,255,255,.03);border-top:1px solid rgba(255,255,255,.07);">
+                        <span style="font-size:.75rem;color:var(--text-secondary);">Tỷ lệ pass</span>
+                        <div style="display:flex;align-items:center;gap:.75rem;">
+                            <div style="width:80px;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">
+                                <div style="height:100%;width:${passRate}%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:3px;"></div>
+                            </div>
+                            <span style="font-size:.8rem;font-weight:700;color:${gpaColor};">${passRate}%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleSemBlock(id) {
+    const block = document.getElementById(`history-block-${id}`);
+    if (block) block.classList.toggle('open');
+}
+
+// Tải lịch sử khi page load (để cập nhật badge)
+document.addEventListener('DOMContentLoaded', () => {
+    loadSemesterHistory();
+});
 </script>
 
 </body>

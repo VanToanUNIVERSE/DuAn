@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\GradeController;
+use App\Http\Controllers\SemesterHistoryController;
 use App\Http\Controllers\UserPreferenceController;
 use Illuminate\Support\Facades\Route;
 
@@ -74,5 +75,12 @@ Route::middleware('auth')->group(function () {
 
     // POST /preferences/save   → Lưu cấu hình mới
     Route::post('/preferences/save', [UserPreferenceController::class, 'save'])->name('preferences.save');
+
+    // ── Routes lịch sử học kỳ ───────────────────────────────────────────────
+    // GET  /semester-history          → Lấy toàn bộ lịch sử
+    Route::get('/semester-history', [SemesterHistoryController::class, 'index'])->name('semester-history.index');
+
+    // POST /semester-history/complete → Lưu khi hoàn tất học kỳ
+    Route::post('/semester-history/complete', [SemesterHistoryController::class, 'complete'])->name('semester-history.complete');
 });
 
