@@ -3089,8 +3089,6 @@
         }
 
         if (!skipSave) { const gradeValue = isNaN(val) ? null : val; autoSaveGrade(id, gradeValue); }
-        clearTimeout(fetchTimer);
-        fetchTimer = setTimeout(fetchSuggestions, 400);
         updateEarnedCredits();
         updateDrawerStats();
     }
@@ -3114,8 +3112,6 @@
             status.textContent = 'Fail'; status.classList.add('fail');
         }
         updateCompleteButton();
-        clearTimeout(fetchTimer);
-        fetchTimer = setTimeout(fetchSuggestions, 400);
         updateEarnedCredits();
     }
 
