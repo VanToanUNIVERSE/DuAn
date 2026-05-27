@@ -2874,6 +2874,9 @@
     function closeGradeDrawer() {
         document.getElementById('grade-drawer').classList.remove('open');
         document.getElementById('grade-drawer-overlay').classList.remove('open');
+        // Refresh đề xuất sau khi đóng drawer (người dùng có thể vừa cập nhật điểm)
+        clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(fetchSuggestions, 300);
     }
 
     function filterGradeSearch(query) {
