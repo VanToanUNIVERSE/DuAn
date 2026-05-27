@@ -1260,6 +1260,168 @@
             gap: .3rem;
             margin-left: auto;
         }
+
+        /* ═══════════════════════════════════════════════════════════
+           SUBJECT GROUP ANALYSIS CARD
+        ═══════════════════════════════════════════════════════════ */
+        .group-analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+        @media (max-width: 700px) { .group-analysis-grid { grid-template-columns: 1fr; } }
+
+        /* Radar chart container */
+        .radar-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        /* Group table */
+        .group-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .group-table th {
+            font-size: .72rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            padding: .5rem .75rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,.06);
+        }
+        .group-table th:last-child { text-align: right; }
+        .group-table td {
+            padding: .55rem .75rem;
+            font-size: .88rem;
+            border-bottom: 1px solid rgba(255,255,255,.04);
+            vertical-align: middle;
+        }
+        .group-table tr:last-child td { border-bottom: none; }
+        .group-table tr:hover td { background: rgba(255,255,255,.02); }
+
+        .group-name-cell {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+        }
+        .group-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .group-name-text { font-weight: 600; color: #e2e8f0; }
+
+        .group-avg-cell { text-align: right; }
+        .group-avg-val {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 800;
+        }
+        .group-avg-val.excellent { color: #6ee7b7; }
+        .group-avg-val.good      { color: #a5f3fc; }
+        .group-avg-val.warning   { color: #fcd34d; }
+        .group-avg-val.danger    { color: #fca5a5; }
+        .group-avg-val.na        { color: var(--text-secondary); }
+
+        /* Progress bar row */
+        .group-bar-cell { min-width: 100px; }
+        .group-bar-track {
+            height: 6px;
+            background: rgba(255,255,255,.08);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .group-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width .8s cubic-bezier(.4,0,.2,1);
+        }
+
+        /* Weak alert badge */
+        .group-weak-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .3rem;
+            font-size: .65rem;
+            font-weight: 700;
+            padding: .2rem .5rem;
+            border-radius: 50px;
+            background: rgba(239,68,68,.12);
+            border: 1px solid rgba(239,68,68,.35);
+            color: #fca5a5;
+            white-space: nowrap;
+        }
+        .group-ok-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .3rem;
+            font-size: .65rem;
+            font-weight: 700;
+            padding: .2rem .5rem;
+            border-radius: 50px;
+            background: rgba(16,185,129,.1);
+            border: 1px solid rgba(16,185,129,.3);
+            color: #6ee7b7;
+            white-space: nowrap;
+        }
+        .group-na-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: .65rem;
+            font-weight: 700;
+            padding: .2rem .5rem;
+            border-radius: 50px;
+            background: rgba(255,255,255,.05);
+            border: 1px solid rgba(255,255,255,.1);
+            color: var(--text-secondary);
+        }
+
+        /* Summary alert boxes */
+        .group-summary-alerts {
+            margin-top: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: .65rem;
+        }
+        .group-alert {
+            display: flex;
+            align-items: flex-start;
+            gap: .75rem;
+            padding: .75rem 1rem;
+            border-radius: 10px;
+            font-size: .84rem;
+            line-height: 1.5;
+        }
+        .group-alert.danger {
+            background: rgba(239,68,68,.07);
+            border: 1px solid rgba(239,68,68,.25);
+            color: #fca5a5;
+        }
+        .group-alert.warning {
+            background: rgba(245,158,11,.07);
+            border: 1px solid rgba(245,158,11,.25);
+            color: #fde68a;
+        }
+        .group-alert.success {
+            background: rgba(16,185,129,.07);
+            border: 1px solid rgba(16,185,129,.25);
+            color: #6ee7b7;
+        }
+        .group-alert-icon { font-size: 1.1rem; flex-shrink: 0; }
+        .group-analysis-empty {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            color: var(--text-secondary);
+            font-size: .9rem;
+        }
+        .group-analysis-empty-icon { font-size: 2.5rem; margin-bottom: .5rem; }
     </style>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -1583,19 +1745,39 @@
                     </div>
                 </div>
             </div>
+
+            {{-- Card: Phân Tích Điểm Theo Nhóm Môn --}}
+            <div class="glass-card" id="group-analysis-card">
+                <h2 class="card-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" />
+                    </svg>
+                    Phân Tích Điểm Theo Nhóm Môn
+                </h2>
+
+                <div id="group-analysis-content">
+                    <div class="group-analysis-empty">
+                        <div class="group-analysis-empty-icon">📊</div>
+                        <p>Nhập điểm các môn học để xem phân tích điểm theo nhóm</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
 
 @php
     $subjectsBySem = $subjects->map(function($group) {
         return $group->map(function($sub) {
             return [
-                'id'       => $sub->id,
-                'name'     => $sub->name,
-                'credits'  => $sub->credits,
-                'semName'  => $sub->semester?->name ?? '?',
-                'typeName' => $sub->subjectType?->name ?? '',
+                'id'        => $sub->id,
+                'name'      => $sub->name,
+                'credits'   => $sub->credits,
+                'semName'   => $sub->semester?->name ?? '?',
+                'typeName'  => $sub->subjectType?->name ?? '',
+                'groupName' => $sub->subjectGroup?->name ?? 'Khác',
             ];
         })->values();
     });
@@ -2734,6 +2916,297 @@ function scheduleChartRefresh() {
     clearTimeout(chartFetchTimer);
     chartFetchTimer = setTimeout(fetchChartData, 2000);
 }
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// SUBJECT GROUP ANALYSIS
+// ═══════════════════════════════════════════════════════════════
+
+// Màu sắc cho từng nhóm (tối đa 10 nhóm)
+const GROUP_COLORS = [
+    '#6366f1', '#a855f7', '#10b981', '#f59e0b',
+    '#3b82f6', '#ec4899', '#14b8a6', '#f97316',
+    '#84cc16', '#8b5cf6'
+];
+
+// Phân loại mức độ điểm
+function gradeLevel(avg) {
+    if (avg === null) return 'na';
+    if (avg >= 8.0)   return 'excellent';
+    if (avg >= 6.5)   return 'good';
+    if (avg >= 5.0)   return 'warning';
+    return 'danger';
+}
+
+function gradeLevelLabel(avg) {
+    if (avg === null) return { cls: 'group-na-badge', text: '— Chưa có dữ liệu' };
+    if (avg >= 8.0)   return { cls: 'group-ok-badge', text: '🌟 Xuất sắc' };
+    if (avg >= 6.5)   return { cls: 'group-ok-badge', text: '✓ Tốt' };
+    if (avg >= 5.0)   return { cls: 'group-weak-badge', text: '⚠ Cần cải thiện' };
+    return { cls: 'group-weak-badge', text: '⛔ Điểm yếu' };
+}
+
+function buildGroupAnalysis() {
+    // Thu thập tất cả môn học và điểm hiện tại
+    const allSubjects = []; // { id, name, credits, groupName }
+    for (const [semName, subs] of Object.entries(SUBJECTS_BY_SEM)) {
+        subs.forEach(sub => allSubjects.push(sub));
+    }
+
+    // Lấy điểm từ các input
+    const grades = {};
+    document.querySelectorAll('.grade-input').forEach(input => {
+        const sid = parseInt(input.dataset.subjectId);
+        const val = parseFloat(input.value);
+        if (!isNaN(val) && input.value !== '') grades[sid] = val;
+    });
+
+    // Nhóm theo groupName
+    const groups = {}; // { groupName: { subjects: [], grades: [] } }
+    allSubjects.forEach(sub => {
+        const gName = sub.groupName || 'Khác';
+        if (!groups[gName]) groups[gName] = { subjects: [], gradedSubjects: [] };
+        groups[gName].subjects.push(sub);
+        if (grades[sub.id] !== undefined) {
+            groups[gName].gradedSubjects.push({ ...sub, grade: grades[sub.id] });
+        }
+    });
+
+    // Tính trung bình cho mỗi nhóm
+    const groupStats = Object.entries(groups).map(([name, data], idx) => {
+        const graded = data.gradedSubjects;
+        let avg = null;
+        if (graded.length > 0) {
+            const sum = graded.reduce((s, s2) => s + s2.grade, 0);
+            avg = Math.round((sum / graded.length) * 10) / 10;
+        }
+        return {
+            name,
+            total: data.subjects.length,
+            graded: graded.length,
+            avg,
+            color: GROUP_COLORS[idx % GROUP_COLORS.length],
+            subjects: data.subjects,
+            gradedSubjects: graded,
+        };
+    }).sort((a, b) => {
+        // Sắp xếp: có điểm trước, sau đó theo avg tăng dần (điểm yếu lên đầu)
+        if (a.avg === null && b.avg === null) return 0;
+        if (a.avg === null) return 1;
+        if (b.avg === null) return -1;
+        return a.avg - b.avg;
+    });
+
+    return groupStats;
+}
+
+function renderGroupAnalysis() {
+    const container = document.getElementById('group-analysis-content');
+    if (!container) return;
+
+    const groupStats = buildGroupAnalysis();
+    const hasAny = groupStats.some(g => g.avg !== null);
+
+    if (!hasAny) {
+        container.innerHTML = `
+            <div class="group-analysis-empty">
+                <div class="group-analysis-empty-icon">📊</div>
+                <p>Nhập điểm các môn học để xem phân tích điểm theo nhóm</p>
+            </div>`;
+        return;
+    }
+
+    // Nhóm yếu (< 6.5)
+    const weakGroups   = groupStats.filter(g => g.avg !== null && g.avg < 6.5);
+    const dangerGroups = groupStats.filter(g => g.avg !== null && g.avg < 5.0);
+    const strongGroups = groupStats.filter(g => g.avg !== null && g.avg >= 8.0);
+
+    // ── Bảng nhóm môn ──
+    const tableRows = groupStats.map(g => {
+        const pct    = g.avg !== null ? Math.round((g.avg / 10) * 100) : 0;
+        const lvl    = gradeLevel(g.avg);
+        const badge  = gradeLevelLabel(g.avg);
+        const barColor = lvl === 'excellent' ? '#10b981'
+                       : lvl === 'good'      ? '#6366f1'
+                       : lvl === 'warning'   ? '#f59e0b'
+                       : lvl === 'danger'    ? '#ef4444'
+                       : 'rgba(255,255,255,.15)';
+        return `
+        <tr>
+            <td>
+                <div class="group-name-cell">
+                    <span class="group-dot" style="background:${g.color};"></span>
+                    <span class="group-name-text">${g.name}</span>
+                </div>
+            </td>
+            <td style="color:var(--text-secondary);font-size:.8rem;">${g.graded}/${g.total}</td>
+            <td class="group-bar-cell">
+                <div class="group-bar-track">
+                    <div class="group-bar-fill" style="width:${pct}%;background:${barColor};"></div>
+                </div>
+            </td>
+            <td class="group-avg-cell">
+                <span class="group-avg-val ${lvl}">${g.avg !== null ? g.avg : '—'}</span>
+            </td>
+            <td style="text-align:right;">
+                <span class="${badge.cls}">${badge.text}</span>
+            </td>
+        </tr>`;
+    }).join('');
+
+    // ── Radar chart ──
+    const radarLabels = groupStats.filter(g => g.avg !== null).map(g => g.name);
+    const radarData   = groupStats.filter(g => g.avg !== null).map(g => g.avg);
+    const radarColors = groupStats.filter(g => g.avg !== null).map(g => g.color);
+
+    // ── Alerts ──
+    let alertsHtml = '';
+    if (dangerGroups.length > 0) {
+        const names = dangerGroups.map(g => `<strong>${g.name}</strong>`).join(', ');
+        alertsHtml += `
+        <div class="group-alert danger">
+            <span class="group-alert-icon">⛔</span>
+            <div>Bạn đang <strong>rất yếu</strong> ở nhóm: ${names} (điểm TB < 5.0). Cần ưu tiên ôn luyện và học lại ngay!</div>
+        </div>`;
+    } else if (weakGroups.length > 0) {
+        const names = weakGroups.map(g => `<strong>${g.name}</strong> (${g.avg})`).join(', ');
+        alertsHtml += `
+        <div class="group-alert warning">
+            <span class="group-alert-icon">⚠️</span>
+            <div>Nhóm môn cần cải thiện: ${names}. Hãy tập trung ôn luyện thêm để nâng điểm!</div>
+        </div>`;
+    }
+    if (strongGroups.length > 0) {
+        const names = strongGroups.map(g => `<strong>${g.name}</strong>`).join(', ');
+        alertsHtml += `
+        <div class="group-alert success">
+            <span class="group-alert-icon">🌟</span>
+            <div>Bạn đang làm rất tốt ở nhóm: ${names}. Tiếp tục phát huy!</div>
+        </div>`;
+    }
+
+    container.innerHTML = `
+        <div class="group-analysis-grid">
+            <div>
+                <div class="radar-wrapper">
+                    <canvas id="groupRadarChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <table class="group-table">
+                    <thead>
+                        <tr>
+                            <th>Nhóm môn</th>
+                            <th>Môn có điểm</th>
+                            <th>Tỷ lệ</th>
+                            <th style="text-align:right;">Điểm TB</th>
+                            <th style="text-align:right;">Đánh giá</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+
+                <div class="group-summary-alerts">${alertsHtml}</div>
+            </div>
+        </div>`;
+
+    // Render Radar Chart
+    renderGroupRadar(radarLabels, radarData, radarColors);
+}
+
+let groupRadarInstance = null;
+function renderGroupRadar(labels, data, colors) {
+    const canvas = document.getElementById('groupRadarChart');
+    if (!canvas || labels.length === 0) return;
+
+    if (groupRadarInstance) { groupRadarInstance.destroy(); groupRadarInstance = null; }
+
+    // Gradient fill
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(99,102,241,0.45)');
+    gradient.addColorStop(1, 'rgba(168,85,247,0.15)');
+
+    groupRadarInstance = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: labels.map(l => l.length > 14 ? l.substring(0, 12) + '…' : l),
+            datasets: [{
+                label: 'Điểm TB nhóm môn',
+                data,
+                backgroundColor: gradient,
+                borderColor: 'rgba(99,102,241,0.9)',
+                borderWidth: 2,
+                pointBackgroundColor: colors,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            animation: { duration: 700, easing: 'easeInOutQuart' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(10,14,30,0.95)',
+                    borderColor: 'rgba(99,102,241,0.4)',
+                    borderWidth: 1,
+                    padding: 10,
+                    callbacks: {
+                        label: item => `  Điểm TB: ${item.raw}`,
+                    }
+                }
+            },
+            scales: {
+                r: {
+                    min: 0,
+                    max: 10,
+                    ticks: {
+                        stepSize: 2,
+                        color: 'rgba(255,255,255,0.4)',
+                        font: { size: 9 },
+                        backdropColor: 'transparent',
+                        callback: v => v === 5 ? '5⚡' : v,
+                    },
+                    grid: {
+                        color: (ctx) => ctx.tick.value === 5
+                            ? 'rgba(239,68,68,0.4)'
+                            : 'rgba(255,255,255,0.07)',
+                        lineWidth: (ctx) => ctx.tick.value === 5 ? 1.5 : 1,
+                    },
+                    pointLabels: {
+                        color: 'rgba(255,255,255,0.75)',
+                        font: { size: 10, weight: '600' },
+                    },
+                    angleLines: { color: 'rgba(255,255,255,0.07)' },
+                }
+            }
+        }
+    });
+}
+
+// Hook vào onGradeChange để cập nhật phân tích
+const _origOnGradeChange = onGradeChange;
+window.onGradeChange = function(id, input, skipSave = false) {
+    _origOnGradeChange(id, input, skipSave);
+    clearTimeout(window._groupAnalysisTimer);
+    window._groupAnalysisTimer = setTimeout(renderGroupAnalysis, 600);
+};
+
+// Cũng update sau khi load grades từ DB
+const _origLoadGrades = loadGradesFromDB;
+window.loadGradesFromDB = async function() {
+    await _origLoadGrades();
+    setTimeout(renderGroupAnalysis, 300);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Sẽ được trigger tự động khi loadGradesFromDB chạy xong
+});
 </script>
 
 <script>
