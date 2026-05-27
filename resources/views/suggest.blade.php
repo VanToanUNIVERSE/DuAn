@@ -1422,11 +1422,639 @@
             font-size: .9rem;
         }
         .group-analysis-empty-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+
+        /* ═══════════════════════════════════════════════════════════
+           SEMESTER RESULT MODAL
+        ═══════════════════════════════════════════════════════════ */
+        .sem-result-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1100;
+            background: rgba(5, 8, 22, 0.82);
+            backdrop-filter: blur(10px);
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .sem-result-overlay.open { display: flex; }
+
+        .sem-result-modal {
+            background: linear-gradient(145deg, rgba(18, 24, 52, 0.99), rgba(28, 18, 58, 0.99));
+            border: 1px solid rgba(99,102,241,.35);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 92vh;
+            overflow-y: auto;
+            box-shadow: 0 40px 100px rgba(0,0,0,.7), 0 0 0 1px rgba(99,102,241,.1),
+                        inset 0 1px 0 rgba(255,255,255,.06);
+            animation: semResultSlideIn .45s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .sem-result-modal::-webkit-scrollbar { width: 4px; }
+        .sem-result-modal::-webkit-scrollbar-thumb { background: rgba(99,102,241,.4); border-radius: 2px; }
+        @keyframes semResultSlideIn {
+            from { opacity: 0; transform: scale(0.92) translateY(30px); }
+            to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* Header */
+        .srm-header {
+            padding: 2rem 2rem 1.25rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,.06);
+            position: relative;
+        }
+        .srm-close {
+            position: absolute;
+            top: 1.25rem; right: 1.25rem;
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.12);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1rem; transition: var(--transition);
+        }
+        .srm-close:hover { background: rgba(239,68,68,.2); border-color: rgba(239,68,68,.4); color: #f87171; }
+        .srm-semester-label {
+            font-size: .78rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .12em;
+            color: #818cf8; margin-bottom: .65rem;
+        }
+        .srm-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.6rem; font-weight: 800;
+            background: linear-gradient(to right, #ffffff, #c7d2fe, #f9a8d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: .4rem;
+        }
+        .srm-subtitle { font-size: .88rem; color: var(--text-secondary); }
+
+        /* KPI Stats row */
+        .srm-kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: .75rem;
+            padding: 1.25rem 2rem;
+            border-bottom: 1px solid rgba(255,255,255,.05);
+        }
+        @media (max-width: 480px) { .srm-kpi-row { grid-template-columns: repeat(2, 1fr); } }
+        .srm-kpi {
+            background: rgba(15,23,42,.55);
+            border: 1px solid rgba(255,255,255,.07);
+            border-radius: 12px;
+            padding: .85rem .5rem;
+            text-align: center;
+        }
+        .srm-kpi-val {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem; font-weight: 800;
+            line-height: 1;
+            margin-bottom: .3rem;
+        }
+        .srm-kpi-label {
+            font-size: .65rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .05em;
+            color: var(--text-secondary);
+        }
+        .srm-kpi-val.gpa-ex  { color: #6ee7b7; }
+        .srm-kpi-val.gpa-good{ color: #a5f3fc; }
+        .srm-kpi-val.gpa-ok  { color: #fcd34d; }
+        .srm-kpi-val.gpa-bad { color: #fca5a5; }
+        .srm-kpi-val.green   { color: #6ee7b7; }
+        .srm-kpi-val.red     { color: #fca5a5; }
+        .srm-kpi-val.blue    { color: #93c5fd; }
+        .srm-kpi-val.yellow  { color: #fcd34d; }
+
+        /* Progress bar */
+        .srm-progress-section {
+            padding: 1.25rem 2rem;
+            border-bottom: 1px solid rgba(255,255,255,.05);
+        }
+        .srm-progress-label {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: .82rem; margin-bottom: .6rem;
+        }
+        .srm-progress-title { color: var(--text-secondary); font-weight: 600; }
+        .srm-progress-pct   { font-weight: 800; font-family: 'Outfit', sans-serif; font-size: 1rem; }
+        .srm-progress-track {
+            height: 10px;
+            background: rgba(255,255,255,.08);
+            border-radius: 5px; overflow: hidden;
+        }
+        .srm-progress-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 1.2s cubic-bezier(.4,0,.2,1);
+        }
+        .srm-progress-meta {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: .75rem; color: var(--text-secondary); margin-top: .5rem;
+        }
+
+        /* Recommendation box */
+        .srm-recommend {
+            margin: 1.25rem 2rem;
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            display: flex; align-items: flex-start; gap: 1rem;
+        }
+        .srm-recommend.increase {
+            background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(168,85,247,.08));
+            border: 1px solid rgba(99,102,241,.35);
+        }
+        .srm-recommend.decrease {
+            background: linear-gradient(135deg, rgba(245,158,11,.09), rgba(239,68,68,.07));
+            border: 1px solid rgba(245,158,11,.3);
+        }
+        .srm-recommend.maintain {
+            background: linear-gradient(135deg, rgba(16,185,129,.09), rgba(6,182,212,.07));
+            border: 1px solid rgba(16,185,129,.3);
+        }
+        .srm-recommend-icon {
+            font-size: 2.2rem;
+            flex-shrink: 0;
+            filter: drop-shadow(0 0 8px currentColor);
+        }
+        .srm-recommend-body { flex: 1; }
+        .srm-recommend-tag {
+            font-size: .7rem; font-weight: 800;
+            text-transform: uppercase; letter-spacing: .08em;
+            margin-bottom: .4rem;
+        }
+        .srm-recommend.increase .srm-recommend-tag { color: #a5b4fc; }
+        .srm-recommend.decrease .srm-recommend-tag { color: #fde68a; }
+        .srm-recommend.maintain .srm-recommend-tag { color: #6ee7b7; }
+        .srm-recommend-headline {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem; font-weight: 700; color: #fff;
+            margin-bottom: .4rem;
+        }
+        .srm-recommend-desc {
+            font-size: .84rem; color: var(--text-secondary);
+            line-height: 1.55;
+        }
+        .srm-credit-change {
+            display: inline-flex; align-items: center; gap: .35rem;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.6rem; font-weight: 800;
+            margin: .5rem 0;
+        }
+        .srm-credit-change.up   { color: #6ee7b7; }
+        .srm-credit-change.down { color: #fca5a5; }
+        .srm-credit-change.same { color: #a5b4fc; }
+
+        /* Reason list */
+        .srm-reasons {
+            margin: 0 2rem 1.25rem;
+            display: flex; flex-direction: column; gap: .5rem;
+        }
+        .srm-reason-item {
+            display: flex; align-items: flex-start; gap: .6rem;
+            font-size: .83rem; color: var(--text-secondary);
+            background: rgba(255,255,255,.03);
+            border: 1px solid rgba(255,255,255,.06);
+            border-radius: 8px;
+            padding: .6rem .85rem;
+            line-height: 1.4;
+        }
+        .srm-reason-icon { flex-shrink: 0; font-size: .95rem; }
+        .srm-reason-item strong { color: #e2e8f0; }
+
+        /* Subject result list */
+        .srm-subj-section {
+            margin: 0 2rem;
+        }
+        .srm-subj-title {
+            font-size: .72rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .06em;
+            color: var(--text-secondary);
+            margin-bottom: .6rem;
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .srm-subj-title::after { content:''; flex:1; height:1px; background:rgba(255,255,255,.06); }
+        .srm-subj-list { display: flex; flex-direction: column; gap: .35rem; margin-bottom: 1rem; }
+        .srm-subj-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: .45rem .75rem;
+            border-radius: 8px;
+            font-size: .84rem;
+            gap: .75rem;
+        }
+        .srm-subj-row.pass { background: rgba(16,185,129,.07); border: 1px solid rgba(16,185,129,.2); }
+        .srm-subj-row.fail { background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.2); }
+        .srm-subj-name { flex: 1; color: #e2e8f0; font-weight: 500; }
+        .srm-subj-credits { font-size: .75rem; color: var(--text-secondary); min-width: 36px; text-align: right; }
+        .srm-subj-grade {
+            min-width: 44px; text-align: center;
+            font-family: 'Outfit', sans-serif; font-size: .95rem; font-weight: 800;
+        }
+        .srm-subj-grade.pass { color: #6ee7b7; }
+        .srm-subj-grade.fail { color: #fca5a5; }
+
+        /* Footer action */
+        .srm-footer {
+            padding: 1.25rem 2rem 2rem;
+            display: flex; gap: .75rem; justify-content: flex-end;
+            border-top: 1px solid rgba(255,255,255,.06);
+            flex-wrap: wrap;
+        }
+        .srm-btn-apply {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none; color: #fff; border-radius: 10px;
+            padding: .65rem 1.5rem; font-size: .9rem; font-weight: 700;
+            cursor: pointer; transition: var(--transition);
+            box-shadow: 0 4px 15px var(--primary-glow);
+            display: flex; align-items: center; gap: .45rem;
+        }
+        .srm-btn-apply:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--primary-glow); }
+        .srm-btn-close {
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.12);
+            color: var(--text-secondary); border-radius: 10px;
+            padding: .65rem 1.25rem; font-size: .88rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+        }
+        .srm-btn-close:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+        /* ═══════════════════════════════════════════════════════════
+           DASHBOARD OVERVIEW PANEL
+        ═══════════════════════════════════════════════════════════ */
+        .dash-panel {
+            margin-bottom: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            max-width: 860px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        @media (max-width: 780px) {
+            .dash-panel { grid-template-columns: 1fr; }
+        }
+        @media (min-width: 481px) and (max-width: 779px) {
+            .dash-panel { grid-template-columns: 1fr 1fr; }
+        }
+
+        .dash-card {
+            background: rgba(30,41,59,0.6);
+            border: 1px solid rgba(255,255,255,.07);
+            border-radius: 16px;
+            padding: 1.25rem 1.35rem;
+            backdrop-filter: blur(16px);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        .dash-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            opacity: 0;
+            transition: opacity .3s;
+        }
+        .dash-card:hover { border-color: rgba(255,255,255,.14); transform: translateY(-2px); }
+
+        /* Card 1: Credit Progress */
+        .dash-card.credit-card::before {
+            background: radial-gradient(ellipse at top left, rgba(99,102,241,.08) 0%, transparent 60%);
+            opacity: 1;
+        }
+        .dash-credit-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .dash-credit-label {
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+        }
+        .dash-credit-numbers {
+            display: flex;
+            align-items: baseline;
+            gap: .25rem;
+        }
+        .dash-credit-earned {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1;
+        }
+        .dash-credit-sep { font-size: 1rem; color: var(--text-secondary); }
+        .dash-credit-total { font-size: 1rem; color: var(--text-secondary); font-weight: 600; }
+
+        .dash-prog-track {
+            height: 8px;
+            background: rgba(255,255,255,.07);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: .55rem;
+            position: relative;
+        }
+        .dash-prog-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 1.4s cubic-bezier(.4,0,.2,1);
+            position: relative;
+        }
+        .dash-prog-fill::after {
+            content: '';
+            position: absolute;
+            right: 0; top: 0; bottom: 0;
+            width: 6px;
+            background: rgba(255,255,255,.5);
+            border-radius: 4px;
+            filter: blur(2px);
+            animation: shimmer-right 2s ease-in-out infinite;
+        }
+        @keyframes shimmer-right {
+            0%,100% { opacity: .5; } 50% { opacity: 1; }
+        }
+        .dash-prog-foot {
+            display: flex;
+            justify-content: space-between;
+            font-size: .73rem;
+            color: var(--text-secondary);
+        }
+        .dash-prog-pct {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: .9rem;
+        }
+        .dash-prog-pct.great  { color: #6ee7b7; }
+        .dash-prog-pct.mid    { color: #a5b4fc; }
+        .dash-prog-pct.low    { color: #fcd34d; }
+
+        /* Mini sub-stats */
+        .dash-credit-sub {
+            display: flex;
+            gap: .75rem;
+            margin-top: .85rem;
+            padding-top: .75rem;
+            border-top: 1px solid rgba(255,255,255,.06);
+        }
+        .dash-sub-item {
+            flex: 1;
+            text-align: center;
+        }
+        .dash-sub-val {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #fff;
+        }
+        .dash-sub-val.green { color: #6ee7b7; }
+        .dash-sub-val.amber { color: #fcd34d; }
+        .dash-sub-val.blue  { color: #93c5fd; }
+        .dash-sub-label {
+            font-size: .62rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-top: .15rem;
+        }
+
+        /* Card 2: Strength / Weakness */
+        .dash-card.strength-card::before {
+            background: radial-gradient(ellipse at bottom right, rgba(168,85,247,.07) 0%, transparent 60%);
+            opacity: 1;
+        }
+        .dash-strength-title {
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--text-secondary);
+            margin-bottom: .85rem;
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+        }
+        .dash-strength-list {
+            display: flex;
+            flex-direction: column;
+            gap: .45rem;
+        }
+        .dash-strength-row {
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+        }
+        .dash-strength-name {
+            font-size: .8rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+        .dash-strength-bar-wrap {
+            width: 60px;
+            flex-shrink: 0;
+        }
+        .dash-strength-bar-track {
+            height: 4px;
+            background: rgba(255,255,255,.07);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .dash-strength-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width .9s ease;
+        }
+        .dash-strength-avg {
+            font-family: 'Outfit', sans-serif;
+            font-size: .82rem;
+            font-weight: 800;
+            min-width: 30px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .dash-strength-avg.ex   { color: #6ee7b7; }
+        .dash-strength-avg.good { color: #a5f3fc; }
+        .dash-strength-avg.ok   { color: #fcd34d; }
+        .dash-strength-avg.bad  { color: #fca5a5; }
+        .dash-strength-avg.na   { color: var(--text-secondary); }
+
+        .dash-no-data {
+            text-align: center;
+            padding: 1.2rem .5rem;
+            color: var(--text-secondary);
+            font-size: .82rem;
+        }
+        .dash-no-data-icon { font-size: 1.8rem; margin-bottom: .3rem; }
+
+        /* Divider between strength / weakness */
+        .dash-sw-divider {
+            height: 1px;
+            background: rgba(255,255,255,.05);
+            margin: .75rem 0;
+        }
+
+        /* Card 3: Credit Advice */
+        .dash-card.advice-card::before {
+            background: radial-gradient(ellipse at top right, rgba(16,185,129,.07) 0%, transparent 60%);
+            opacity: 1;
+        }
+        .dash-advice-title {
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--text-secondary);
+            margin-bottom: .85rem;
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+        }
+        .dash-advice-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .3rem .75rem;
+            border-radius: 50px;
+            font-size: .72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            margin-bottom: .65rem;
+        }
+        .dash-advice-badge.increase {
+            background: rgba(99,102,241,.15);
+            border: 1px solid rgba(99,102,241,.4);
+            color: #a5b4fc;
+        }
+        .dash-advice-badge.decrease {
+            background: rgba(245,158,11,.12);
+            border: 1px solid rgba(245,158,11,.35);
+            color: #fde68a;
+        }
+        .dash-advice-badge.maintain {
+            background: rgba(16,185,129,.12);
+            border: 1px solid rgba(16,185,129,.35);
+            color: #6ee7b7;
+        }
+        .dash-advice-num {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.4rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: .2rem;
+        }
+        .dash-advice-num.up   { color: #6ee7b7; }
+        .dash-advice-num.same { color: #a5b4fc; }
+        .dash-advice-num.down { color: #fca5a5; }
+        .dash-advice-unit {
+            font-size: .78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-bottom: .6rem;
+        }
+        .dash-advice-reason {
+            font-size: .78rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            border-top: 1px solid rgba(255,255,255,.05);
+            padding-top: .6rem;
+            margin-top: .3rem;
+        }
     </style>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
+
+{{-- ═══════════════════════════════════════════════════════════════
+     SEMESTER RESULT & CREDIT RECOMMENDATION MODAL
+═══════════════════════════════════════════════════════════════ --}}
+<div class="sem-result-overlay" id="sem-result-overlay">
+    <div class="sem-result-modal" id="sem-result-modal">
+
+        {{-- Header --}}
+        <div class="srm-header">
+            <button class="srm-close" onclick="closeSemResultModal()">&#x2715;</button>
+            <div class="srm-semester-label" id="srm-sem-label">Kết quả học kỳ</div>
+            <div class="srm-title" id="srm-title">Hoàn tất Học Kỳ!</div>
+            <div class="srm-subtitle" id="srm-subtitle">Phân tích kết quả và gợi ý lộ trình tín chỉ kỳ tiếp theo</div>
+        </div>
+
+        {{-- KPI stats --}}
+        <div class="srm-kpi-row" id="srm-kpi-row">
+            <div class="srm-kpi">
+                <div class="srm-kpi-val" id="srm-gpa">--</div>
+                <div class="srm-kpi-label">GPA học kỳ</div>
+            </div>
+            <div class="srm-kpi">
+                <div class="srm-kpi-val green" id="srm-pass-count">0</div>
+                <div class="srm-kpi-label">Môn pass</div>
+            </div>
+            <div class="srm-kpi">
+                <div class="srm-kpi-val red" id="srm-fail-count">0</div>
+                <div class="srm-kpi-label">Môn fail</div>
+            </div>
+            <div class="srm-kpi">
+                <div class="srm-kpi-val blue" id="srm-credits-done">0</div>
+                <div class="srm-kpi-label">TC tích lũy</div>
+            </div>
+        </div>
+
+        {{-- Progress toward graduation --}}
+        <div class="srm-progress-section">
+            <div class="srm-progress-label">
+                <span class="srm-progress-title">🎯 Tiến độ tích lũy tín chỉ</span>
+                <span class="srm-progress-pct" id="srm-prog-pct">0%</span>
+            </div>
+            <div class="srm-progress-track">
+                <div class="srm-progress-fill" id="srm-prog-fill" style="width:0%;background:linear-gradient(90deg,#6366f1,#a855f7);"></div>
+            </div>
+            <div class="srm-progress-meta">
+                <span id="srm-prog-left">Còn lại: -- TC</span>
+                <span id="srm-prog-pace">Cần -- TC/kỳ</span>
+            </div>
+        </div>
+
+        {{-- Recommendation --}}
+        <div class="srm-recommend" id="srm-recommend">
+            <div class="srm-recommend-icon" id="srm-rec-icon">📈</div>
+            <div class="srm-recommend-body">
+                <div class="srm-recommend-tag" id="srm-rec-tag">Gợi ý</div>
+                <div class="srm-recommend-headline" id="srm-rec-headline">Giữ nguyên số tín chỉ</div>
+                <div class="srm-credit-change" id="srm-credit-change"><span>--</span> TC/kỳ</div>
+                <div class="srm-recommend-desc" id="srm-rec-desc">--</div>
+            </div>
+        </div>
+
+        {{-- Reasons --}}
+        <div class="srm-reasons" id="srm-reasons"></div>
+
+        {{-- Subject list --}}
+        <div class="srm-subj-section" id="srm-subj-section"></div>
+
+        {{-- Footer --}}
+        <div class="srm-footer">
+            <button class="srm-btn-close" onclick="closeSemResultModal()">Bỏ qua</button>
+            <button class="srm-btn-apply" id="srm-btn-apply" onclick="applyCreditRecommendation()">
+                ✓ Áp dụng gợi ý
+            </button>
+        </div>
+    </div>
+</div>
+
 
 {{-- ══════════════════════════════════════════════════════════════════
      ONBOARDING WIZARD OVERLAY
@@ -1671,6 +2299,89 @@
         <h1>Gợi Ý Học Tập Thông Minh</h1>
         <p>Nhập điểm các môn đã học và nhận ngay lộ trình đề xuất tối ưu theo tiến độ của bạn.</p>
     </header>
+
+    {{-- ═══════════════════════════════════════════════════════════════
+         DASHBOARD OVERVIEW PANEL
+    ═══════════════════════════════════════════════════════════════ --}}
+    <div class="dash-panel" id="dash-panel">
+
+        {{-- Card 1: Tiến độ tín chỉ --}}
+        <div class="dash-card credit-card">
+            <div class="dash-credit-header">
+                <div class="dash-credit-label">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.627 48.627 0 0 1 12 20.904a48.627 48.627 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.57 50.57 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.902 59.902 0 0 1 10.399 5.84 50.53 50.53 0 0 0-2.658.814m-15.482 0A50.699 50.699 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
+                    </svg>
+                    Tiến độ tín chỉ
+                </div>
+                <span class="dash-prog-pct" id="dash-prog-pct">0%</span>
+            </div>
+
+            <div class="dash-credit-numbers">
+                <span class="dash-credit-earned" id="dash-credit-earned">0</span>
+                <span class="dash-credit-sep">/</span>
+                <span class="dash-credit-total" id="dash-credit-total">{{ $totalCredits }}</span>
+                <span class="dash-credit-sep" style="font-size:.7rem;margin-left:.2rem;">TC</span>
+            </div>
+
+            <div class="dash-prog-track" style="margin-top:.6rem;">
+                <div class="dash-prog-fill" id="dash-prog-fill" style="width:0%;background:linear-gradient(90deg,#6366f1,#a855f7);"></div>
+            </div>
+
+            <div class="dash-prog-foot">
+                <span id="dash-prog-left">Còn lại: --</span>
+                <span id="dash-prog-rem-sem">-- kỳ còn</span>
+            </div>
+
+            <div class="dash-credit-sub">
+                <div class="dash-sub-item">
+                    <div class="dash-sub-val green" id="dash-pass-credits">0</div>
+                    <div class="dash-sub-label">TC pass</div>
+                </div>
+                <div class="dash-sub-item">
+                    <div class="dash-sub-val amber" id="dash-needed-per-sem">--</div>
+                    <div class="dash-sub-label">TC/kỳ cần</div>
+                </div>
+                <div class="dash-sub-item">
+                    <div class="dash-sub-val blue" id="dash-current-sem">--</div>
+                    <div class="dash-sub-label">Học kỳ này</div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Card 2: Thế mạnh / điểm yếu nhóm môn --}}
+        <div class="dash-card strength-card">
+            <div class="dash-strength-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                </svg>
+                Thế Mạnh & Điểm Yếu
+            </div>
+            <div id="dash-strength-content">
+                <div class="dash-no-data">
+                    <div class="dash-no-data-icon">⭐</div>
+                    <div>Nhập điểm để xem</div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Card 3: Gợi ý tín chỉ kỳ tới --}}
+        <div class="dash-card advice-card">
+            <div class="dash-advice-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+                Gợi Ý Kỳ Tiếp Theo
+            </div>
+            <div id="dash-advice-badge-wrap">
+                <span class="dash-advice-badge maintain" id="dash-advice-badge">• Phân tích...</span>
+            </div>
+            <div class="dash-advice-num same" id="dash-advice-num">--</div>
+            <div class="dash-advice-unit">tín chỉ / học kỳ</div>
+            <div class="dash-advice-reason" id="dash-advice-reason">Nhập điểm các môn để nhận gợi ý.</div>
+        </div>
+    </div>
+
 
     <div class="main-grid">
         {{-- Cột phải: Gợi ý --}}
@@ -2596,13 +3307,14 @@
         if (unfilled.length > 0) { showToast(`Còn ${unfilled.length} môn chưa điền điểm!`, 'error'); return; }
         if (currentCourses.length === 0) { showToast('Chưa có môn nào trong danh sách!', 'error'); return; }
 
-        const snapshot = currentCourses.map(c => ({ id: c.id, grade: c.grade }));
+        const snapshot = currentCourses.map(c => ({ ...c }));
         const sel = document.getElementById('target_semester');
         const cur = parseInt(sel.value);
 
         // Lưu lịch sử học kỳ vào DB
-        saveSemesterHistory(cur, snapshot);
+        saveSemesterHistory(cur, snapshot.map(c => ({ id: c.id, grade: c.grade })));
 
+        // Giải phóng danh sách môn đang học
         currentCourses = [];
         renderCurrentCourses();
         snapshot.forEach(({ id, grade }) => {
@@ -2614,15 +3326,233 @@
             input.value = grade;
             onGradeChange(id, input, true);
         });
-        const gradesToSave = snapshot.map(({ id, grade }) => ({ subject_id: id, grade: grade }));
+        const gradesToSave = snapshot.map(c => ({ subject_id: c.id, grade: c.grade }));
         saveMultipleGrades(gradesToSave);
+
+        // Chuyển sang học kỳ tiếp
         if (cur < 8) { sel.value = cur + 1; } else { showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success'); }
         savePreferences();
         fetchSuggestions();
         updateEarnedCredits();
         scheduleChartRefresh();
-        showToast(`Hoàn tất học kỳ ${cur}! Đã chuyển sang học kỳ ${Math.min(cur + 1, 8)}.`, 'success');
+
+        // Hiển thị modal kết quả + gợi ý tín chỉ
+        showSemResultModal(cur, snapshot);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SEMESTER RESULT MODAL
+    // ═══════════════════════════════════════════════════════════════
+
+    let _semRecCredits = 0; // lưu số TC gợi ý để nút Apply
+
+    function showSemResultModal(semNumber, snapshot) {
+        // 1. Tính GPA học kỳ
+        const graded = snapshot.filter(c => c.grade !== null && c.grade !== undefined);
+        const passSubjects = graded.filter(c => c.grade > 5.0);
+        const failSubjects = graded.filter(c => c.grade <= 5.0);
+        const gpa = graded.length > 0
+            ? Math.round(graded.reduce((s, c) => s + c.grade, 0) / graded.length * 10) / 10
+            : null;
+        const creditsThisSem = snapshot.reduce((s, c) => s + (c.credits || 0), 0);
+        const passedCredits  = passSubjects.reduce((s, c) => s + (c.credits || 0), 0);
+
+        // 2. Tính tổng tín chỉ đã tích lũy (từ drawer grades)
+        let totalEarned = 0;
+        document.querySelectorAll('.grade-input').forEach(input => {
+            const val = parseFloat(input.value);
+            if (!isNaN(val) && val > 5.0) totalEarned += parseInt(input.dataset.credits || 0);
+        });
+
+        // 3. Tiến độ và số học kỳ còn lại
+        const targetYears  = parseInt(document.getElementById('target_years').value)  || 4;
+        const totalSem     = targetYears * 2;   // 8 nếu 4 năm
+        const nextSem      = Math.min(semNumber + 1, 8);
+        const remSem       = Math.max(1, totalSem - semNumber); // kỳ còn lại sau kỳ này
+        const remCredits   = Math.max(0, TOTAL_CREDITS - totalEarned);
+        const neededPerSem = remSem > 0 ? Math.ceil(remCredits / remSem) : 0;
+        const progPct      = Math.min(100, Math.round((totalEarned / TOTAL_CREDITS) * 100));
+
+        // 4. Loại gợi ý: dựa trên GPA + tiến độ
+        const passRate   = graded.length > 0 ? passSubjects.length / graded.length : 1;
+        const onPace     = neededPerSem;   // TC cần/kỳ để đút tiến độ
+        const avgPerSem  = creditsThisSem; // TC kỳ này
+
+        let recType, recIcon, recTag, recHeadline, recDesc, recDelta;
+        const reasons = [];
+
+        if (gpa === null) {
+            // Không có dữ liệu
+            recType = 'maintain'; recIcon = '📊';
+            recTag = 'Giữ nguyên'; recHeadline = 'Tiếp tục theo kế hoạch';
+            recDelta = 0; recDesc = 'Nhập điểm để nhận gợi ý chính xác hơn.';
+        } else if (gpa >= 7.5 && passRate >= 0.85 && remCredits > neededPerSem) {
+            // Xuất sắc, chậm tiến độ → tăng tín chỉ
+            recType = 'increase'; recIcon = '📈';
+            recTag = 'Gợi ý tăng tín chỉ';
+            recHeadline = 'Bạn đủ năng lực để học nhiều hơn!';
+            recDelta = Math.min(6, neededPerSem - avgPerSem + 3);
+            recDesc = `GPA ${gpa} ≥ 7.5 và tỷ lệ pass cao. Tăng tín chỉ giúp bạn hoàn thành chương trình đúng tiến độ.`;
+            reasons.push({ icon: '🌟', text: `GPA học kỳ <strong>${gpa}</strong> — kết quả xuất sắc!` });
+            reasons.push({ icon: '⏳', text: `Còn <strong>${remCredits} TC</strong> trong <strong>${remSem} kỳ</strong> — cần tăng tốc.` });
+        } else if (gpa >= 6.5 && passRate >= 0.8 && neededPerSem <= avgPerSem + 2) {
+            // Tốt, đúng tiến độ → giữ nguyên
+            recType = 'maintain'; recIcon = '✅';
+            recTag = 'Giữ nguyên tiến độ';
+            recHeadline = 'Tiếp tục theo kế hoạch!';
+            recDelta = 0;
+            recDesc = `GPA ${gpa} và tiến độ đúng hướng. Hãy duy trì số tín chỉ hiện tại.`;
+            reasons.push({ icon: '✔️', text: `GPA <strong>${gpa}</strong> — đang đi đúng hướng!` });
+            reasons.push({ icon: '📌', text: `Tỷ lệ pass <strong>${Math.round(passRate*100)}%</strong> — ổn định.` });
+        } else if ((gpa < 5.5 || passRate < 0.6) && failSubjects.length > 0) {
+            // Yếu, nhiều fail → giảm tín chỉ
+            recType = 'decrease'; recIcon = '⚠️';
+            recTag = 'Gợi ý giảm tín chỉ';
+            recHeadline = 'Cần giảm tải để tập trung';
+            recDelta = -Math.min(6, Math.ceil(failSubjects.length * 1.5));
+            recDesc = `GPA ${gpa} thấp, ${failSubjects.length} môn fail. Giảm tải giúp tập trung vào chất lượng hơn là số lượng.`;
+            reasons.push({ icon: '⛔', text: `<strong>${failSubjects.length} môn fail</strong> cần học lại kỳ sau.` });
+            reasons.push({ icon: '📊', text: `GPA <strong>${gpa}</strong> dưới ngưỡng an toàn (5.5).` });
+            if (failSubjects.length > 2) reasons.push({ icon: '💡', text: `Học lại các môn fail sẽ chiếm khá nhiều TC kỳ tới.` });
+        } else if (neededPerSem > avgPerSem + 4) {
+            // Trễ tiến độ → tăng tín chỉ nhẹ
+            recType = 'increase'; recIcon = '⏩';
+            recTag = 'Cần tăng tiến độ';
+            recHeadline = 'Tăng tín chỉ để kịp tiến độ';
+            recDelta = Math.min(5, neededPerSem - avgPerSem);
+            recDesc = `Cần <strong>${neededPerSem} TC/kỳ</strong> nhưng học kỳ này chỉ đăng ký ${avgPerSem} TC. Hãy tăng thêm để không bị trễ.`;
+            reasons.push({ icon: '⏳', text: `Còn <strong>${remCredits} TC</strong> trong <strong>${remSem} kỳ</strong>.` });
+            reasons.push({ icon: '📈', text: `Cần ít nhất <strong>${neededPerSem} TC/kỳ</strong> để tốt nghiệp đúng hạn.` });
+        } else {
+            // Mặc định: giữ nguyên
+            recType = 'maintain'; recIcon = '👍';
+            recTag = 'Giữ nguyên tiến độ';
+            recHeadline = 'Tiếp tục theo kế hoạch!';
+            recDelta = 0;
+            recDesc = `Bạn đang đi đúng hướng. Duy trì số tín chỉ hiện tại là lựa chọn tốt.`;
+            if (gpa) reasons.push({ icon: '✔️', text: `GPA <strong>${gpa}</strong> — kết quả ổn.` });
+        }
+
+        const suggestedCredits = Math.max(10, Math.min(25, avgPerSem + recDelta));
+        _semRecCredits = suggestedCredits;
+
+        // ── Render lên modal ──
+        const gpaClass = gpa === null ? '' : gpa >= 8.0 ? 'gpa-ex' : gpa >= 7.0 ? 'gpa-good' : gpa >= 5.5 ? 'gpa-ok' : 'gpa-bad';
+
+        document.getElementById('srm-sem-label').textContent     = `Kết quả Học Kỳ ${semNumber}`;
+        document.getElementById('srm-title').textContent         = semNumber < 8
+            ? `Hoàn tất Học Kỳ ${semNumber} 🎉`
+            : `Tốt nghiệp chương trình! 🎓`;
+        document.getElementById('srm-subtitle').textContent      = `Phân tích kết quả và gợi ý tín chỉ cho học kỳ ${nextSem}`;
+
+        const gpaEl = document.getElementById('srm-gpa');
+        gpaEl.textContent = gpa !== null ? gpa : '—';
+        gpaEl.className = `srm-kpi-val ${gpaClass}`;
+
+        document.getElementById('srm-pass-count').textContent  = passSubjects.length;
+        document.getElementById('srm-fail-count').textContent  = failSubjects.length;
+        document.getElementById('srm-credits-done').textContent = totalEarned;
+
+        // Progress
+        document.getElementById('srm-prog-pct').textContent  = `${progPct}%`;
+        const fill = document.getElementById('srm-prog-fill');
+        fill.style.width = '0%';
+        setTimeout(() => { fill.style.width = `${progPct}%`; }, 100);
+        fill.style.background = progPct >= 75
+            ? 'linear-gradient(90deg,#10b981,#34d399)'
+            : progPct >= 40
+            ? 'linear-gradient(90deg,#6366f1,#a855f7)'
+            : 'linear-gradient(90deg,#f59e0b,#f97316)';
+        document.getElementById('srm-prog-left').textContent = `Còn lại: ${remCredits} TC`;
+        document.getElementById('srm-prog-pace').textContent = `Cần ${neededPerSem} TC/kỳ`;
+
+        // Recommendation box
+        const recEl = document.getElementById('srm-recommend');
+        recEl.className = `srm-recommend ${recType}`;
+        document.getElementById('srm-rec-icon').textContent      = recIcon;
+        document.getElementById('srm-rec-tag').textContent       = recTag;
+        document.getElementById('srm-rec-headline').textContent  = recHeadline;
+        document.getElementById('srm-rec-desc').innerHTML        = recDesc;
+
+        const changeEl = document.getElementById('srm-credit-change');
+        if (recDelta > 0) {
+            changeEl.className = 'srm-credit-change up';
+            changeEl.innerHTML = `↑ ${suggestedCredits} <small style="font-size:.75rem;font-weight:500;color:var(--text-secondary);">TC/kỳ (tăng +${recDelta})</small>`;
+        } else if (recDelta < 0) {
+            changeEl.className = 'srm-credit-change down';
+            changeEl.innerHTML = `↓ ${suggestedCredits} <small style="font-size:.75rem;font-weight:500;color:var(--text-secondary);">TC/kỳ (giảm ${recDelta})</small>`;
+        } else {
+            changeEl.className = 'srm-credit-change same';
+            changeEl.innerHTML = `= ${suggestedCredits} <small style="font-size:.75rem;font-weight:500;color:var(--text-secondary);">TC/kỳ (giữ nguyên)</small>`;
+        }
+
+        // Reasons
+        const reasonsEl = document.getElementById('srm-reasons');
+        reasonsEl.innerHTML = reasons.map(r => `
+            <div class="srm-reason-item">
+                <span class="srm-reason-icon">${r.icon}</span>
+                <span>${r.text}</span>
+            </div>`).join('');
+
+        // Subject list
+        const subjEl = document.getElementById('srm-subj-section');
+        const subjectData = snapshot.map(c => {
+            const input = document.getElementById(`grade-${c.id}`);
+            const credits = parseInt(input?.dataset.credits || c.credits || 0);
+            return { ...c, credits };
+        });
+        const passHtml = subjectData.filter(c => c.grade > 5.0).map(c => `
+            <div class="srm-subj-row pass">
+                <span class="srm-subj-name">${c.name}</span>
+                <span class="srm-subj-credits">${c.credits} TC</span>
+                <span class="srm-subj-grade pass">${c.grade}</span>
+            </div>`).join('');
+        const failHtml = subjectData.filter(c => c.grade <= 5.0).map(c => `
+            <div class="srm-subj-row fail">
+                <span class="srm-subj-name">${c.name}</span>
+                <span class="srm-subj-credits">${c.credits} TC</span>
+                <span class="srm-subj-grade fail">${c.grade}</span>
+            </div>`).join('');
+        subjEl.innerHTML = `
+            ${passHtml ? `<div class="srm-subj-title">✓ Môn đạt (${passSubjects.length})</div><div class="srm-subj-list">${passHtml}</div>` : ''}
+            ${failHtml ? `<div class="srm-subj-title" style="color:#fca5a5;">✗ Môn chưa đạt (${failSubjects.length})</div><div class="srm-subj-list">${failHtml}</div>` : ''}
+        `;
+
+        // Apply button text
+        const applyBtn = document.getElementById('srm-btn-apply');
+        if (recDelta !== 0) {
+            applyBtn.style.display = '';
+            applyBtn.innerHTML = recDelta > 0
+                ? `↑ Tăng lên ${suggestedCredits} TC/kỳ`
+                : `↓ Giảm xuống ${suggestedCredits} TC/kỳ`;
+        } else {
+            applyBtn.style.display = 'none';
+        }
+
+        // Mở modal
+        document.getElementById('sem-result-overlay').classList.add('open');
+    }
+
+    function closeSemResultModal() {
+        document.getElementById('sem-result-overlay').classList.remove('open');
+    }
+
+    function applyCreditRecommendation() {
+        // Ghi nhớ được số TC gợi ý vào target_years — không có field riêng,
+        // nên ta show toast + lưu vào localStorage để thông báo dị vụ suggest
+        localStorage.setItem('recommended_credits_per_sem', _semRecCredits);
+        showToast(`Đã ghi nhớ gợi ý: ${_semRecCredits} TC/kỳ 📌`, 'success');
+        closeSemResultModal();
+        // Cập nhật hiển thị
+        document.getElementById('stat-credits-per-sem').textContent = _semRecCredits;
+        document.getElementById('stat-credits-per-sem').style.cssText =
+            'background:linear-gradient(135deg,#10b981,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900;';
+    }
+
+    // Đóng modal khi click ra ngoài
+    document.getElementById('sem-result-overlay').addEventListener('click', function(e) {
+        if (e.target === this) closeSemResultModal();
+    });
 
     async function saveSemesterHistory(semesterNumber, snapshot) {
         try {
@@ -3339,6 +4269,216 @@ function toggleSemBlock(id) {
 // Tải lịch sử khi page load (để cập nhật badge)
 document.addEventListener('DOMContentLoaded', () => {
     loadSemesterHistory();
+});
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD OVERVIEW PANEL
+// ═══════════════════════════════════════════════════════════════
+
+function renderDashboard() {
+    // ── 1. Thu thập điểm từ tất cả inputs ──
+    let totalEarned   = 0;
+    let totalGraded   = 0;
+    let totalFail     = 0;
+    let allGrades     = []; // { id, grade, credits, groupName }
+
+    document.querySelectorAll('.grade-input').forEach(input => {
+        const val     = parseFloat(input.value);
+        const credits = parseInt(input.dataset.credits || 0);
+        const sid     = parseInt(input.dataset.subjectId);
+        if (isNaN(val) || input.value === '') return;
+        totalGraded++;
+        if (val > 5.0) totalEarned += credits;
+        else totalFail++;
+        allGrades.push({ id: sid, grade: val, credits });
+    });
+
+    // Bổ sung groupName từ SUBJECTS_BY_SEM
+    const subjectMap = {};
+    for (const subs of Object.values(SUBJECTS_BY_SEM)) {
+        subs.forEach(s => { subjectMap[s.id] = s; });
+    }
+    allGrades = allGrades.map(g => ({
+        ...g,
+        groupName: subjectMap[g.id]?.groupName || 'Khác',
+        name:      subjectMap[g.id]?.name || '?',
+    }));
+
+    // ── 2. Thống số cơ bản ──
+    const targetYears  = parseInt(document.getElementById('target_years')?.value || 4);
+    const currentSem   = parseInt(document.getElementById('target_semester')?.value || 1);
+    const totalSem     = targetYears * 2;
+    const remSem       = Math.max(1, totalSem - currentSem + 1);
+    const remCredits   = Math.max(0, TOTAL_CREDITS - totalEarned);
+    const neededPerSem = Math.ceil(remCredits / remSem);
+    const progPct      = Math.min(100, Math.round((totalEarned / TOTAL_CREDITS) * 100));
+
+    // TC học kỳ này (môn đang học)
+    const thisSemCredits = currentCourses.reduce((s, c) => s + (parseInt(subjectMap[c.id]?.credits || 0)), 0);
+
+    // ── 3. Render Card 1: Tiến độ tín chỉ ──
+    const fill    = document.getElementById('dash-prog-fill');
+    const pctEl   = document.getElementById('dash-prog-pct');
+    const earnEl  = document.getElementById('dash-credit-earned');
+    const leftEl  = document.getElementById('dash-prog-left');
+    const remSemEl= document.getElementById('dash-prog-rem-sem');
+    const passEl  = document.getElementById('dash-pass-credits');
+    const needEl  = document.getElementById('dash-needed-per-sem');
+    const thisEl  = document.getElementById('dash-current-sem');
+
+    earnEl.textContent = totalEarned;
+    leftEl.textContent = `Còn lại: ${remCredits} TC`;
+    remSemEl.textContent = `${remSem} kỳ còn`;
+    passEl.textContent = totalEarned;
+    needEl.textContent = neededPerSem;
+    thisEl.textContent = thisSemCredits || currentCourses.length > 0 ? thisSemCredits : '--';
+
+    // Thanh tiến độ với màu theo %
+    const progColor = progPct >= 75
+        ? 'linear-gradient(90deg,#10b981,#34d399)'
+        : progPct >= 40
+        ? 'linear-gradient(90deg,#6366f1,#a855f7)'
+        : 'linear-gradient(90deg,#f59e0b,#f97316)';
+
+    if (fill) {
+        fill.style.background = progColor;
+        fill.style.width = '0%';
+        setTimeout(() => { fill.style.width = `${progPct}%`; }, 80);
+    }
+
+    const pctClass = progPct >= 75 ? 'great' : progPct >= 40 ? 'mid' : 'low';
+    if (pctEl) { pctEl.textContent = `${progPct}%`; pctEl.className = `dash-prog-pct ${pctClass}`; }
+
+    // ── 4. Render Card 2: Thế mạnh / Điểm yếu nhóm môn ──
+    const strengthEl = document.getElementById('dash-strength-content');
+    if (strengthEl) {
+        if (allGrades.length === 0) {
+            strengthEl.innerHTML = `<div class="dash-no-data"><div class="dash-no-data-icon">⭐</div><div>Nhập điểm để xem</div></div>`;
+        } else {
+            // Nhóm theo groupName
+            const groups = {};
+            allGrades.forEach(g => {
+                const gn = g.groupName;
+                if (!groups[gn]) groups[gn] = { grades: [], name: gn };
+                groups[gn].grades.push(g.grade);
+            });
+            const groupStats = Object.values(groups).map(g => ({
+                name: g.name,
+                avg: Math.round(g.grades.reduce((s, v) => s + v, 0) / g.grades.length * 10) / 10,
+                count: g.grades.length,
+            })).sort((a, b) => b.avg - a.avg);
+
+            const avgCls = avg => avg >= 8 ? 'ex' : avg >= 6.5 ? 'good' : avg >= 5 ? 'ok' : 'bad';
+            const barColor = avg => avg >= 8 ? '#10b981' : avg >= 6.5 ? '#6366f1' : avg >= 5 ? '#f59e0b' : '#ef4444';
+
+            // Top 3 mạnh nhất
+            const top3 = groupStats.slice(0, 3);
+            // Bottom 2 yếu nhất (nếu có)
+            const bottom2 = groupStats.length > 3 ? groupStats.slice(-2).filter(g => g.avg < 6.5) : [];
+
+            const renderRow = (g) => `
+                <div class="dash-strength-row">
+                    <span class="dash-strength-name">${g.name}</span>
+                    <div class="dash-strength-bar-wrap">
+                        <div class="dash-strength-bar-track">
+                            <div class="dash-strength-bar-fill" style="width:${g.avg * 10}%;background:${barColor(g.avg)};"></div>
+                        </div>
+                    </div>
+                    <span class="dash-strength-avg ${avgCls(g.avg)}">${g.avg}</span>
+                </div>`;
+
+            let html = `
+                <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);margin-bottom:.4rem;">🌟 Thế mạnh</div>
+                <div class="dash-strength-list">${top3.map(renderRow).join('')}</div>`;
+
+            if (bottom2.length > 0) {
+                html += `
+                <div class="dash-sw-divider"></div>
+                <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fca5a5;margin-bottom:.4rem;">⚠ Cần cải thiện</div>
+                <div class="dash-strength-list">${bottom2.map(renderRow).join('')}</div>`;
+            }
+            strengthEl.innerHTML = html;
+        }
+    }
+
+    // ── 5. Render Card 3: Gợi ý tín chỉ kỳ tới ──
+    const badgeEl  = document.getElementById('dash-advice-badge');
+    const numEl    = document.getElementById('dash-advice-num');
+    const reasonEl = document.getElementById('dash-advice-reason');
+
+    if (allGrades.length === 0) {
+        if (badgeEl)  { badgeEl.className = 'dash-advice-badge maintain'; badgeEl.textContent = '• Chưa có dữ liệu'; }
+        if (numEl)    { numEl.className = 'dash-advice-num same'; numEl.textContent = '--'; }
+        if (reasonEl) { reasonEl.textContent = 'Nhập điểm các môn để nhận gợi ý.'; }
+    } else {
+        const overallGpa   = Math.round(allGrades.reduce((s, g) => s + g.grade, 0) / allGrades.length * 10) / 10;
+        const passRate     = allGrades.filter(g => g.grade > 5).length / allGrades.length;
+        const avgPerSem    = thisSemCredits || neededPerSem;
+        const savedRec     = localStorage.getItem('recommended_credits_per_sem');
+        const baseCredits  = savedRec ? parseInt(savedRec) : avgPerSem;
+
+        let recType, recLabel, recCredits, recReason, numClass;
+
+        if (overallGpa >= 7.5 && passRate >= 0.85 && remCredits > neededPerSem + 5) {
+            recType    = 'increase';
+            recLabel   = '↑ Nên tăng tín chỉ';
+            recCredits = Math.min(24, neededPerSem + 2);
+            numClass   = 'up';
+            recReason  = `GPA ${overallGpa} cao, pass rate ${Math.round(passRate*100)}%. Có thể tăng tải để đúng tiến độ.`;
+        } else if (overallGpa < 5.5 || passRate < 0.6) {
+            recType    = 'decrease';
+            recLabel   = '↓ Nên giảm tín chỉ';
+            recCredits = Math.max(10, neededPerSem - 3);
+            numClass   = 'down';
+            recReason  = `GPA ${overallGpa} thấp. Giảm tải để tập trung vào chất lượng.`;
+        } else if (neededPerSem > (baseCredits || 15) + 4) {
+            recType    = 'increase';
+            recLabel   = '↑ Cần tăng để kịp';
+            recCredits = Math.min(24, neededPerSem);
+            numClass   = 'up';
+            recReason  = `Cần ${neededPerSem} TC/kỳ để tốt nghiệp đúng hạn trong ${remSem} kỳ còn lại.`;
+        } else {
+            recType    = 'maintain';
+            recLabel   = '= Giữ nguyên';
+            recCredits = neededPerSem;
+            numClass   = 'same';
+            recReason  = `Đang đúng tiến độ. Cần ~${neededPerSem} TC/kỳ trong ${remSem} kỳ còn lại.`;
+        }
+
+        if (badgeEl)  { badgeEl.className = `dash-advice-badge ${recType}`; badgeEl.textContent = recLabel; }
+        if (numEl)    { numEl.className = `dash-advice-num ${numClass}`; numEl.textContent = recCredits; }
+        if (reasonEl) { reasonEl.textContent = recReason; }
+    }
+}
+
+// ── Hook vào onGradeChange (debounce) ──
+const __origGradeChangeDash = window.onGradeChange;
+window.onGradeChange = function(id, input, skipSave = false) {
+    __origGradeChangeDash(id, input, skipSave);
+    clearTimeout(window._dashTimer);
+    window._dashTimer = setTimeout(renderDashboard, 500);
+};
+
+// ── Hook vào loadGradesFromDB ──
+const __origLoadGradesDash = window.loadGradesFromDB;
+window.loadGradesFromDB = async function() {
+    await __origLoadGradesDash();
+    setTimeout(renderDashboard, 300);
+};
+
+// ── Cập nhật khi đổi config (semester, target_years) ──
+['target_semester', 'target_years', 'academic_year'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+        clearTimeout(window._dashTimer);
+        window._dashTimer = setTimeout(renderDashboard, 300);
+    });
+});
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+    renderDashboard();
 });
 </script>
 
