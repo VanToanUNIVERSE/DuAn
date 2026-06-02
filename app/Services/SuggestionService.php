@@ -62,29 +62,41 @@ class SuggestionService
 
         $subjects = $query->whereNotIn('id', $passedSubjects)->get();
 
-        // 5. Lọc danh sách môn học theo điều kiện tiên quyết
         $suggestions = [];
         foreach ($subjects as $subject) {
             $prerequisites = SubjectRelation::where('subject_id', $subject->id)
                 ->where('type', 'prerequisite')
-                ->pluck('related_subject_id')
-                ->toArray();
+                ->with('relatedSubject')
+                ->get();
 
             $canStudy = true;
-            foreach ($prerequisites as $prerequisite) {
-                if (!in_array($prerequisite, $passedSubjects)) {
+            $prereqDetails = [];
+            foreach ($prerequisites as $prereq) {
+                $isPassed = in_array($prereq->related_subject_id, $passedSubjects);
+                if (!$isPassed) {
                     $canStudy = false;
-                    break;
+                }
+                if ($prereq->relatedSubject) {
+                    $prereqDetails[] = [
+                        'id' => $prereq->related_subject_id,
+                        'name' => $prereq->relatedSubject->name,
+                        'is_passed' => $isPassed
+                    ];
                 }
             }
 
-            if ($canStudy) {
-                $suggestions[] = $subject;
-            }
+            $subject->can_study = $canStudy;
+            $subject->prerequisites_info = $prereqDetails;
+            $suggestions[] = $subject;
         }
 
-        // 6. Sắp xếp các môn học đề xuất theo khoảng cách học kỳ gần nhất
+        // 6. Sắp xếp các môn học đề xuất: Môn đủ điều kiện trước, sau đó theo khoảng cách học kỳ gần nhất
         usort($suggestions, function ($a, $b) use ($currentSemester) {
+            // Đủ điều kiện xếp trước
+            if ($a->can_study && !$b->can_study) return -1;
+            if (!$a->can_study && $b->can_study) return 1;
+
+            // Nếu cùng trạng thái điều kiện, xếp theo khoảng cách học kỳ
             $distanceA = abs(($a->semester?->name ?? 1) - $currentSemester);
             $distanceB = abs(($b->semester?->name ?? 1) - $currentSemester);
             if ($distanceA == $distanceB) {
@@ -92,6 +104,9 @@ class SuggestionService
             }
             return ($distanceA < $distanceB) ? -1 : 1;
         });
+
+        // Tùy chọn giới hạn số lượng gợi ý (ví dụ: 15 môn) để tránh danh sách quá dài
+        $suggestions = array_slice($suggestions, 0, 15);
 
         return $suggestions;
     }
