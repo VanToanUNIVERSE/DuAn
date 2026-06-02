@@ -14,16 +14,15 @@ class SuggestionService
         if ($userId && is_array($passedSubjectIds)) {
             // Xóa danh sách môn đã đỗ cũ
             UserGrade::where('user_id', $userId)
-                ->where('status', 'passed')
+                ->where('status', 'pass')
                 ->delete();
 
             // Lưu danh sách môn đã đỗ mới
             foreach ($passedSubjectIds as $subId) {
-                UserGrade::create([
-                    'user_id' => $userId,
-                    'subject_id' => $subId,
-                    'status' => 'passed',
-                ]);
+                UserGrade::updateOrCreate(
+                    ['user_id' => $userId, 'subject_id' => $subId],
+                    ['status' => 'pass']
+                );
             }
         }
 
@@ -31,7 +30,7 @@ class SuggestionService
         if ($userId) {
             // Nếu có đăng nhập, ưu tiên lấy từ database (đã được cập nhật ở bước 1)
             $passedSubjects = UserGrade::where('user_id', $userId)
-                ->where('status', 'passed')
+                ->where('status', 'pass')
                 ->pluck('subject_id')
                 ->toArray();
         } else {

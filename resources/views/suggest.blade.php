@@ -2700,6 +2700,12 @@
     }
 
     function obGradeChange(id, input) {
+        // Clamp giá trị về đúng khoảng [0, 10]
+        const rawVal = parseFloat(input.value);
+        if (!isNaN(rawVal)) {
+            if (rawVal > 10) input.value = 10;
+            else if (rawVal < 0) input.value = 0;
+        }
         const val = parseFloat(input.value);
         const status = document.getElementById(`ob-gstatus-${id}`);
         const row = document.getElementById(`ob-row-${id}`);
@@ -3053,6 +3059,12 @@
     // GRADE CHANGE HANDLERS
     // ═══════════════════════════════════════════════════════════════
     function onGradeChange(id, input, skipSave = false) {
+        // Clamp giá trị về đúng khoảng [0, 10]
+        const rawVal = parseFloat(input.value);
+        if (!isNaN(rawVal)) {
+            if (rawVal > 10) input.value = 10;
+            else if (rawVal < 0) input.value = 0;
+        }
         const card   = document.getElementById(`lbl-sub-${id}`);
         const status = document.getElementById(`status-${id}`);
         const val    = parseFloat(input.value);
@@ -3097,6 +3109,12 @@
     }
 
     function onCCGradeChange(id, input) {
+        // Clamp giá trị về đúng khoảng [0, 10]
+        const rawVal = parseFloat(input.value);
+        if (!isNaN(rawVal)) {
+            if (rawVal > 10) input.value = 10;
+            else if (rawVal < 0) input.value = 0;
+        }
         const val    = parseFloat(input.value);
         const item   = document.getElementById(`cc-item-${id}`);
         const status = document.getElementById(`cc-status-${id}`);
