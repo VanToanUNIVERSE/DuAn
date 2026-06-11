@@ -11,6 +11,7 @@ class Subject extends Model
         'credits',
         'subject_type_id',
         'skill_group_id',
+        'program_group_id',
         'semester_id',
     ];
 
@@ -22,6 +23,11 @@ class Subject extends Model
     public function skillGroup()
     {
         return $this->belongsTo(SkillGroup::class);
+    }
+
+    public function programGroup()
+    {
+        return $this->belongsTo(ProgramGroup::class);
     }
 
     public function semester()
