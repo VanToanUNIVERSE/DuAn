@@ -10,6 +10,7 @@ class Subject extends Model
         'none'            => 'Không yêu cầu',
         'completed_basic' => 'Đã hoàn thành đại cương',
         'completed_major' => 'Đã hoàn thành cơ sở ngành',
+        'completed_specialized' => 'Đã hoàn thành chuyên ngành',
         'completed_all'   => 'Đã hoàn thành tất cả',
         'min_credits'     => 'Đủ tối thiểu tín chỉ',
     ];

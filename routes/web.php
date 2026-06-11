@@ -39,10 +39,10 @@ Route::middleware('auth')->group(function () {
 
     // ── Trang chính ─────────────────────────────────────────────────────────
     Route::get('/suggest', function () {
-        $subjects = App\Models\Subject::with(['subjectType', 'skillGroup', 'programGroup', 'semester'])
+        $subjects = App\Models\Subject::with(['subjectType', 'skillGroup', 'programGroup'])
             ->get()
             ->groupBy(function ($subject) {
-                return $subject->semester?->name ?? 'Môn khác';
+                return $subject->programGroup?->name ?? 'Môn khác';
             });
 
         $totalCredits = App\Models\Subject::sum('credits');
@@ -112,6 +112,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('/curriculum',                                           [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'index'])->name('curriculum.index');
     Route::get('/curriculum/{curriculumFramework}',                     [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'show'])->name('curriculum.show');
     Route::post('/curriculum/{curriculumFramework}/assign',             [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'assign'])->name('curriculum.assign');
+    Route::post('/curriculum/{curriculumFramework}/auto-assign',           [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'autoAssign'])->name('curriculum.auto-assign');
     Route::delete('/curriculum/{curriculumFramework}/remove/{assignment}', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'remove'])->name('curriculum.remove');
 });
 

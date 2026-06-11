@@ -19,8 +19,8 @@
 
                 <div class="form-grid-2">
                     <div class="form-group">
-                        <label>Mã môn học</label>
-                        <input type="text" name="subject_code" value="{{ old('subject_code', $subject->subject_code) }}" placeholder="VD: IT001">
+                        <label>Mã môn học <span style="color:var(--error);">*</span></label>
+                        <input type="text" name="subject_code" value="{{ old('subject_code', $subject->subject_code) }}" placeholder="VD: IT001" required>
                         @error('subject_code')<div class="field-error">{{ $message }}</div>@enderror
                     </div>
                     <div class="form-group">
@@ -96,17 +96,243 @@
                     </div>
                 </div>
 
+                <div class="form-grid-2" style="margin-top:16px; margin-bottom:16px;">
+                    <div class="form-group">
+                        <label>Môn tiên quyết</label>
+                        <select name="prerequisites[]" multiple class="form-control" style="height:120px;">
+                            @foreach($allSubjects as $sub)
+                                @if($sub->id != $subject->id)
+                                    <option value="{{ $sub->id }}" {{ in_array($sub->id, old('prerequisites', $prerequisiteIds ?? [])) ? 'selected' : '' }}>
+                                        {{ $sub->subject_code }} - {{ $sub->name }}
+                                    </option>
+                                @endif
+                            @endforeach
+                        </select>
+                        <div style="font-size:11px; color:var(--muted); margin-top:4px;">Nhấn giữ Ctrl (hoặc Cmd) để chọn nhiều môn.</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Môn song hành</label>
+                        <select name="corequisites[]" multiple class="form-control" style="height:120px;">
+                            @foreach($allSubjects as $sub)
+                                @if($sub->id != $subject->id)
+                                    <option value="{{ $sub->id }}" {{ in_array($sub->id, old('corequisites', $corequisiteIds ?? [])) ? 'selected' : '' }}>
+                                        {{ $sub->subject_code }} - {{ $sub->name }}
+                                    </option>
+                                @endif
+                            @endforeach
+                        </select>
+                        <div style="font-size:11px; color:var(--muted); margin-top:4px;">Nhấn giữ Ctrl (hoặc Cmd) để chọn nhiều môn.</div>
+                    </div>
+                </div>
+
                 <div style="display:flex; gap:10px; margin-top:8px;">
                     <button type="submit" class="btn btn-primary">💾 Lưu thay đổi</button>
                     <a href="{{ route('admin.subjects.index') }}" class="btn btn-secondary">Hủy</a>
-                    <form method="POST" action="{{ route('admin.subjects.destroy', $subject) }}"
-                          onsubmit="return confirm('Xóa môn học này?');" style="margin-left:auto;">
-                        @csrf @method('DELETE')
-                        <button type="submit" class="btn btn-danger">🗑️ Xóa môn học</button>
-                    </form>
+                    <button type="submit" form="delete-form" class="btn btn-danger" style="margin-left:auto;" onclick="return confirm('Xóa môn học này?');">🗑️ Xóa môn học</button>
                 </div>
+            </form>
+            
+            <form id="delete-form" method="POST" action="{{ route('admin.subjects.destroy', $subject) }}" style="display:none;">
+                @csrf @method('DELETE')
             </form>
         </div>
     </div>
 </div>
 @endsection
+
+@push('styles')
+<style>
+.vanilla-multi-select {
+    position: relative;
+    font-family: inherit;
+}
+.vms-header {
+    min-height: 38px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.vms-tag {
+    background: var(--brand-teal);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.vms-tag-remove {
+    cursor: pointer;
+    font-weight: bold;
+}
+.vms-tag-remove:hover { color: #ffe3e3; }
+.vms-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.vanilla-multi-select.open .vms-dropdown {
+    display: block;
+}
+.vms-search {
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: #fff;
+}
+.vms-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    outline: none;
+}
+.vms-options {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.vms-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid #f9f9f9;
+}
+.vms-option:hover { background: #f8f9fa; }
+.vms-option.selected {
+    background: #e6fcf5;
+    color: var(--brand-teal);
+    font-weight: 600;
+}
+</style>
+@endpush
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function initMultiSelect(selectElement) {
+        selectElement.style.display = 'none'; // Ẩn select gốc
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'vanilla-multi-select';
+        selectElement.parentNode.insertBefore(wrapper, selectElement);
+        wrapper.appendChild(selectElement);
+
+        const header = document.createElement('div');
+        header.className = 'vms-header';
+        wrapper.appendChild(header);
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'vms-dropdown';
+        wrapper.appendChild(dropdown);
+
+        const searchWrap = document.createElement('div');
+        searchWrap.className = 'vms-search';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Tìm kiếm môn học...';
+        searchWrap.appendChild(searchInput);
+        dropdown.appendChild(searchWrap);
+
+        const optionsList = document.createElement('ul');
+        optionsList.className = 'vms-options';
+        dropdown.appendChild(optionsList);
+
+        const options = Array.from(selectElement.options);
+
+        function renderHeader() {
+            header.innerHTML = '';
+            const selectedOptions = options.filter(o => o.selected);
+            if (selectedOptions.length === 0) {
+                header.innerHTML = '<span style="color:#aaa; font-size:14px;">— Nhấp để chọn môn —</span>';
+            } else {
+                selectedOptions.forEach(opt => {
+                    const tag = document.createElement('div');
+                    tag.className = 'vms-tag';
+                    tag.innerHTML = `<span>${opt.text}</span><span class="vms-tag-remove" data-value="${opt.value}">×</span>`;
+                    header.appendChild(tag);
+                });
+            }
+        }
+
+        function renderOptions(filter = '') {
+            optionsList.innerHTML = '';
+            options.forEach(opt => {
+                if (opt.text.toLowerCase().includes(filter.toLowerCase())) {
+                    const li = document.createElement('li');
+                    li.className = 'vms-option' + (opt.selected ? ' selected' : '');
+                    li.textContent = opt.text;
+                    li.dataset.value = opt.value;
+                    optionsList.appendChild(li);
+                }
+            });
+        }
+
+        header.addEventListener('click', (e) => {
+            if (e.target.classList.contains('vms-tag-remove')) {
+                const val = e.target.dataset.value;
+                const opt = options.find(o => o.value === val);
+                if (opt) {
+                    opt.selected = false;
+                    renderHeader();
+                    renderOptions(searchInput.value);
+                }
+                return;
+            }
+            wrapper.classList.toggle('open');
+            if (wrapper.classList.contains('open')) {
+                searchInput.focus();
+            }
+        });
+
+        searchInput.addEventListener('input', (e) => {
+            renderOptions(e.target.value);
+        });
+
+        optionsList.addEventListener('click', (e) => {
+            const li = e.target.closest('.vms-option');
+            if (li) {
+                const val = li.dataset.value;
+                const opt = options.find(o => o.value === val);
+                if (opt) {
+                    opt.selected = !opt.selected;
+                    renderHeader();
+                    renderOptions(searchInput.value);
+                }
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) {
+                wrapper.classList.remove('open');
+            }
+        });
+
+        renderHeader();
+        renderOptions();
+    }
+
+    document.querySelectorAll('select[multiple]').forEach(select => {
+        initMultiSelect(select);
+    });
+});
+</script>
+@endpush

@@ -5,7 +5,6 @@ namespace App\Imports;
 use App\Models\Subject;
 use App\Models\SkillGroup;
 use App\Models\ProgramGroup;
-use App\Models\Semester;
 use App\Models\SubjectRelation;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -29,6 +28,8 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $name = trim($row['subjects'] ?? $row['subject'] ?? '');
             if (empty($name)) continue;
 
+            $subjectCode = strtoupper(trim($row['subject_code'] ?? $row['id'] ?? ''));
+
             // Tìm hoặc tạo program group
             $programGroupId = null;
             $pgName = trim($row['program_groups'] ?? $row['program_group'] ?? '');
@@ -43,13 +44,6 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 $skillGroupId = SkillGroup::firstOrCreate(['name' => $sgName])->id;
             }
 
-            // Tìm semester theo tên (HK1, HK2, ...)
-            $semesterId = null;
-            $semName = trim($row['semester'] ?? '');
-            if ($semName) {
-                $semesterId = Semester::where('name', $semName)->value('id');
-            }
-
             // Số tín chỉ
             $credits = null;
             $rawCredits = trim($row['credits'] ?? '');
@@ -57,36 +51,62 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 $credits = (int) $rawCredits;
             }
 
-            // Upsert theo tên môn
+            // Requirement type
+            $validTypes = array_keys(\App\Models\Subject::REQUIREMENT_TYPES);
+            $reqType = trim($row['requirement_type'] ?? 'none');
+            if (!in_array($reqType, $validTypes)) $reqType = 'none';
+
+            // Upsert: nếu có subject_code thì match theo code, không thì theo tên
+            $matchKey = $subjectCode ? ['subject_code' => $subjectCode] : ['name' => $name];
+
+            // Kiểm tra trùng code nếu upsert theo tên (tránh tạo trùng code)
+            if (!$subjectCode) {
+                // Không có code trong file → bỏ qua, không thể upsert an toàn
+                $this->errors[] = "Dòng " . ($index + 2) . ": Môn \"{$name}\" thiếu mã môn, bỏ qua.";
+                continue;
+            }
+
             Subject::updateOrCreate(
-                ['name' => $name],
+                $matchKey,
                 [
+                    'name'             => $name,
                     'credits'          => $credits,
                     'skill_group_id'   => $skillGroupId,
                     'program_group_id' => $programGroupId,
-                    'semester_id'      => $semesterId,
+                    'requirement_type' => $reqType,
                 ]
             );
 
             $this->rowCount++;
 
             // Lưu relations để xử lý sau
-            $prereqName = trim($row['prerequisite'] ?? '');
-            $coreqName  = trim($row['corequisite']  ?? '');
-            if ($prereqName) {
-                $this->pendingRelations[] = ['subject' => $name, 'related' => $prereqName, 'type' => 'prerequisite'];
+            $prereqString = trim($row['prerequisite'] ?? '');
+            $coreqString  = trim($row['corequisite']  ?? '');
+            
+            if ($prereqString) {
+                $prereqCodes = array_map('trim', explode(',', $prereqString));
+                foreach ($prereqCodes as $code) {
+                    if ($code) {
+                        $this->pendingRelations[] = ['subject' => $subjectCode, 'related' => strtoupper($code), 'type' => 'prerequisite'];
+                    }
+                }
             }
-            if ($coreqName) {
-                $this->pendingRelations[] = ['subject' => $name, 'related' => $coreqName, 'type' => 'corequisite'];
+            if ($coreqString) {
+                $coreqCodes = array_map('trim', explode(',', $coreqString));
+                foreach ($coreqCodes as $code) {
+                    if ($code) {
+                        $this->pendingRelations[] = ['subject' => $subjectCode, 'related' => strtoupper($code), 'type' => 'corequisite'];
+                    }
+                }
             }
         }
 
         // Pass 2: Xử lý relations sau khi subjects đã tạo xong
         foreach ($this->pendingRelations as $rel) {
-            $subjectId = Subject::where('name', $rel['subject'])->value('id');
-            $relatedId = Subject::where('name', $rel['related'])->value('id');
+            $subjectId = Subject::where('subject_code', $rel['subject'])->value('id');
+            $relatedId = Subject::where('subject_code', $rel['related'])->value('id');
 
-            if ($subjectId && $relatedId) {
+            if ($subjectId && $relatedId && $subjectId != $relatedId) {
                 SubjectRelation::updateOrCreate(
                     [
                         'subject_id'         => $subjectId,
@@ -94,6 +114,17 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                         'type'               => $rel['type'],
                     ]
                 );
+                
+                // Nếu là song hành, tạo luôn chiều ngược lại
+                if ($rel['type'] === 'corequisite') {
+                    SubjectRelation::updateOrCreate(
+                        [
+                            'subject_id'         => $relatedId,
+                            'related_subject_id' => $subjectId,
+                            'type'               => 'corequisite',
+                        ]
+                    );
+                }
             }
         }
     }

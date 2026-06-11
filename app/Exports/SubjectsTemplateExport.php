@@ -21,14 +21,14 @@ class SubjectsTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
     public function headings(): array
     {
         return [
-            'ID',
-            'subjects',
-            'prerequisite',
-            'corequisite',
-            'program_groups',
-            'skill_groups',
-            'semester',
-            'credits',
+            'subject_code',   // A — BẮT BUỘC, dùng làm khoá upsert
+            'subjects',       // B — BẮT BUỘC, tên môn học
+            'credits',        // C
+            'program_groups', // D
+            'skill_groups',   // E
+            'prerequisite',   // F
+            'corequisite',    // G
+            'requirement_type', // H
         ];
     }
 
@@ -36,18 +36,18 @@ class SubjectsTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
     {
         // Dữ liệu mẫu minh hoạ
         return [
-            [1, 'Nhập môn máy học và CNTT', '',                          'Lập trình căn bản - TH', 'Khối kiến thức cơ sở ngành',       'Hệ thống máy tính', 'HK1', 1],
-            [2, 'Lập trình căn bản',         'Nhập môn máy học và CNTT', 'Lập trình Giáo dục đại cương', 'Khối kiến thức Giáo dục đại cương', 'Lập trình',           'HK2', 2],
-            [3, 'Lập trình căn bản - TH',    '',                          'Lập trình căn bản',             'Khối kiến thức Giáo dục đại cương', 'Lập trình',           'HK2', 2],
-            [4, 'Toán rời rạc 1',             '',                          '',                              'Khối kiến thức cơ sở ngành',       'Toán – Khoa học cơ bản','HK1', 3],
-            [5, 'Toán rời rạc 2',             'Toán rời rạc 1',           '',                              'Khối kiến thức cơ sở ngành',       'Toán – Khoa học cơ bản','HK2', 3],
+            ['IT001', 'Nhập môn lập trình',         1,  'Đại cương',     'Lập trình',            '',      '',       'none'],
+            ['IT002', 'Lập trình căn bản',           3,  'Đại cương',     'Lập trình',            'IT001', '',       'completed_basic'],
+            ['IT002L','Lập trình căn bản - Thực hành',2, 'Đại cương',     'Lập trình',            'IT001', 'IT002',  'completed_basic'],
+            ['MATH01','Toán rời rạc 1',              3,  'Cơ sở ngành',   'Toán – Khoa học',      '',      '',       'none'],
+            ['MATH02','Toán rời rạc 2',              3,  'Cơ sở ngành',   'Toán – Khoa học',      'MATH01','',       'none'],
         ];
     }
 
     public function styles(Worksheet $sheet): array
     {
         return [
-            // Dòng tiêu đề — nền xanh đậm, chữ trắng, in đậm
+            // Dòng tiêu đề — nền tối, chữ trắng, in đậm
             1 => [
                 'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
                 'fill' => [
@@ -56,11 +56,15 @@ class SubjectsTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
                 ],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             ],
-            // Cột ID — căn giữa
-            'A' => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
-            'C' => ['font' => ['italic' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFF3CD']]],
-            'D' => ['font' => ['italic' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD1F5E0']]],
-            'G' => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
+            // Cột A (subject_code) — highlight bắt buộc
+            'A' => [
+                'font' => ['bold' => true],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFF0CC']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ],
+            'C' => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
+            'F' => ['font' => ['italic' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFF3CD']]],
+            'G' => ['font' => ['italic' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD1F5E0']]],
             'H' => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
         ];
     }
@@ -68,14 +72,14 @@ class SubjectsTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
     public function columnWidths(): array
     {
         return [
-            'A' => 6,
-            'B' => 35,
-            'C' => 30,
+            'A' => 12,
+            'B' => 38,
+            'C' => 9,
             'D' => 30,
-            'E' => 35,
-            'F' => 30,
-            'G' => 10,
-            'H' => 10,
+            'E' => 28,
+            'F' => 28,
+            'G' => 28,
+            'H' => 20,
         ];
     }
 }

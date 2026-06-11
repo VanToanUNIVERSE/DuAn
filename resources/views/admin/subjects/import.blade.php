@@ -80,11 +80,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td style="text-align:center; color:var(--muted);">A</td>
-                            <td><code style="background:var(--surface-strong); padding:2px 6px;">ID</code></td>
-                            <td style="color:var(--muted);">Số thứ tự (bỏ qua)</td>
-                            <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
+                        <tr style="background:#fffbeb;">
+                            <td style="text-align:center; font-weight:700;">A</td>
+                            <td><code style="background:#ffe082; padding:2px 6px; font-weight:700;">subject_code</code></td>
+                            <td><strong>Mã môn học</strong> — dùng làm khoá nhận diện (upsert). Nếu mã đã tồn tại sẽ cập nhật, nếu chưa sẽ tạo mới.</td>
+                            <td style="text-align:center;"><span class="badge badge-coral">Có</span></td>
                         </tr>
                         <tr>
                             <td style="text-align:center; color:var(--muted);">B</td>
@@ -92,40 +92,40 @@
                             <td><strong>Tên môn học</strong></td>
                             <td style="text-align:center;"><span class="badge badge-coral">Có</span></td>
                         </tr>
-                        <tr style="background:#fffff3;">
+                        <tr>
                             <td style="text-align:center; color:var(--muted);">C</td>
-                            <td><code style="background:#fff3cd; padding:2px 6px;">prerequisite</code></td>
-                            <td>Tên môn tiên quyết (phải là tên môn đã có trong file)</td>
-                            <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
-                        </tr>
-                        <tr style="background:#f0fff4;">
-                            <td style="text-align:center; color:var(--muted);">D</td>
-                            <td><code style="background:#d1f5e0; padding:2px 6px;">corequisite</code></td>
-                            <td>Tên môn song hành (học đồng thời)</td>
+                            <td><code style="background:var(--surface-strong); padding:2px 6px;">credits</code></td>
+                            <td>Số tín chỉ (số nguyên)</td>
                             <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
                         </tr>
                         <tr>
-                            <td style="text-align:center; color:var(--muted);">E</td>
+                            <td style="text-align:center; color:var(--muted);">D</td>
                             <td><code style="background:var(--surface-strong); padding:2px 6px;">program_groups</code></td>
                             <td>Tên Program Group (Đại cương, Cơ sở ngành…)</td>
                             <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
                         </tr>
                         <tr>
-                            <td style="text-align:center; color:var(--muted);">F</td>
+                            <td style="text-align:center; color:var(--muted);">E</td>
                             <td><code style="background:var(--surface-strong); padding:2px 6px;">skill_groups</code></td>
-                            <td>Tên Skill Group (Lập trình, Toán – Khoa học cơ bản…)</td>
+                            <td>Tên Skill Group (Lập trình, Toán – Khoa học…)</td>
                             <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
                         </tr>
-                        <tr>
+                        <tr style="background:#fffff3;">
+                            <td style="text-align:center; color:var(--muted);">F</td>
+                            <td><code style="background:#fff3cd; padding:2px 6px;">prerequisite</code></td>
+                            <td>Mã môn tiên quyết (phải là mã môn đã có trong file)</td>
+                            <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
+                        </tr>
+                        <tr style="background:#f0fff4;">
                             <td style="text-align:center; color:var(--muted);">G</td>
-                            <td><code style="background:var(--surface-strong); padding:2px 6px;">semester</code></td>
-                            <td>Học kỳ (HK1, HK2, HK3… — phải trùng với tên trong DB)</td>
+                            <td><code style="background:#d1f5e0; padding:2px 6px;">corequisite</code></td>
+                            <td>Mã môn song hành (học đồng thời)</td>
                             <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
                         </tr>
                         <tr>
                             <td style="text-align:center; color:var(--muted);">H</td>
-                            <td><code style="background:var(--surface-strong); padding:2px 6px;">credits</code></td>
-                            <td>Số tín chỉ (số nguyên)</td>
+                            <td><code style="background:var(--surface-strong); padding:2px 6px;">requirement_type</code></td>
+                            <td>Điều kiện đăng ký: <code>none</code> / <code>completed_basic</code> / <code>completed_major</code> / <code>completed_all</code> / <code>min_credits</code></td>
                             <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
                         </tr>
                     </tbody>
@@ -135,11 +135,11 @@
             <div style="margin-top:16px; padding:12px 16px; background:var(--surface-soft); border:2px solid var(--hairline); font-size:13px; line-height:1.8;">
                 <strong>💡 Lưu ý quan trọng:</strong>
                 <ul style="margin: 6px 0 0 18px;">
-                    <li>Môn học được <strong>upsert theo tên</strong>: nếu tên môn đã tồn tại, thông tin sẽ được cập nhật.</li>
-                    <li>Cột <code>prerequisite</code> và <code>corequisite</code> ghi <strong>tên môn học</strong> (không phải ID).</li>
-                    <li>Program Group / Skill Group chưa có trong hệ thống sẽ được <strong>tạo tự động</strong>.</li>
+                    <li>Cột <code>subject_code</code> là <strong>bắt buộc</strong> và là khoá nhận diện: nếu mã đã tồn tại → <strong>cập nhật</strong>, chưa có → <strong>tạo mới</strong>.</li>
+                    <li>Dòng thiếu <code>subject_code</code> sẽ bị <strong>bỏ qua</strong> và ghi vào danh sách lỗi.</li>
+                    <li>Cột <code>prerequisite</code> và <code>corequisite</code> ghi <strong>mã môn học</strong> (subject_code, không phải tên).</li>
+                    <li>Program Group / Skill Group chưa có sẽ được <strong>tạo tự động</strong>.</li>
                     <li>File CSV phải dùng <strong>encoding UTF-8</strong>.</li>
-                    <li>Dòng có cột <code>subjects</code> trống sẽ bị bỏ qua.</li>
                 </ul>
             </div>
         </div>
