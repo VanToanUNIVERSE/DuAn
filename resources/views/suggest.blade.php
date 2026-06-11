@@ -1984,7 +1984,7 @@
 
             <button class="nav-item" onclick="switchTab('analysis', this)" id="nav-analysis">
                 <svg class="nav-item-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" /></svg>
-                Phân Tích Nhóm Môn
+                Phân Tích
             </button>
 
             <button class="nav-item" onclick="switchTab('courses', this)" id="nav-courses">
@@ -2229,13 +2229,19 @@
         </div>
 
         {{-- ════════════════════════════════════════════════════════
-             TAB: PHÂN TÍCH NHÓM MÔN
+             TAB: PHÂN TÍCH
         ════════════════════════════════════════════════════════ --}}
         <div class="page-content tab-panel" id="tab-analysis">
             <div style="margin-bottom:var(--sp-xl);">
-                <h2 style="font-family:'Sora',sans-serif;font-size:1.4rem;font-weight:800;color:var(--ink);letter-spacing:-0.4px;margin-bottom:4px;">Phân Tích Điểm Theo Nhóm Môn</h2>
-                <p style="color:var(--muted);font-size:0.88rem;">Xem điểm trung bình theo từng nhóm môn học và nhận cảnh báo về điểm yếu.</p>
+                <h2 style="font-family:'Sora',sans-serif;font-size:1.4rem;font-weight:800;color:var(--ink);letter-spacing:-0.4px;margin-bottom:4px;">Phân Tích Điểm</h2>
+                <p style="color:var(--muted);font-size:0.88rem;">Xem điểm trung bình và nhận cảnh báo theo nhóm kỹ năng hoặc khối kiến thức.</p>
             </div>
+
+            <div class="analysis-toggle-group" style="display:inline-flex;background:var(--surface-soft);border:1px solid var(--hairline);border-radius:10px;padding:4px;margin-bottom:var(--sp-lg);gap:4px;">
+                <button class="toggle-btn active" onclick="setAnalysisType('skill')" id="toggle-analysis-skill" style="border:none;background:var(--surface);color:var(--ink);padding:8px 16px;border-radius:8px;font-size:0.88rem;font-weight:600;cursor:pointer;box-shadow:var(--shadow-sm);transition:all 0.2s;">Phân tích theo Skill Groups</button>
+                <button class="toggle-btn" onclick="setAnalysisType('program')" id="toggle-analysis-program" style="border:none;background:transparent;color:var(--muted);padding:8px 16px;border-radius:8px;font-size:0.88rem;font-weight:600;cursor:pointer;transition:all 0.2s;">Phân tích theo Program Groups</button>
+            </div>
+
             <div class="clay-card" id="group-analysis-card">
                 <div id="group-analysis-content">
                     <div class="group-analysis-empty">
@@ -2280,12 +2286,13 @@
     $subjectsBySem = $subjects->map(function($group) {
         return $group->map(function($sub) {
             return [
-                'id'        => $sub->id,
-                'name'      => $sub->name,
-                'credits'   => $sub->credits,
-                'semName'   => $sub->semester?->name ?? '?',
-                'typeName'  => $sub->subjectType?->name ?? '',
-                'groupName' => $sub->skillGroup?->name ?? 'Khác',
+                'id'               => $sub->id,
+                'name'             => $sub->name,
+                'credits'          => $sub->credits,
+                'semName'          => $sub->semester?->name ?? '?',
+                'typeName'         => $sub->subjectType?->name ?? '',
+                'skillGroupName'   => $sub->skillGroup?->name ?? 'Khác',
+                'programGroupName' => $sub->programGroup?->name ?? 'Khác',
             ];
         })->values();
     });
@@ -2311,7 +2318,7 @@
         dashboard:   { title: 'Dashboard', sub: 'Tổng quan tiến độ học tập của bạn' },
         suggestions: { title: 'Đề Xuất Môn Học', sub: 'Gợi ý môn học phù hợp với tiến độ của bạn' },
         chart:       { title: 'Biểu Đồ So Sánh Điểm', sub: 'So sánh điểm của bạn với sinh viên cùng khóa' },
-        analysis:    { title: 'Phân Tích Nhóm Môn', sub: 'Điểm trung bình theo từng nhóm môn học' },
+        analysis:    { title: 'Phân Tích', sub: 'Điểm trung bình theo nhóm kỹ năng hoặc khối kiến thức' },
         courses:     { title: 'Môn Đang Học', sub: 'Quản lý môn học trong học kỳ hiện tại' },
     };
 
@@ -3156,6 +3163,38 @@ function scheduleChartRefresh(){clearTimeout(chartFetchTimer);chartFetchTimer=se
 // ═══════════════════════════════════════════════════════════════
 const GROUP_COLORS=['#1a3a3a','#ff4d8b','#b8a4ed','#ffb084','#e8b94a','#a4d4c5','#ff6b5a','#0a0a0a','#3a3a3a','#6a6a6a'];
 
+let currentAnalysisType = 'skill';
+
+function setAnalysisType(type) {
+    currentAnalysisType = type;
+    const skillBtn = document.getElementById('toggle-analysis-skill');
+    const programBtn = document.getElementById('toggle-analysis-program');
+    if (!skillBtn || !programBtn) return;
+    
+    if (type === 'skill') {
+        skillBtn.classList.add('active');
+        skillBtn.style.background = 'var(--surface)';
+        skillBtn.style.color = 'var(--ink)';
+        skillBtn.style.boxShadow = 'var(--shadow-sm)';
+        
+        programBtn.classList.remove('active');
+        programBtn.style.background = 'transparent';
+        programBtn.style.color = 'var(--muted)';
+        programBtn.style.boxShadow = 'none';
+    } else {
+        programBtn.classList.add('active');
+        programBtn.style.background = 'var(--surface)';
+        programBtn.style.color = 'var(--ink)';
+        programBtn.style.boxShadow = 'var(--shadow-sm)';
+        
+        skillBtn.classList.remove('active');
+        skillBtn.style.background = 'transparent';
+        skillBtn.style.color = 'var(--muted)';
+        skillBtn.style.boxShadow = 'none';
+    }
+    renderGroupAnalysis();
+}
+
 function gradeLevel(avg){if(avg===null)return'na';if(avg>=8.0)return'excellent';if(avg>=6.5)return'good';if(avg>=5.0)return'warning';return'danger';}
 function gradeLevelLabel(avg){
     if(avg===null)return{cls:'group-na-badge',text:'— Chưa có dữ liệu'};
@@ -3171,7 +3210,12 @@ function buildGroupAnalysis(){
     const grades={};
     document.querySelectorAll('.grade-input').forEach(input=>{const sid=parseInt(input.dataset.subjectId);const val=parseFloat(input.value);if(!isNaN(val)&&input.value!=='')grades[sid]=val;});
     const groups={};
-    allSubjects.forEach(sub=>{const gName=sub.groupName||'Khác';if(!groups[gName])groups[gName]={subjects:[],gradedSubjects:[]};groups[gName].subjects.push(sub);if(grades[sub.id]!==undefined)groups[gName].gradedSubjects.push({...sub,grade:grades[sub.id]});});
+    allSubjects.forEach(sub=>{
+        const gName = currentAnalysisType === 'skill' ? (sub.skillGroupName || 'Khác') : (sub.programGroupName || 'Khác');
+        if(!groups[gName])groups[gName]={subjects:[],gradedSubjects:[]};
+        groups[gName].subjects.push(sub);
+        if(grades[sub.id]!==undefined)groups[gName].gradedSubjects.push({...sub,grade:grades[sub.id]});
+    });
     const groupStats=Object.entries(groups).map(([name,data],idx)=>{const graded=data.gradedSubjects;let avg=null;if(graded.length>0){const sum=graded.reduce((s,s2)=>s+s2.grade,0);avg=Math.round((sum/graded.length)*10)/10;}return{name,total:data.subjects.length,graded:graded.length,avg,color:GROUP_COLORS[idx%GROUP_COLORS.length],subjects:data.subjects,gradedSubjects:graded};}).sort((a,b)=>{if(a.avg===null&&b.avg===null)return 0;if(a.avg===null)return 1;if(b.avg===null)return-1;return a.avg-b.avg;});
     return groupStats;
 }
@@ -3205,15 +3249,17 @@ function renderGroupAnalysis(){
     const radarColors=groupStats.filter(g=>g.avg!==null).map(g=>g.color);
 
     let alertsHtml='';
-    if(dangerGroups.length>0){const names=dangerGroups.map(g=>`<strong>${g.name}</strong>`).join(', ');alertsHtml+=`<div class="group-alert danger"><span class="group-alert-icon">⛔</span><div>Bạn đang <strong>rất yếu</strong> ở nhóm: ${names} (điểm TB < 5.0).</div></div>`;}
-    else if(weakGroups.length>0){const names=weakGroups.map(g=>`<strong>${g.name}</strong> (${g.avg})`).join(', ');alertsHtml+=`<div class="group-alert warning"><span class="group-alert-icon">⚠️</span><div>Nhóm môn cần cải thiện: ${names}.</div></div>`;}
-    if(strongGroups.length>0){const names=strongGroups.map(g=>`<strong>${g.name}</strong>`).join(', ');alertsHtml+=`<div class="group-alert success"><span class="group-alert-icon">🌟</span><div>Bạn đang làm rất tốt ở nhóm: ${names}.</div></div>`;}
+    const labelTitle = currentAnalysisType === 'skill' ? 'nhóm kỹ năng' : 'khối kiến thức';
+    if(dangerGroups.length>0){const names=dangerGroups.map(g=>`<strong>${g.name}</strong>`).join(', ');alertsHtml+=`<div class="group-alert danger"><span class="group-alert-icon">⛔</span><div>Bạn đang <strong>rất yếu</strong> ở ${labelTitle}: ${names} (điểm TB < 5.0).</div></div>`;}
+    else if(weakGroups.length>0){const names=weakGroups.map(g=>`<strong>${g.name}</strong> (${g.avg})`).join(', ');alertsHtml+=`<div class="group-alert warning"><span class="group-alert-icon">⚠️</span><div>Cần cải thiện ${labelTitle}: ${names}.</div></div>`;}
+    if(strongGroups.length>0){const names=strongGroups.map(g=>`<strong>${g.name}</strong>`).join(', ');alertsHtml+=`<div class="group-alert success"><span class="group-alert-icon">🌟</span><div>Bạn đang làm rất tốt ở ${labelTitle}: ${names}.</div></div>`;}
 
+    const colHeader = currentAnalysisType === 'skill' ? 'Nhóm kỹ năng' : 'Khối kiến thức';
     container.innerHTML=`<div class="group-analysis-grid">
         <div><div class="radar-wrapper"><canvas id="groupRadarChart"></canvas></div></div>
         <div>
             <table class="group-table">
-                <thead><tr><th>Nhóm môn</th><th>Môn có điểm</th><th>Tỷ lệ</th><th style="text-align:right;">Điểm TB</th><th style="text-align:right;">Đánh giá</th></tr></thead>
+                <thead><tr><th>${colHeader}</th><th>Môn có điểm</th><th>Tỷ lệ</th><th style="text-align:right;">Điểm TB</th><th style="text-align:right;">Đánh giá</th></tr></thead>
                 <tbody>${tableRows}</tbody>
             </table>
             <div class="group-summary-alerts">${alertsHtml}</div>
@@ -3229,9 +3275,10 @@ function renderGroupRadar(labels,data,colors){
     const ctx=canvas.getContext('2d');
     const gradient=ctx.createLinearGradient(0,0,0,300);
     gradient.addColorStop(0,'rgba(10,10,10,0.3)'); gradient.addColorStop(1,'rgba(10,10,10,0.05)');
+    const datasetLabel = currentAnalysisType === 'skill' ? 'Điểm TB nhóm kỹ năng' : 'Điểm TB khối kiến thức';
     groupRadarInstance=new Chart(ctx,{
         type:'radar',
-        data:{labels:labels.map(l=>l.length>14?l.substring(0,12)+'…':l),datasets:[{label:'Điểm TB nhóm môn',data,backgroundColor:gradient,borderColor:'rgba(10,10,10,0.7)',borderWidth:2,pointBackgroundColor:colors,pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:5,pointHoverRadius:7}]},
+        data:{labels:labels.map(l=>l.length>14?l.substring(0,12)+'…':l),datasets:[{label:datasetLabel,data,backgroundColor:gradient,borderColor:'rgba(10,10,10,0.7)',borderWidth:2,pointBackgroundColor:colors,pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:5,pointHoverRadius:7}]},
         options:{responsive:true,maintainAspectRatio:true,animation:{duration:700,easing:'easeInOutQuart'},plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(10,10,10,0.9)',padding:10,callbacks:{label:item=>`  Điểm TB: ${item.raw}`}}},scales:{r:{min:0,max:10,ticks:{stepSize:2,color:'rgba(10,10,10,0.35)',font:{size:9},backdropColor:'transparent',callback:v=>v===5?'5⚡':v},grid:{color:ctx=>ctx.tick.value===5?'rgba(239,68,68,0.3)':'rgba(10,10,10,0.07)',lineWidth:ctx=>ctx.tick.value===5?1.5:1},pointLabels:{color:'rgba(10,10,10,0.65)',font:{size:10,weight:'600'}},angleLines:{color:'rgba(10,10,10,0.07)'}}}}
     });
 }
@@ -3316,7 +3363,7 @@ function renderDashboard(){
     });
     const subjectMap={};
     for(const subs of Object.values(SUBJECTS_BY_SEM)){subs.forEach(s=>{subjectMap[s.id]=s;});}
-    allGrades=allGrades.map(g=>({...g,groupName:subjectMap[g.id]?.groupName||'Khác',name:subjectMap[g.id]?.name||'?'}));
+    allGrades=allGrades.map(g=>({...g,groupName:subjectMap[g.id]?.skillGroupName||'Khác',name:subjectMap[g.id]?.name||'?'}));
 
     const targetYears=parseInt(document.getElementById('target_years')?.value||4);
     const currentSem=parseInt(document.getElementById('target_semester')?.value||1);
