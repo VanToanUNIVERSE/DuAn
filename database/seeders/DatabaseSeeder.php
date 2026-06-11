@@ -10,7 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             SubjectTypeSeeder::class,
-            SubjectGroupSeeder::class,
+            SkillGroupSeeder::class,
             TrainingProgramSeeder::class,
             SubjectSeeder::class,
             SubjectRelationSeeder::class,

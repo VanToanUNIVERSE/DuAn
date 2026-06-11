@@ -5,11 +5,11 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-class SubjectGroupSeeder extends Seeder
+class SkillGroupSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('subject_groups')->insert([
+        DB::table('skill_groups')->insert([
             ['name' => 'Toán – Khoa học cơ bản', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'Lập trình',               'created_at' => now(), 'updated_at' => now()],
             ['name' => 'Hệ thống máy tính',       'created_at' => now(), 'updated_at' => now()],
