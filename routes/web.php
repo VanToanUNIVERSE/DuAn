@@ -84,3 +84,35 @@ Route::middleware('auth')->group(function () {
     Route::post('/semester-history/complete', [SemesterHistoryController::class, 'complete'])->name('semester-history.complete');
 });
 
+// ─── Admin Routes ────────────────────────────────────────────────────────────
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
+
+    // Dashboard
+    Route::get('/', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
+
+    // Quản lý môn học
+    Route::get('/subjects/import',           [App\Http\Controllers\Admin\SubjectController::class, 'importForm'])->name('subjects.import.form');
+    Route::post('/subjects/import',          [App\Http\Controllers\Admin\SubjectController::class, 'import'])->name('subjects.import');
+    Route::get('/subjects/template-download',[App\Http\Controllers\Admin\SubjectController::class, 'downloadTemplate'])->name('subjects.template');
+    Route::resource('/subjects',              App\Http\Controllers\Admin\SubjectController::class)->names('subjects');
+
+    // Quản lý Skill Groups
+    Route::get('/skill-groups',            [App\Http\Controllers\Admin\SkillGroupController::class, 'index'])->name('skill-groups.index');
+    Route::post('/skill-groups',           [App\Http\Controllers\Admin\SkillGroupController::class, 'store'])->name('skill-groups.store');
+    Route::put('/skill-groups/{skillGroup}',    [App\Http\Controllers\Admin\SkillGroupController::class, 'update'])->name('skill-groups.update');
+    Route::delete('/skill-groups/{skillGroup}', [App\Http\Controllers\Admin\SkillGroupController::class, 'destroy'])->name('skill-groups.destroy');
+
+    // Quản lý Program Groups
+    Route::get('/program-groups',               [App\Http\Controllers\Admin\ProgramGroupController::class, 'index'])->name('program-groups.index');
+    Route::post('/program-groups',              [App\Http\Controllers\Admin\ProgramGroupController::class, 'store'])->name('program-groups.store');
+    Route::put('/program-groups/{programGroup}',    [App\Http\Controllers\Admin\ProgramGroupController::class, 'update'])->name('program-groups.update');
+    Route::delete('/program-groups/{programGroup}', [App\Http\Controllers\Admin\ProgramGroupController::class, 'destroy'])->name('program-groups.destroy');
+
+    // Phân công môn học vào học kỳ theo chương trình đào tạo
+    Route::get('/curriculum',                                           [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'index'])->name('curriculum.index');
+    Route::get('/curriculum/{curriculumFramework}',                     [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'show'])->name('curriculum.show');
+    Route::post('/curriculum/{curriculumFramework}/assign',             [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'assign'])->name('curriculum.assign');
+    Route::delete('/curriculum/{curriculumFramework}/remove/{assignment}', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'remove'])->name('curriculum.remove');
+});
+
+

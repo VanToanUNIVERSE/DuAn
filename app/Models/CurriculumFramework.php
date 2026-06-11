@@ -21,4 +21,15 @@ class CurriculumFramework extends Model
     {
         return $this->hasMany(Semester::class);
     }
+
+    // Môn học được phân công trong chương trình này
+    public function subjects()
+    {
+        return $this->belongsToMany(
+            Subject::class,
+            'curriculum_subject',
+            'curriculum_framework_id',
+            'subject_id'
+        )->using(\App\Models\CurriculumSubject::class)->withPivot('semester_id')->withTimestamps();
+    }
 }

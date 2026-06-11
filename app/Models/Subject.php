@@ -6,13 +6,24 @@ use Illuminate\Database\Eloquent\Model;
 
 class Subject extends Model
 {
+    const REQUIREMENT_TYPES = [
+        'none'            => 'Không yêu cầu',
+        'completed_basic' => 'Đã hoàn thành đại cương',
+        'completed_major' => 'Đã hoàn thành cơ sở ngành',
+        'completed_all'   => 'Đã hoàn thành tất cả',
+        'min_credits'     => 'Đủ tối thiểu tín chỉ',
+    ];
+
     protected $fillable = [
+        'subject_code',
         'name',
         'credits',
         'subject_type_id',
         'skill_group_id',
         'program_group_id',
         'semester_id',
+        'note',
+        'requirement_type',
     ];
 
     public function subjectType()
@@ -30,9 +41,26 @@ class Subject extends Model
         return $this->belongsTo(ProgramGroup::class);
     }
 
-    public function semester()
+    // Môn học thuộc các chương trình đào tạo (thông qua bảng trung gian curriculum_subject)
+    public function curriculumFrameworks()
     {
-        return $this->belongsTo(Semester::class);
+        return $this->belongsToMany(
+            CurriculumFramework::class,
+            'curriculum_subject',
+            'subject_id',
+            'curriculum_framework_id'
+        )->using(CurriculumSubject::class)->withPivot('semester_id')->withTimestamps();
+    }
+
+    // Danh sách học kỳ mà môn này được phân công
+    public function assignedSemesters()
+    {
+        return $this->belongsToMany(
+            Semester::class,
+            'curriculum_subject',
+            'subject_id',
+            'semester_id'
+        )->using(CurriculumSubject::class)->withPivot('curriculum_framework_id')->withTimestamps();
     }
 
     public function grades()

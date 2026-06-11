@@ -18,6 +18,7 @@ class User extends Authenticatable
         'password',
         'fullName',
         'student_code',
+        'is_admin',
         // Cấu hình chương trình — lưu lựa chọn cuối của user trên trang gợi ý
         'pref_academic_year',
         'pref_program_type',
