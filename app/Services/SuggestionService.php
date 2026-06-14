@@ -5,9 +5,20 @@ use App\Models\SubjectRelation;
 use App\Models\UserGrade;
 use App\Models\Subject;
 use App\Models\TrainingProgram;
+use App\Models\ProgramGroup;
 
 class SuggestionService
 {
+    private function translateReqType($type) {
+        $map = [
+            'completed_basic' => 'Hoàn thành khối Đại cương',
+            'completed_major' => 'Hoàn thành khối Cơ sở ngành',
+            'completed_specialized' => 'Hoàn thành khối Chuyên ngành',
+            'completed_all' => 'Hoàn thành tất cả môn trước đó'
+        ];
+        return $map[$type] ?? 'Khác';
+    }
+
     public function suggestSubjects($userId = null, $currentSemester = 1, $academicYear = null, $programType = null, array $passedSubjectIds = null)
     {
         // 1. Nếu có đăng nhập và có truyền danh sách môn đã đỗ từ client, lưu thông tin vào database
@@ -39,7 +50,7 @@ class SuggestionService
         }
 
         // 3. Xác định phạm vi môn học theo Chương trình đào tạo (nếu có)
-        $semesterIds = null;
+        $frameworkId = null;
         if ($academicYear && $programType) {
             $program = TrainingProgram::where('academic_year', $academicYear)
                 ->where('program_type', $programType)
@@ -48,19 +59,50 @@ class SuggestionService
             if ($program) {
                 $framework = $program->curriculumFrameworks()->first();
                 if ($framework) {
-                    $semesterIds = $framework->semesters()->pluck('id')->toArray();
+                    $frameworkId = $framework->id;
                 }
             }
         }
 
-        // 4. Truy vấn danh sách môn học thích hợp
-        $query = Subject::with('semester');
+        // 4. Lấy các nhóm môn học để ánh xạ điều kiện ngầm định
+        $basicGroupIds = ProgramGroup::where('name', 'like', '%Đại cương%')
+            ->orWhere('name', 'like', '%Anh văn%')
+            ->pluck('id')->toArray();
+            
+        $majorGroupIds = ProgramGroup::where('name', 'like', '%Cơ sở ngành%')
+            ->pluck('id')->toArray();
+            
+        $specializedGroupIds = ProgramGroup::where('name', 'like', '%Chuyên ngành%')
+            ->pluck('id')->toArray();
 
-        if ($semesterIds !== null) {
-            $query->whereIn('semester_id', $semesterIds);
+        // 5. Truy vấn danh sách môn học thích hợp
+        $subjects = collect();
+        $allFrameworkSubjects = collect();
+
+        if ($frameworkId) {
+            $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+                ->with(['subject', 'semester'])
+                ->get();
+            
+            $allFrameworkSubjects = $curriculumSubjects->pluck('subject')->filter();
+
+            foreach ($curriculumSubjects as $cs) {
+                if ($cs->subject && !in_array($cs->subject_id, $passedSubjects)) {
+                    $subject = $cs->subject;
+                    // Gán tạm học kỳ vào để tương thích với logic cũ
+                    $subject->setRelation('semester', $cs->semester);
+                    $subjects->push($subject);
+                }
+            }
+        } else {
+            // Fallback nếu không có CTĐT
+            $allFrameworkSubjects = Subject::all();
+            $subjects = Subject::whereNotIn('id', $passedSubjects)->get();
         }
 
-        $subjects = $query->whereNotIn('id', $passedSubjects)->get();
+        $basicSubjects = $allFrameworkSubjects->whereIn('program_group_id', $basicGroupIds);
+        $majorSubjects = $allFrameworkSubjects->whereIn('program_group_id', $majorGroupIds);
+        $specializedSubjects = $allFrameworkSubjects->whereIn('program_group_id', $specializedGroupIds);
 
         $suggestions = [];
         foreach ($subjects as $subject) {
@@ -80,6 +122,37 @@ class SuggestionService
                     $prereqDetails[] = [
                         'id' => $prereq->related_subject_id,
                         'name' => $prereq->relatedSubject->name,
+                        'is_passed' => $isPassed
+                    ];
+                }
+            }
+
+            // Kiểm tra tiên quyết NGẦM ĐỊNH (dựa trên requirement_type)
+            $reqType = $subject->requirement_type;
+            if ($reqType && $reqType !== 'none') {
+                $implicitPrereqSubjects = collect();
+                
+                if ($reqType === 'completed_basic') {
+                    $implicitPrereqSubjects = $basicSubjects;
+                } elseif ($reqType === 'completed_major') {
+                    $implicitPrereqSubjects = $majorSubjects;
+                } elseif ($reqType === 'completed_specialized') {
+                    $implicitPrereqSubjects = $specializedSubjects;
+                } elseif ($reqType === 'completed_all') {
+                    $implicitPrereqSubjects = $allFrameworkSubjects->where('id', '!=', $subject->id);
+                }
+
+                foreach ($implicitPrereqSubjects as $impSub) {
+                    // Nếu môn ẩn định này thuộc tiên quyết cứng rồi thì bỏ qua
+                    if (collect($prereqDetails)->contains('id', $impSub->id)) continue;
+
+                    $isPassed = in_array($impSub->id, $passedSubjects);
+                    if (!$isPassed) {
+                        $canStudy = false;
+                    }
+                    $prereqDetails[] = [
+                        'id' => $impSub->id,
+                        'name' => $impSub->name . ' (Yêu cầu: ' . $this->translateReqType($reqType) . ')',
                         'is_passed' => $isPassed
                     ];
                 }

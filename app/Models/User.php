@@ -41,8 +41,5 @@ class User extends Authenticatable
         return $this->hasMany(UserGrade::class);
     }
 
-    public function studyPlans()
-    {
-        return $this->hasMany(StudyPlan::class);
-    }
+    // Removed obsolete studyPlans relationship
 }

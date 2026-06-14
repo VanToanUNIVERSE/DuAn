@@ -28,6 +28,7 @@ class UserPreferenceController extends Controller
             'program_type'     => $user->pref_program_type,
             'current_semester' => $user->pref_current_semester,
             'target_years'     => $user->pref_target_years,
+            'current_courses'  => $user->pref_current_courses ? json_decode($user->pref_current_courses, true) : [],
         ]);
     }
 
@@ -53,6 +54,7 @@ class UserPreferenceController extends Controller
             'program_type'     => 'nullable|string|max:50',
             'current_semester' => 'nullable|integer|min:1|max:10',
             'target_years'     => 'nullable|integer|min:3|max:8',
+            'current_courses'  => 'nullable|array',
         ]);
 
         // Chỉ cập nhật các trường được gửi lên (bỏ qua null từ key không tồn tại)
@@ -69,6 +71,9 @@ class UserPreferenceController extends Controller
         }
         if (array_key_exists('target_years', $validated)) {
             $toUpdate['pref_target_years'] = $validated['target_years'];
+        }
+        if (array_key_exists('current_courses', $validated)) {
+            $toUpdate['pref_current_courses'] = $validated['current_courses'] === null ? null : json_encode($validated['current_courses']);
         }
 
         if (!empty($toUpdate)) {

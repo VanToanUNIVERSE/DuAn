@@ -2263,9 +2263,11 @@
 
             <div class="clay-card" id="current-courses-card">
                 <div class="card-title-row">
-                    <div class="card-heading">
+                    <div class="card-heading" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                         📖 Danh Sách Môn
                         <span class="counter-badge" id="cc-count">0</span>
+                        <span class="pill" id="cc-credits" style="background:var(--surface-soft);color:var(--muted);border:1px solid var(--hairline);font-size:0.75rem;">0 TC</span>
+                        <span class="pill" id="cc-recommend" style="background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;font-size:0.75rem;">Khuyên dùng: -- TC</span>
                     </div>
                     <button class="btn-complete btn-primary" id="btn-complete" onclick="completeSemester()" disabled>
                         ✓ Hoàn tất học kỳ
@@ -2311,6 +2313,7 @@
     let saveTimer     = null;
     let prefTimer     = null;
     let currentCourses = [];
+    try { const saved = localStorage.getItem('current_courses'); if(saved) currentCourses = JSON.parse(saved); } catch(e) {}
     let syncLock      = false;
 
     // ─── Tab Switching ────────────────────────────────────────────────────────
@@ -2528,7 +2531,7 @@
         clearTimeout(prefTimer);
         prefTimer=setTimeout(async()=>{
             try {
-                const payload={academic_year:document.getElementById('academic_year').value,program_type:document.getElementById('program_type').value,current_semester:parseInt(document.getElementById('target_semester').value),target_years:parseInt(document.getElementById('target_years').value)};
+                const payload={academic_year:document.getElementById('academic_year').value,program_type:document.getElementById('program_type').value,current_semester:parseInt(document.getElementById('target_semester').value),target_years:parseInt(document.getElementById('target_years').value),current_courses:currentCourses};
                 const res=await fetch('/preferences/save',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF_TOKEN,'Accept':'application/json'},body:JSON.stringify(payload)});
                 if(!res.ok)throw new Error(`HTTP ${res.status}`);
                 showSaveIndicator('saved','Đã lưu cấu hình ✓');
@@ -2608,7 +2611,7 @@
         document.getElementById('stat-earned-credits').textContent=earned;
 
         const years=parseInt(document.getElementById('target_years').value);
-        const totalSem=years*2;
+        const totalSem=years*3;
         const currentSem=parseInt(document.getElementById('target_semester').value);
         const remaining=Math.max(0,TOTAL_CREDITS-earned);
         const remSem=Math.max(1,totalSem-(currentSem-1));
@@ -2677,6 +2680,8 @@
         if(input.value===''||isNaN(val)){status.textContent='—';status.classList.add('empty');}
         else if(val>5.0){item.classList.add('cc-pass');input.classList.add('is-pass');status.textContent='Pass';status.classList.add('pass');}
         else{item.classList.add('cc-fail');input.classList.add('is-fail');status.textContent='Fail';status.classList.add('fail');}
+        localStorage.setItem('current_courses', JSON.stringify(currentCourses));
+        savePreferences();
         updateCompleteButton(); updateEarnedCredits();
     }
 
@@ -2725,8 +2730,24 @@
     }
 
     function renderCurrentCourses() {
+        localStorage.setItem('current_courses', JSON.stringify(currentCourses));
+        savePreferences();
         const container=document.getElementById('current-courses-list');
         const counter=document.getElementById('cc-count'); counter.textContent=currentCourses.length;
+        const currentCredits = currentCourses.reduce((sum, c) => sum + (parseInt(c.credits) || 0), 0);
+        const ccCredits = document.getElementById('cc-credits');
+        if (ccCredits) {
+            ccCredits.textContent = currentCredits + ' TC';
+            if (currentCredits > 0) {
+                ccCredits.style.background = 'var(--ink)';
+                ccCredits.style.color = 'white';
+                ccCredits.style.borderColor = 'var(--ink)';
+            } else {
+                ccCredits.style.background = 'var(--surface-soft)';
+                ccCredits.style.color = 'var(--muted)';
+                ccCredits.style.borderColor = 'var(--hairline)';
+            }
+        }
         updateCompleteButton();
         if(currentCourses.length===0){container.innerHTML='<div class="current-courses-empty">Chưa có môn nào — vào <strong>Đề Xuất Môn Học</strong> và nhấn <strong>+ Thêm</strong>.</div>';return;}
         container.innerHTML=currentCourses.map(c=>`
@@ -2992,9 +3013,14 @@
             if(prefs.program_type)     document.getElementById('program_type').value    =prefs.program_type;
             if(prefs.current_semester) document.getElementById('target_semester').value =prefs.current_semester;
             if(prefs.target_years)     document.getElementById('target_years').value    =prefs.target_years;
+            if(prefs.current_courses && prefs.current_courses.length > 0) {
+                currentCourses = prefs.current_courses;
+                localStorage.setItem('current_courses', JSON.stringify(currentCourses));
+            }
             document.getElementById('config-dot')?.remove();
             updateCreditStats();
             await loadGradesFromDB();
+            renderCurrentCourses();
             fetchSuggestions();
             fetchChartData();
         }
@@ -3367,7 +3393,7 @@ function renderDashboard(){
 
     const targetYears=parseInt(document.getElementById('target_years')?.value||4);
     const currentSem=parseInt(document.getElementById('target_semester')?.value||1);
-    const totalSem=targetYears*2;
+    const totalSem=targetYears*3;
     const remSem=Math.max(1,totalSem-currentSem+1);
     const remCredits=Math.max(0,TOTAL_CREDITS-totalEarned);
     const neededPerSem=Math.ceil(remCredits/remSem);
@@ -3443,6 +3469,8 @@ function renderDashboard(){
         if(badgeEl){badgeEl.className=`dash-advice-badge ${recType}`;badgeEl.textContent=recLabel;}
         if(numEl){numEl.className=`dash-advice-num ${numClass}`;numEl.textContent=recCredits;}
         if(reasonEl)reasonEl.textContent=recReason;
+        const ccRec = document.getElementById('cc-recommend');
+        if(ccRec) ccRec.textContent = `Khuyên dùng: ${recCredits} TC`;
     }
 }
 

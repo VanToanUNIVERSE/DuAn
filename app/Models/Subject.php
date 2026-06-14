@@ -69,10 +69,7 @@ class Subject extends Model
         return $this->hasMany(UserGrade::class);
     }
 
-    public function studyPlanSubjects()
-    {
-        return $this->hasMany(StudyPlanSubject::class);
-    }
+    // Removed obsolete studyPlanSubjects relationship
 
     // Các môn là tiên quyết/song hành của môn này
     public function relations()
