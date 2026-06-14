@@ -65,25 +65,7 @@
 {{-- ══════════════════════════════════════════════════════════════════
      ONBOARDING WIZARD
 ══════════════════════════════════════════════════════════════════ --}}
-<div class="ob-overlay hidden" id="ob-overlay">
-    <div class="ob-modal" id="ob-modal">
-        <div class="ob-header" id="ob-header">
-            <div class="ob-step-dots" id="ob-dots">
-                <div class="ob-dot active" data-step="0"></div>
-                <div class="ob-dot" data-step="1"></div>
-                <div class="ob-dot" data-step="2"></div>
-                <div class="ob-dot" data-step="3"></div>
-            </div>
-            <div id="ob-header-content"></div>
-        </div>
-        <div class="ob-body" id="ob-body-content"></div>
-        <div class="ob-footer">
-            <button class="ob-btn-back" id="ob-btn-back" onclick="obPrev()">← Quay lại</button>
-            <span class="ob-progress-text" id="ob-progress-text">Bước 1 / 4</span>
-            <button class="ob-btn-next" id="ob-btn-next" onclick="obNext()">Tiếp theo →</button>
-        </div>
-    </div>
-</div>
+@include('components.onboarding-modal')
 
 {{-- ══════════════════════════════════════════════════════════════════
      CONFIG PANEL
@@ -142,164 +124,23 @@
 {{-- ══════════════════════════════════════════════════════════════════
      GRADE DRAWER (slide-in từ trái)
 ══════════════════════════════════════════════════════════════════ --}}
-<div class="drawer-overlay" id="grade-drawer-overlay" onclick="closeGradeDrawer()"></div>
-<div class="grade-drawer" id="grade-drawer">
-    <div class="drawer-header">
-        <div>
-            <div class="drawer-title">📝 Nhập Điểm Môn Học</div>
-            <div class="drawer-subtitle">Điểm > 5.0 được tính là Pass ✅</div>
-        </div>
-        <button class="drawer-close" onclick="closeGradeDrawer()">✕</button>
-    </div>
-    <div class="drawer-search">
-        <input type="text" id="grade-search" class="clay-input" placeholder="🔍 Tìm kiếm môn học..." oninput="filterGradeSearch(this.value)" style="height:38px;font-size:0.84rem;">
-    </div>
-    <div class="drawer-stats">
-        <div class="drawer-stat pass">✓ Pass: <strong id="drawer-pass-count">0</strong></div>
-        <div class="drawer-stat fail">✗ Fail: <strong id="drawer-fail-count">0</strong></div>
-        <div class="drawer-stat">Chưa nhập: <strong id="drawer-empty-count">0</strong></div>
-    </div>
-    <div class="grade-drawer-body" id="grade-drawer-body">
-        @foreach($subjects as $semName => $semSubjects)
-            <div class="drawer-sem-group">
-                <div class="drawer-sem-header">Học kỳ chuẩn {{ $semName }}</div>
-                <div class="drawer-subjects-list">
-                    @foreach($semSubjects as $sub)
-                        <div class="drawer-subject-card" id="lbl-sub-{{ $sub->id }}" data-name="{{ strtolower($sub->name) }}">
-                            <div class="drawer-subject-info">
-                                <div class="drawer-subject-name">{{ $sub->name }}</div>
-                                <div class="drawer-subject-meta">{{ $sub->credits }} tín chỉ · {{ $sub->subjectType?->name }}</div>
-                            </div>
-                            <div class="drawer-grade-wrap">
-                                <input type="number"
-                                       class="drawer-grade-input grade-input"
-                                       id="grade-{{ $sub->id }}"
-                                       data-subject-id="{{ $sub->id }}"
-                                       data-credits="{{ $sub->credits }}"
-                                       min="0" max="10" step="0.1"
-                                       placeholder="—"
-                                       oninput="onGradeChange({{ $sub->id }}, this)">
-                                <span class="drawer-grade-status empty" id="status-{{ $sub->id }}">—</span>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        @endforeach
-    </div>
-</div>
+@include('components.grade-drawer')
 
 {{-- ══════════════════════════════════════════════════════════════════
      HISTORY DRAWER (slide-in từ phải)
 ══════════════════════════════════════════════════════════════════ --}}
-<div class="drawer-overlay" id="history-drawer-overlay" onclick="closeHistoryDrawer()"></div>
-<div class="history-drawer" id="history-drawer">
-    <div class="drawer-header">
-        <div>
-            <div class="drawer-title">📚 Lịch Sử Học Kỳ</div>
-            <div class="drawer-subtitle">Các học kỳ bạn đã hoàn tất</div>
-        </div>
-        <button class="drawer-close" onclick="closeHistoryDrawer()">✕</button>
-    </div>
-    <div class="drawer-body" id="history-drawer-body">
-        <div class="history-empty" id="history-empty">
-            <span class="history-empty-icon">📖</span>
-            <p>Chưa có học kỳ nào được hoàn tất.<br>Ấn <strong>✓ Hoàn tất học kỳ</strong> sau khi kết thúc mỗi kỳ học.</p>
-        </div>
-        <div id="history-list"></div>
-    </div>
-</div>
+@include('components.history-drawer')
 
-{{-- ══════════════════════════════════════════════════════════════════
-     APP SHELL
-══════════════════════════════════════════════════════════════════ --}}
-<div class="app-shell">
+{{-- ── SIDEBAR ── --}}
+    @include('components.sidebar')
 
-    {{-- ── SIDEBAR ── --}}
-    <aside class="sidebar">
-        <div class="sidebar-logo">
-            <div class="sidebar-logo-name">AcademiaLink</div>
-            <div class="sidebar-logo-sub">Smart Student Planner</div>
-        </div>
-
-        <div class="sidebar-user">
-            <div class="sidebar-avatar">👤</div>
-            <div style="min-width:0;flex:1;">
-                <div class="sidebar-user-name">{{ Auth::user()->fullName ?? Auth::user()->username }}</div>
-                <div class="sidebar-user-meta">MSSV: {{ Auth::user()->student_code ?? '—' }}</div>
-            </div>
-        </div>
-
-        <nav class="sidebar-nav">
-            <span class="sidebar-nav-label">Điều hướng</span>
-
-            <button class="nav-item active" onclick="switchTab('dashboard', this)" id="nav-dashboard">
-                <svg class="nav-item-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
-                Dashboard
-            </button>
-
-            <button class="nav-item" onclick="switchTab('suggestions', this)" id="nav-suggestions">
-                <svg class="nav-item-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" /></svg>
-                Đề Xuất Môn Học
-            </button>
-
-            <button class="nav-item" onclick="switchTab('chart', this)" id="nav-chart">
-                <svg class="nav-item-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
-                Biểu Đồ Điểm
-            </button>
-
-            <button class="nav-item" onclick="switchTab('analysis', this)" id="nav-analysis">
-                <svg class="nav-item-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" /></svg>
-                Phân Tích
-            </button>
-
-            <button class="nav-item" onclick="switchTab('courses', this)" id="nav-courses">
-                <svg class="nav-item-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
-                Môn Đang Học
-                <span class="nav-badge" id="nav-cc-badge">0</span>
-            </button>
-        </nav>
-
-        <div class="sidebar-actions">
-            <span class="sidebar-nav-label" style="padding:0 var(--sp-xs) 4px;">Công cụ</span>
-            <button class="btn-sidebar-action btn-grades-sb" onclick="toggleGradeDrawer()">
-                <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg>
-                Nhập điểm
-                <span class="nav-badge" id="grade-count-badge" style="position:static;margin-left:auto;">0</span>
-            </button>
-            <button class="btn-sidebar-action btn-history-sb" onclick="toggleHistoryDrawer()">
-                <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
-                Lịch sử HK
-                <span class="nav-badge" id="history-count-badge" style="position:static;margin-left:auto;"></span>
-            </button>
-            <button class="btn-sidebar-action btn-config-sb" id="btn-config" onclick="toggleConfigPanel()">
-                <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
-                Cấu hình
-                <span class="config-dot-sb" id="config-dot"></span>
-            </button>
-            <form method="POST" action="{{ route('logout') }}" style="margin:0;">
-                @csrf
-                <button type="submit" class="btn-sidebar-action btn-logout-sb">
-                    <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" /></svg>
-                    Đăng xuất
-                </button>
-            </form>
-        </div>
-    </aside>
 
     {{-- ── MAIN CONTENT ── --}}
     <div class="main-content">
 
         {{-- Topbar --}}
-        <header class="topbar">
-            <div>
-                <div class="topbar-title" id="topbar-title">Dashboard</div>
-                <div class="topbar-subtitle" id="topbar-subtitle">Tổng quan tiến độ học tập của bạn</div>
-            </div>
-            <div class="topbar-right">
-                <div style="font-size:0.8rem;color:var(--muted);">{{ Auth::user()->email }}</div>
-            </div>
-        </header>
+        @include('components.topbar')
+
 
         {{-- ════════════════════════════════════════════════════════
              TAB: DASHBOARD
@@ -315,29 +156,7 @@
             </div>
 
             {{-- 4 KPI feature cards --}}
-            <div class="feat-grid-4" style="margin-bottom:var(--sp-xl);">
-                <div class="feat-card feat-card-teal">
-                    <div class="feat-card-label">GPA tích lũy</div>
-                    <div class="feat-card-value" id="kpi-gpa">—</div>
-                    <div class="feat-card-sub">/ 10.0 điểm</div>
-                </div>
-                <div class="feat-card feat-card-lavender">
-                    <div class="feat-card-label">Tín chỉ tích lũy</div>
-                    <div class="feat-card-value" id="kpi-credits">0</div>
-                    <div class="feat-card-sub" id="kpi-credits-sub">/ {{ $totalCredits }} TC</div>
-                </div>
-                <div class="feat-card feat-card-peach">
-                    <div class="feat-card-label">Học kỳ hiện tại</div>
-                    <div class="feat-card-value" id="kpi-semester">—</div>
-                    <div class="feat-card-sub">/ 8 học kỳ</div>
-                </div>
-                <div class="feat-card feat-card-ochre">
-                    <div class="feat-card-label">Tiến độ</div>
-                    <div class="feat-card-value" id="kpi-progress">0%</div>
-                    <div class="feat-card-sub" id="kpi-progress-sub">Hoàn thành chương trình</div>
-                </div>
-            </div>
-
+            @include('components.dashboard-stat')
             {{-- Dashboard 3-col mini cards --}}
             <div id="dash-global-warning"></div>
             <div class="dash-panel" id="dash-panel">
