@@ -1636,9 +1636,10 @@
         /* ── Dash panel cards ── */
         .dash-panel {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1.4fr 1.1fr;
             gap: var(--sp-md);
             margin-bottom: var(--sp-xl);
+            align-items: start;
         }
         @media (max-width: 860px) { .dash-panel { grid-template-columns: 1fr; } }
         @media (min-width: 560px) and (max-width: 860px) { .dash-panel { grid-template-columns: 1fr 1fr; } }
@@ -2076,6 +2077,7 @@
             </div>
 
             {{-- Dashboard 3-col mini cards --}}
+            <div id="dash-global-warning"></div>
             <div class="dash-panel" id="dash-panel">
 
                 {{-- Card 1: Tiến độ tín chỉ --}}
@@ -2932,12 +2934,42 @@
         let recType,recIcon,recTag,recHeadline,recDesc,recDelta;
         const reasons=[];
         if(gpa===null){recType='maintain';recIcon='📊';recTag='Giữ nguyên';recHeadline='Tiếp tục theo kế hoạch';recDelta=0;recDesc='Nhập điểm để nhận gợi ý chính xác hơn.';}
-        else if(gpa>=7.5&&passRate>=0.85&&remCredits>neededPerSem){recType='increase';recIcon='📈';recTag='Gợi ý tăng tín chỉ';recHeadline='Bạn đủ năng lực để học nhiều hơn!';recDelta=Math.min(6,neededPerSem-avgPerSem+3);recDesc=`GPA ${gpa} ≥ 7.5 và tỷ lệ pass cao. Tăng tín chỉ giúp hoàn thành đúng tiến độ.`;reasons.push({icon:'🌟',text:`GPA học kỳ <strong>${gpa}</strong> — kết quả xuất sắc!`});reasons.push({icon:'⏳',text:`Còn <strong>${remCredits} TC</strong> trong <strong>${remSem} kỳ</strong>.`});}
+        else if(gpa>=7.5&&passRate>=0.85){
+            recType='increase';recIcon='🌟';recTag='Học lực xuất sắc';
+            if (neededPerSem > 20) {
+                recHeadline='Năng lực tốt, hãy tăng tốc!';
+                recDelta = Math.min(6, Math.max(2, neededPerSem - avgPerSem));
+                recDesc=`Thành tích kỳ này rất tốt (GPA ${gpa}). Hãy tăng số tín chỉ kỳ sau để sớm bắt kịp tiến độ nhé.`;
+                reasons.push({icon:'⏳',text:`Cần <strong>${neededPerSem} TC/kỳ</strong> để không bị trễ hạn.`});
+            } else {
+                recHeadline='Cơ hội ra trường sớm!';
+                recDelta = Math.max(2, Math.min(6, 22 - avgPerSem));
+                recDesc=`Thành tích của bạn rất xuất sắc (GPA ${gpa}). Nếu tăng mức tải, bạn hoàn toàn có thể ra trường sớm hơn kế hoạch!`;
+                reasons.push({icon:'🎯',text:`Có thể đăng ký vượt rào để rút ngắn thời gian học.`});
+            }
+            reasons.push({icon:'🌟',text:`GPA học kỳ <strong>${gpa}</strong> — kết quả xuất sắc!`});
+        }
         else if(gpa>=6.5&&passRate>=0.8&&neededPerSem<=avgPerSem+2){recType='maintain';recIcon='✅';recTag='Giữ nguyên tiến độ';recHeadline='Tiếp tục theo kế hoạch!';recDelta=0;recDesc=`GPA ${gpa} và tiến độ đúng hướng.`;reasons.push({icon:'✔️',text:`GPA <strong>${gpa}</strong> — đang đi đúng hướng!`});}
-        else if((gpa<5.5||passRate<0.6)&&failSubjects.length>0){recType='decrease';recIcon='⚠️';recTag='Gợi ý giảm tín chỉ';recHeadline='Cần giảm tải để tập trung';recDelta=-Math.min(6,Math.ceil(failSubjects.length*1.5));recDesc=`GPA ${gpa} thấp, ${failSubjects.length} môn fail.`;reasons.push({icon:'⛔',text:`<strong>${failSubjects.length} môn fail</strong> cần học lại kỳ sau.`});}
-        else if(neededPerSem>avgPerSem+4){recType='increase';recIcon='⏩';recTag='Cần tăng tiến độ';recHeadline='Tăng tín chỉ để kịp tiến độ';recDelta=Math.min(5,neededPerSem-avgPerSem);recDesc=`Cần <strong>${neededPerSem} TC/kỳ</strong> nhưng kỳ này chỉ ${avgPerSem} TC.`;}
-        else{recType='maintain';recIcon='👍';recTag='Giữ nguyên tiến độ';recHeadline='Tiếp tục theo kế hoạch!';recDelta=0;recDesc='Bạn đang đi đúng hướng.';if(gpa)reasons.push({icon:'✔️',text:`GPA <strong>${gpa}</strong> — kết quả ổn.`});}
-        const suggestedCredits=Math.max(10,Math.min(25,avgPerSem+recDelta));
+        else if((gpa<5.5||passRate<0.6)&&failSubjects.length>0){
+            recType='decrease';recIcon='📉';recTag='Gợi ý giảm tín chỉ';
+            if(neededPerSem > 20) {
+                recHeadline='Cảnh báo học vụ & Tiến độ';
+                recDelta = 15 - avgPerSem; // Hướng tới mức 15 TC an toàn
+                recDesc=`GPA ${gpa} thấp nhưng tiến độ đang rất chậm. Đề xuất học khoảng 15 TC để cân bằng.`;
+            } else {
+                recHeadline='Cần giảm tải để tập trung';
+                recDelta=-Math.min(6,Math.ceil(failSubjects.length*1.5));
+                recDesc=`GPA ${gpa} thấp, ${failSubjects.length} môn fail.`;
+            }
+            reasons.push({icon:'⚠️',text:`<strong>${failSubjects.length} môn fail</strong> cần học lại kỳ sau.`});
+        }
+        else if(neededPerSem>avgPerSem+4){recType='increase';recIcon='📈';recTag='Cần tăng tiến độ';recHeadline='Tăng tín chỉ để kịp tiến độ';recDelta=Math.min(5,neededPerSem-avgPerSem);recDesc=`Cần <strong>${neededPerSem} TC/kỳ</strong> nhưng kỳ này chỉ ${avgPerSem} TC.`;}
+        else{recType='maintain';recIcon='✨';recTag='Giữ nguyên tiến độ';recHeadline='Tiếp tục theo kế hoạch!';recDelta=0;recDesc='Bạn đang đi đúng hướng.';if(gpa)reasons.push({icon:'⭐',text:`GPA <strong>${gpa}</strong> - kết quả ổn.`});}
+        
+        // Ensure suggestion is bounded safely, but allow 15 if forced
+        let suggestedCredits=Math.max(10,Math.min(25,avgPerSem+recDelta));
+        if ((gpa<5.5||passRate<0.6) && neededPerSem > 20) suggestedCredits = 15;
+        
         _semRecCredits=suggestedCredits;
         const gpaClass=gpa===null?'':gpa>=8.0?'gpa-ex':gpa>=7.0?'gpa-good':gpa>=5.5?'gpa-ok':'gpa-bad';
         document.getElementById('srm-sem-label').textContent=`Kết quả Học Kỳ ${semNumber}`;
@@ -2970,7 +3002,7 @@
         const failHtml=subjectData.filter(c=>c.grade<=5.0).map(c=>`<div class="srm-subj-row fail"><span class="srm-subj-name">${c.name}</span><span class="srm-subj-credits">${c.credits} TC</span><span class="srm-subj-grade fail">${c.grade}</span></div>`).join('');
         subjEl.innerHTML=`${passHtml?`<div class="srm-subj-title">✓ Môn đạt (${passSubjects.length})</div><div class="srm-subj-list">${passHtml}</div>`:''}${failHtml?`<div class="srm-subj-title" style="color:var(--error);">✗ Môn chưa đạt (${failSubjects.length})</div><div class="srm-subj-list">${failHtml}</div>`:''}`;
         const applyBtn=document.getElementById('srm-btn-apply');
-        if(recDelta!==0){applyBtn.style.display='';applyBtn.innerHTML=recDelta>0?`↑ Tăng lên ${suggestedCredits} TC/kỳ`:`↓ Giảm xuống ${suggestedCredits} TC/kỳ`;}
+        if(recDelta!==0){applyBtn.style.display='';applyBtn.innerHTML=`✨ Áp dụng gợi ý (${suggestedCredits} TC)`;}
         else{applyBtn.style.display='none';}
         document.getElementById('sem-result-overlay').classList.add('open');
     }
@@ -3475,15 +3507,59 @@ function renderDashboard(){
         const savedRec=localStorage.getItem('recommended_credits_per_sem');
         const baseCredits=savedRec?parseInt(savedRec):avgPerSem;
         let recType,recLabel,recCredits,recReason,numClass;
-        if(overallGpa>=7.5&&passRate>=0.85&&remCredits>neededPerSem+5){recType='increase';recLabel='↑ Nên tăng tín chỉ';recCredits=Math.min(24,neededPerSem+2);numClass='up';recReason=`GPA ${overallGpa} cao, pass rate ${Math.round(passRate*100)}%. Có thể tăng tải để đúng tiến độ.`;}
-        else if(overallGpa<5.5||passRate<0.6){recType='decrease';recLabel='↓ Nên giảm tín chỉ';recCredits=Math.max(10,neededPerSem-3);numClass='down';recReason=`GPA ${overallGpa} thấp. Giảm tải để tập trung vào chất lượng.`;}
+        if (savedRec) {
+            recType = 'maintain'; recLabel = ''; recCredits = parseInt(savedRec); numClass = 'same';
+            recReason = `Hệ thống khuyến nghị mức tải ${recCredits} TC/kỳ dựa trên đánh giá tiến độ của bạn.`;
+        } else if(overallGpa>=7.5&&passRate>=0.85){
+            recType='increase';
+            numClass='up';
+            if (neededPerSem > 20) {
+                recLabel='';
+                recCredits=Math.min(24,neededPerSem+2);
+                recReason=`Thành tích học tập rất tốt (GPA ${overallGpa}). Hệ thống khuyến nghị tăng mức tải lên ${recCredits} TC/kỳ để nhanh chóng bắt kịp tiến độ.`;
+            } else {
+                recLabel='';
+                recCredits=Math.max(neededPerSem + 3, 20); // Gợi ý mức cao để ra trường sớm
+                recCredits=Math.min(24, recCredits);
+                recReason=`Thành tích học tập của bạn rất xuất sắc (GPA ${overallGpa}). Hệ thống khuyến nghị mức tải ${recCredits} TC/kỳ. Bạn hoàn toàn có khả năng ra trường sớm hơn dự kiến!`;
+            }
+        }
+        else if(overallGpa<5.5||passRate<0.6){
+            recType='decrease';
+            if (neededPerSem > 20) {
+                recLabel='';
+                recCredits=15; // Giới hạn cảnh báo học vụ
+                numClass='same';
+                recReason=`GPA thấp nhưng tiến độ rất chậm. Đề xuất học 15 TC để cân bằng chất lượng và không bị trễ hạn quá lâu.`;
+            } else {
+                recLabel='↓ Nên giảm tín chỉ';
+                recCredits=Math.max(10,neededPerSem-3);
+                numClass='down';
+                recReason=`GPA ${overallGpa} thấp. Giảm tải để tập trung vào chất lượng.`;
+            }
+        }
         else if(neededPerSem>(baseCredits||15)+4){recType='increase';recLabel='↑ Cần tăng để kịp';recCredits=Math.min(24,neededPerSem);numClass='up';recReason=`Cần ${neededPerSem} TC/kỳ để tốt nghiệp đúng hạn trong ${remSem} kỳ.`;}
         else{recType='maintain';recLabel='= Giữ nguyên';recCredits=neededPerSem;numClass='same';recReason=`Đang đúng tiến độ. Cần ~${neededPerSem} TC/kỳ trong ${remSem} kỳ còn lại.`;}
         if(badgeEl){badgeEl.className=`dash-advice-badge ${recType}`;badgeEl.textContent=recLabel;}
         if(numEl){numEl.className=`dash-advice-num ${numClass}`;numEl.textContent=recCredits;}
-        if(reasonEl)reasonEl.textContent=recReason;
+        if(reasonEl)reasonEl.innerHTML=recReason;
         const ccRec = document.getElementById('cc-recommend');
         if(ccRec) ccRec.textContent = `Khuyên dùng: ${recCredits} TC`;
+
+        const globalWarnEl = document.getElementById('dash-global-warning');
+        if (globalWarnEl) {
+            if (neededPerSem > recCredits + 3 && neededPerSem < 100) {
+                globalWarnEl.innerHTML = `<div style="margin-bottom: 24px; padding: 16px 20px; background: #fff1f2; border-left: 5px solid #e11d48; border-radius: 8px; color: #881337; font-size: 0.9rem; line-height: 1.5; display: flex; gap: 14px; align-items: flex-start; box-shadow: 0 4px 12px rgba(225,29,72,0.08);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0; margin-top:2px; color:#e11d48;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <div>
+                        <strong style="display:block; font-size:1rem; margin-bottom:6px; color:#be123c; font-weight:800; letter-spacing:0.02em;">Cảnh báo: Nguy cơ trễ hạn tốt nghiệp!</strong>
+                        Tiến độ hiện tại đòi hỏi bạn phải hoàn thành <strong>~${neededPerSem} TC/kỳ</strong> để ra trường đúng mục tiêu. Mức tải <strong>${recCredits} TC/kỳ</strong> là quá thấp. Bạn nên vào mục <b>Cấu hình</b> (thanh menu bên trái) để điều chỉnh nới lỏng thời gian tốt nghiệp cho phù hợp.
+                    </div>
+                </div>`;
+            } else {
+                globalWarnEl.innerHTML = '';
+            }
+        }
     }
 }
 
