@@ -6,6 +6,7 @@ use App\Models\UserGrade;
 use App\Models\Subject;
 use App\Models\TrainingProgram;
 use App\Models\ProgramGroup;
+use Illuminate\Support\Facades\DB;
 
 class SuggestionService
 {
@@ -37,16 +38,34 @@ class SuggestionService
             }
         }
 
-        // 2. Xác định danh sách môn học đã đỗ
+        $skillAverages = [];
+
         if ($userId) {
             // Nếu có đăng nhập, ưu tiên lấy từ database (đã được cập nhật ở bước 1)
             $passedSubjects = UserGrade::where('user_id', $userId)
                 ->where('status', 'pass')
                 ->pluck('subject_id')
                 ->toArray();
+                
+            $failedSubjects = UserGrade::where('user_id', $userId)
+                ->where('status', 'fail')
+                ->pluck('subject_id')
+                ->toArray();
+                
+            // Truy vấn trung bình điểm (GPA) theo từng nhóm kỹ năng
+            $skillAverages = DB::table('user_grades')
+                ->join('subjects', 'user_grades.subject_id', '=', 'subjects.id')
+                ->where('user_grades.user_id', $userId)
+                ->whereNotNull('user_grades.grade')
+                ->whereNotNull('subjects.skill_group_id')
+                ->groupBy('subjects.skill_group_id')
+                ->select('subjects.skill_group_id', DB::raw('AVG(user_grades.grade) as avg_grade'))
+                ->pluck('avg_grade', 'skill_group_id')
+                ->toArray();
         } else {
             // Nếu không đăng nhập, sử dụng danh sách truyền từ client lên
             $passedSubjects = $passedSubjectIds ?? [];
+            $failedSubjects = [];
         }
 
         // 3. Xác định phạm vi môn học theo Chương trình đào tạo (nếu có)
@@ -152,7 +171,7 @@ class SuggestionService
                     }
                     $prereqDetails[] = [
                         'id' => $impSub->id,
-                        'name' => $impSub->name . ' (Yêu cầu: ' . $this->translateReqType($reqType) . ')',
+                        'name' => $impSub->name,
                         'is_passed' => $isPassed
                     ];
                 }
@@ -160,22 +179,52 @@ class SuggestionService
 
             $subject->can_study = $canStudy;
             $subject->prerequisites_info = $prereqDetails;
+
+            // 5.5 Chấm điểm môn học (Scoring System)
+            $score = 100; // Điểm cơ bản
+
+            // Khoảng cách học kỳ (Mỗi kỳ chênh lệch -10đ)
+            $distance = abs(($subject->semester?->name ?? 1) - $currentSemester);
+            $score -= ($distance * 10);
+
+            // Năng lực theo nhóm kỹ năng
+            $skillDesc = null;
+            if ($subject->skill_group_id && isset($skillAverages[$subject->skill_group_id])) {
+                $avg = (float) $skillAverages[$subject->skill_group_id];
+                if ($avg >= 8.0) {
+                    $score += 15;
+                    $skillDesc = 'Thế mạnh (+15đ)';
+                } elseif ($avg >= 6.5) {
+                    $score += 5;
+                    $skillDesc = 'Khá tốt (+5đ)';
+                } elseif ($avg >= 5.0) {
+                    $score -= 5;
+                    $skillDesc = 'Trung bình (-5đ)';
+                } else {
+                    $score -= 15;
+                    $skillDesc = 'Điểm yếu (-15đ)';
+                }
+            }
+
+            // Nếu là môn rớt, ưu tiên học lại
+            if (in_array($subject->id, $failedSubjects)) {
+                $score += 50;
+            }
+
+            $subject->suggestion_score = $score;
+            $subject->skill_evaluation = $skillDesc;
+
             $suggestions[] = $subject;
         }
 
-        // 6. Sắp xếp các môn học đề xuất: Môn đủ điều kiện trước, sau đó theo khoảng cách học kỳ gần nhất
-        usort($suggestions, function ($a, $b) use ($currentSemester) {
+        // 6. Sắp xếp các môn học đề xuất: Môn đủ điều kiện trước, sau đó theo điểm số (suggestion_score) giảm dần
+        usort($suggestions, function ($a, $b) {
             // Đủ điều kiện xếp trước
             if ($a->can_study && !$b->can_study) return -1;
             if (!$a->can_study && $b->can_study) return 1;
 
-            // Nếu cùng trạng thái điều kiện, xếp theo khoảng cách học kỳ
-            $distanceA = abs(($a->semester?->name ?? 1) - $currentSemester);
-            $distanceB = abs(($b->semester?->name ?? 1) - $currentSemester);
-            if ($distanceA == $distanceB) {
-                return 0;
-            }
-            return ($distanceA < $distanceB) ? -1 : 1;
+            // Nếu cùng trạng thái điều kiện, xếp theo điểm số
+            return $b->suggestion_score <=> $a->suggestion_score;
         });
 
         // Tùy chọn giới hạn số lượng gợi ý (ví dụ: 15 môn) để tránh danh sách quá dài

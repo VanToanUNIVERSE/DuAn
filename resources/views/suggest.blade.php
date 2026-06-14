@@ -1499,6 +1499,7 @@
         }
         .toast.success { background: var(--ink); color: white; }
         .toast.error   { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+        .toast.info    { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
         @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:none} }
 
         .save-indicator {
@@ -1702,6 +1703,8 @@
             background: var(--canvas);
             border-radius: var(--r-lg);
             width: 100%; max-width: 440px;
+            max-height: 90vh;
+            overflow: hidden;
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             display: flex; flex-direction: column;
             animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -1715,7 +1718,7 @@
         .prereq-title { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
         .prereq-close { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
         .prereq-close:hover { background: var(--surface-soft); color: var(--ink); }
-        .prereq-body { padding: 20px; }
+        .prereq-body { padding: 20px; overflow-y: auto; }
         .prereq-desc { font-size: 0.95rem; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
         .prereq-desc strong { color: var(--ink); font-weight: 700; }
         .prereq-list { display: flex; flex-direction: column; gap: 12px; }
@@ -2168,8 +2171,11 @@
 
             <div class="clay-card">
                 <div class="card-title-row">
-                    <div class="card-heading">
+                    <div class="card-heading" style="display:flex; align-items:center;">
                         ✨ Gợi Ý Học Kỳ Mới
+                        <button class="btn-info-clay" onclick="openScoreInfoModal()" title="Cách tính điểm" style="margin-left:12px; width:36px; height:36px; border-radius:50%; background:var(--canvas); color:var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.06); border:1px solid var(--hairline);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="loader" id="loader">
@@ -2813,22 +2819,30 @@
             const isAdded=currentCourses.find(c=>c.id==subject.id);
             const failedIds=getFailedSubjectIds();
             const isFailed=failedIds.has(subject.id);
-            let distLabel='';
-            if(isFailed) distLabel=`<span class="pill pill-red">Học lại 🔄</span>`;
-            else if(subSem===targetSem) distLabel=`<span class="pill pill-mint">Đúng tiến độ 🎯</span>`;
-            else if(subSem<targetSem) distLabel=`<span class="pill pill-ochre">Học bù (chậm ${targetSem-subSem} kỳ) ⏳</span>`;
-            else distLabel=`<span class="pill pill-lavender">Học vượt (nhanh ${subSem-targetSem} kỳ) ⚡</span>`;
+            let priorityLabel='';
+            let scoreText = `<span style="opacity:0.85;margin-left:4px;font-size:0.9em;">(${subject.suggestion_score}đ)</span>`;
+
+            if(isFailed) priorityLabel=`<span class="pill pill-red">Học lại 🔄 ${scoreText}</span>`;
+            else if(subject.suggestion_score >= 105) priorityLabel=`<span class="pill pill-mint">Ưu tiên Rất Cao 🔥 ${scoreText}</span>`;
+            else if(subject.suggestion_score >= 95) priorityLabel=`<span class="pill pill-lavender">Ưu tiên Cao 👍 ${scoreText}</span>`;
+            else if(subject.suggestion_score >= 80) priorityLabel=`<span class="pill pill-ochre">Ưu tiên Vừa 👌 ${scoreText}</span>`;
+            else priorityLabel=`<span class="pill pill-red" style="background:#fee2e2;color:#b91c1c;border:none;">Ít Ưu tiên ⬇️ ${scoreText}</span>`;
             const isEligible = subject.can_study !== false;
             
             let tagHtml = '';
             let actionHtml = '';
             let jsonSubject = JSON.stringify(subject).replace(/"/g,'&quot;');
-            
             if (isEligible) {
                 tagHtml = `
                     <span class="pill pill-cream" style="background:#e8f8f3;color:#1a3a3a;border:none;">${subject.credits} Tín chỉ</span>
-                    ${distLabel}
+                    ${priorityLabel}
                 `;
+                if (subject.skill_evaluation) {
+                    let evalColor = subject.skill_evaluation.includes('+') ? '#10b981' : '#f59e0b';
+                    if (subject.skill_evaluation.includes('-15')) evalColor = '#ef4444';
+                    let evalIcon = subject.skill_evaluation.includes('+') ? '⭐' : (subject.skill_evaluation.includes('-15') ? '⚠️' : '📊');
+                    tagHtml += `<span class="pill" style="background:var(--surface);color:${evalColor};border:1px solid ${evalColor}40;font-size:0.68rem;padding:2px 8px;">${evalIcon} ${subject.skill_evaluation}</span>`;
+                }
                 actionHtml = `
                     <button id="btn-add-${subject.id}" class="btn-add-clay${isAdded?' added':''}" onclick="addToCurrentCourses(${jsonSubject})">
                         ${isAdded?'✓ Đã thêm vào kế hoạch':'Thêm vào kế hoạch'}
@@ -2853,7 +2867,6 @@
                             <span class="suggestion-title">${subject.name}</span>
                             <div class="suggestion-tags">
                                 ${tagHtml}
-                                <span class="semester-pill" style="margin-left:auto;background:transparent;border:1px dashed var(--hairline);">HK ${subject.semester?.name||'1'}</span>
                             </div>
                         </div>
                         <div class="suggestion-icon ${isFailed||!isEligible ? 'locked' : ''}"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" /></svg></div>
@@ -3500,6 +3513,41 @@ document.addEventListener('DOMContentLoaded',()=>{renderDashboard();});
     </div>
 </div>
 
+<div class="prereq-modal-overlay hidden" id="score-info-modal-overlay">
+    <div class="prereq-modal" style="max-width: 500px;">
+        <div class="prereq-header">
+            <h3 class="prereq-title">Cách Tính Điểm Ưu Tiên</h3>
+            <button class="prereq-close" onclick="closeScoreInfoModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+        <div class="prereq-body" style="line-height:1.6; font-size:0.95rem; color:var(--ink);">
+            <p style="margin-bottom:12px;">Hệ thống Đề xuất Môn học sử dụng thuật toán tính điểm thông minh để giúp bạn ưu tiên môn học hợp lý nhất:</p>
+            <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px;">
+                <li style="display:flex; align-items:start; gap:12px;">
+                    <span style="font-size:1.3rem; line-height:1;">💯</span>
+                    <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Điểm Gốc (100đ):</strong> Mọi môn học luôn bắt đầu với 100 điểm.</div>
+                </li>
+                <li style="display:flex; align-items:start; gap:12px;">
+                    <span style="font-size:1.3rem; line-height:1;">⏳</span>
+                    <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Lệch Tiến Độ (-10đ/kỳ):</strong> Nếu môn học nằm ngoài học kỳ hiện tại của bạn, hệ thống trừ 10đ cho mỗi kỳ chênh lệch để giữ lộ trình chuẩn.</div>
+                </li>
+                <li style="display:flex; align-items:start; gap:12px;">
+                    <span style="font-size:1.3rem; line-height:1;">🌟</span>
+                    <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Năng Lực Cá Nhân (±15đ):</strong> Hệ thống phân tích lịch sử điểm để xác định Thế mạnh và Điểm yếu. Môn thuộc thế mạnh được thưởng (tối đa +15đ), môn điểm yếu sẽ bị phạt (tối đa -15đ).</div>
+                </li>
+                <li style="display:flex; align-items:start; gap:12px;">
+                    <span style="font-size:1.3rem; line-height:1;">🔄</span>
+                    <div><strong style="color:var(--red);display:block;margin-bottom:2px;">Học Lại (+50đ):</strong> Những môn bạn đã thi rớt sẽ được tự động cộng 50 điểm tuyệt đối để ưu tiên học lại sớm nhất có thể!</div>
+                </li>
+            </ul>
+        </div>
+        <div class="prereq-footer" style="padding:16px 20px; border-top:1px solid var(--hairline); display:flex; justify-content:flex-end;">
+            <button class="prereq-btn-ok" onclick="closeScoreInfoModal()" style="background:var(--primary); color:white; border:none; padding:8px 20px; border-radius:6px; cursor:pointer; font-weight:600;">Đã hiểu</button>
+        </div>
+    </div>
+</div>
+
 <script>
 function openPrereqModal(subjectData) {
     let subject;
@@ -3507,7 +3555,7 @@ function openPrereqModal(subjectData) {
         subject = typeof subjectData === 'string' ? JSON.parse(subjectData) : subjectData;
     } catch(e) { return; }
     
-    document.getElementById('prereq-subject-name').textContent = subject.name;
+    document.getElementById('prereq-subject-name').innerHTML = subject.name + ' <span class="pill pill-lavender" style="font-size:0.7rem;margin-left:6px;vertical-align:1px;">Học kỳ chuẩn: ' + (subject.semester?.name||'1') + '</span>';
     const list = document.getElementById('prereq-list');
     
     if (!subject.prerequisites_info || subject.prerequisites_info.length === 0) {
@@ -3532,6 +3580,13 @@ function openPrereqModal(subjectData) {
 }
 function closePrereqModal() {
     document.getElementById('prereq-modal-overlay').classList.add('hidden');
+}
+
+function openScoreInfoModal() {
+    document.getElementById('score-info-modal-overlay').classList.remove('hidden');
+}
+function closeScoreInfoModal() {
+    document.getElementById('score-info-modal-overlay').classList.add('hidden');
 }
 </script>
 
