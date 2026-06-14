@@ -91,6 +91,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('/', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
     // Quản lý môn học
+    Route::delete('/subjects/delete-all',    [App\Http\Controllers\Admin\SubjectController::class, 'deleteAll'])->name('subjects.deleteAll');
     Route::get('/subjects/import',           [App\Http\Controllers\Admin\SubjectController::class, 'importForm'])->name('subjects.import.form');
     Route::post('/subjects/import',          [App\Http\Controllers\Admin\SubjectController::class, 'import'])->name('subjects.import');
     Route::get('/subjects/template-download',[App\Http\Controllers\Admin\SubjectController::class, 'downloadTemplate'])->name('subjects.template');

@@ -107,8 +107,8 @@ class SubjectController extends Controller
         $skillGroups   = SkillGroup::orderBy('name')->get();
         $allSubjects   = Subject::where('id', '!=', $subject->id)->orderBy('name')->get(['id', 'subject_code', 'name']);
         
-        $prerequisiteIds = $subject->prerequisites()->pluck('related_subject_id')->toArray();
-        $corequisiteIds  = $subject->corequisites()->pluck('related_subject_id')->toArray();
+        $prerequisiteIds = $subject->prerequisites()->pluck('subjects.id')->toArray();
+        $corequisiteIds  = $subject->corequisites()->pluck('subjects.id')->toArray();
 
         return view('admin.subjects.edit', compact(
             'subject', 'programGroups', 'skillGroups', 'allSubjects', 'prerequisiteIds', 'corequisiteIds'
@@ -179,9 +179,15 @@ class SubjectController extends Controller
     public function destroy(Subject $subject)
     {
         $subject->delete();
-
         return redirect()->route('admin.subjects.index')
             ->with('success', 'Đã xóa môn học.');
+    }
+
+    public function deleteAll()
+    {
+        Subject::query()->delete();
+        return redirect()->route('admin.subjects.index')
+            ->with('success', 'Đã xóa toàn bộ môn học.');
     }
 
     // ── Import ────────────────────────────────────────────────────────────────

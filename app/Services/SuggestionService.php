@@ -180,6 +180,27 @@ class SuggestionService
             $subject->can_study = $canStudy;
             $subject->prerequisites_info = $prereqDetails;
 
+            $corequisites = SubjectRelation::where('type', 'corequisite')
+                ->where(function($query) use ($subject) {
+                    $query->where('subject_id', $subject->id)
+                          ->orWhere('related_subject_id', $subject->id);
+                })
+                ->with(['subject', 'relatedSubject'])
+                ->get();
+            $coreqDetails = [];
+            foreach ($corequisites as $coreq) {
+                $related = ($coreq->subject_id == $subject->id) ? $coreq->relatedSubject : $coreq->subject;
+                if ($related) {
+                    $coreqDetails[] = [
+                        'id' => $related->id,
+                        'code' => $related->subject_code,
+                        'name' => $related->name,
+                        'credits' => $related->credits,
+                    ];
+                }
+            }
+            $subject->corequisites_info = $coreqDetails;
+
             // 5.5 Chấm điểm môn học (Scoring System)
             $score = 100; // Điểm cơ bản
 

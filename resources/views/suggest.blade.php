@@ -2705,12 +2705,39 @@
     function addToCurrentCourses(subject) {
         if(currentCourses.find(c=>c.id==subject.id))return;
         currentCourses.push({id:subject.id,name:subject.name,credits:subject.credits,semesterName:subject.semester?.name||'?',grade:null});
+        
+        let autoAdded = [];
+        if (subject.corequisites_info && subject.corequisites_info.length > 0) {
+            subject.corequisites_info.forEach(coreq => {
+                if(!currentCourses.find(c=>c.id==coreq.id)) {
+                    currentCourses.push({id:coreq.id,name:coreq.name,credits:coreq.credits,semesterName:'?',grade:null});
+                    autoAdded.push(coreq);
+                }
+            });
+        }
+
         renderCurrentCourses();
-        const btn=document.getElementById(`btn-add-${subject.id}`); if(btn){btn.textContent='✓ Đã thêm';btn.classList.add('added');}
+        
+        const btn=document.getElementById(`btn-add-${subject.id}`); 
+        if(btn){btn.innerHTML='✓ Đã thêm';btn.classList.add('added');}
         lockLeftInput(subject.id);
-        // Update nav badge
+
+        if (autoAdded.length > 0) {
+            autoAdded.forEach(coreq => {
+                const cbtn=document.getElementById(`btn-add-${coreq.id}`); 
+                if(cbtn){cbtn.innerHTML='✓ Đã thêm';cbtn.classList.add('added');}
+                lockLeftInput(coreq.id);
+            });
+            showToast(`Đã tự động thêm môn song hành: ${autoAdded.map(a=>a.name).join(', ')}`, 'info');
+        }
+
         const navBadge = document.getElementById('nav-cc-badge');
         if (navBadge) { navBadge.textContent = currentCourses.length; navBadge.classList.toggle('visible', currentCourses.length > 0); }
+        
+        clearTimeout(fetchTimer); 
+        fetchTimer=setTimeout(()=>{
+            saveMultipleGrades(currentCourses.map(c=>({subject_id:c.id,grade:c.grade})));
+        }, 1000);
     }
 
     function removeCourse(id) {
@@ -2801,7 +2828,7 @@
         const suggestionsContainer=document.getElementById('suggestions-list');
         loader.style.display='flex'; suggestionsContainer.style.opacity='0.3';
         try {
-            const url=`/api/suggestions?academic_year=${encodeURIComponent(academicYear)}&program_type=${encodeURIComponent(programType)}&passed_subjects=${passedSubjects}&semester=${semester}`;
+            const url=`/api/suggestions?academic_year=${encodeURIComponent(academicYear)}&program_type=${encodeURIComponent(programType)}&passed_subjects=${passedSubjects}&semester=${semester}&t=${new Date().getTime()}`;
             const response=await fetch(url); if(!response.ok)throw new Error('API error');
             const data=await response.json(); renderSuggestions(data,semester);
         } catch(error) {
@@ -3615,6 +3642,10 @@ document.addEventListener('DOMContentLoaded',()=>{renderDashboard();});
                 <li style="display:flex; align-items:start; gap:12px;">
                     <span style="font-size:1.3rem; line-height:1;">🔄</span>
                     <div><strong style="color:var(--red);display:block;margin-bottom:2px;">Học Lại (+50đ):</strong> Những môn bạn đã thi rớt sẽ được tự động cộng 50 điểm tuyệt đối để ưu tiên học lại sớm nhất có thể!</div>
+                </li>
+                <li style="display:flex; align-items:start; gap:12px; margin-top:8px; padding-top:12px; border-top:1px dashed var(--hairline);">
+                    <span style="font-size:1.3rem; line-height:1;">🔒</span>
+                    <div><strong style="color:#b91c1c;display:block;margin-bottom:2px;">Điều Kiện Tiên Quyết (Bộ lọc):</strong> Các môn học chưa thỏa mãn điều kiện tiên quyết sẽ bị <b>khóa hoàn toàn</b> khỏi danh sách gợi ý đăng ký, bất kể điểm ưu tiên của nó là bao nhiêu.</div>
                 </li>
             </ul>
         </div>

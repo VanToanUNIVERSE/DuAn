@@ -46,7 +46,12 @@
         Hiển thị <strong>{{ $subjects->firstItem() ?? 0 }}–{{ $subjects->lastItem() ?? 0 }}</strong>
         / tổng <strong>{{ $subjects->total() }}</strong> môn học
     </div>
-    <div style="display:flex; gap:8px;">
+    <div style="display:flex; gap:8px; align-items:center;">
+        <form action="{{ route('admin.subjects.deleteAll') }}" method="POST" onsubmit="return confirm('CẢNH BÁO: Bạn có chắc chắn muốn XÓA TOÀN BỘ môn học trong hệ thống không? Hành động này KHÔNG THỂ HOÀN TÁC!');" style="margin:0;">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="btn btn-sm" style="background-color: #dc2626; color: white; border: none; font-weight: 500; padding: 4px 10px; cursor: pointer;">🗑 Xóa tất cả</button>
+        </form>
         <a href="{{ route('admin.subjects.import.form') }}" class="btn btn-secondary btn-sm">📥 Import Excel/CSV</a>
         <a href="{{ route('admin.subjects.create') }}" class="btn btn-primary btn-sm">➕ Thêm môn học</a>
     </div>
