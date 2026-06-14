@@ -39,7 +39,7 @@ Route::middleware('auth')->group(function () {
 
     // ── Trang chính ─────────────────────────────────────────────────────────
     Route::get('/suggest', function () {
-        $subjects = App\Models\Subject::with(['subjectType', 'skillGroup', 'programGroup'])
+        $subjects = App\Models\Subject::with(['skillGroup', 'programGroup'])
             ->get()
             ->groupBy(function ($subject) {
                 return $subject->programGroup?->name ?? 'Môn khác';

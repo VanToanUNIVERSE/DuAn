@@ -36,19 +36,7 @@
                     @error('name')<div class="field-error">{{ $message }}</div>@enderror
                 </div>
 
-                <div class="form-grid-3">
-                    <div class="form-group">
-                        <label>Loại môn</label>
-                        <select name="subject_type_id">
-                            <option value="">— Chọn loại môn —</option>
-                            @foreach($subjectTypes as $st)
-                                <option value="{{ $st->id }}" {{ old('subject_type_id') == $st->id ? 'selected' : '' }}>
-                                    {{ $st->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('subject_type_id')<div class="field-error">{{ $message }}</div>@enderror
-                    </div>
+                <div class="form-grid-2">
                     <div class="form-group">
                         <label>Skill Group</label>
                         <select name="skill_group_id">

@@ -26,7 +26,7 @@ class DashboardController extends Controller
         $skillGroupStats = SkillGroup::withCount('subjects')->get();
 
         // Môn học gần đây thêm vào
-        $recentSubjects = Subject::with(['subjectType', 'skillGroup', 'programGroup'])
+        $recentSubjects = Subject::with(['skillGroup', 'programGroup'])
             ->latest()
             ->limit(10)
             ->get();

@@ -19,7 +19,6 @@ class Subject extends Model
         'subject_code',
         'name',
         'credits',
-        'subject_type_id',
         'skill_group_id',
         'program_group_id',
         'semester_id',
@@ -27,10 +26,6 @@ class Subject extends Model
         'requirement_type',
     ];
 
-    public function subjectType()
-    {
-        return $this->belongsTo(SubjectType::class);
-    }
 
     public function skillGroup()
     {

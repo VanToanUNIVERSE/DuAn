@@ -33,15 +33,6 @@
             @endforeach
         </select>
     </div>
-    <div class="form-group">
-        <label>Loại môn</label>
-        <select name="subject_type_id">
-            <option value="">Tất cả</option>
-            @foreach($subjectTypes as $st)
-                <option value="{{ $st->id }}" {{ request('subject_type_id') == $st->id ? 'selected' : '' }}>{{ $st->name }}</option>
-            @endforeach
-        </select>
-    </div>
     <div style="display:flex; gap:8px; align-items:flex-end;">
         <button type="submit" class="btn btn-primary">🔍 Lọc</button>
         <a href="{{ route('admin.subjects.index') }}" class="btn btn-secondary">✕ Reset</a>
@@ -70,7 +61,6 @@
                     <th width="110">Mã môn</th>
                     <th>Tên môn học</th>
                     <th width="70" style="text-align:center;">TC</th>
-                    <th width="130">Loại môn</th>
                     <th width="140">Skill Group</th>
                     <th width="140">Program Group</th>
                     <th width="150">Yêu cầu</th>
@@ -91,12 +81,6 @@
                     </td>
                     <td style="font-weight:600; color:var(--ink);">{{ $subject->name }}</td>
                     <td style="text-align:center; font-weight:700;">{{ $subject->credits ?? '—' }}</td>
-                    <td>
-                        @if($subject->subjectType)
-                            <span class="badge badge-ochre">{{ $subject->subjectType->name }}</span>
-                        @else <span style="color:var(--muted-soft);">—</span>
-                        @endif
-                    </td>
                     <td>
                         @if($subject->skillGroup)
                             <span class="badge badge-pink">{{ $subject->skillGroup->name }}</span>

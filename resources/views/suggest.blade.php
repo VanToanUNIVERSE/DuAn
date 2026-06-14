@@ -2871,7 +2871,7 @@
                         </div>
                         <div class="suggestion-icon ${isFailed||!isEligible ? 'locked' : ''}"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" /></svg></div>
                     </div>
-                    <div class="suggestion-desc">Môn học ${subject.subject_type?.name||'bắt buộc'} thuộc khối kiến thức ${subject.skill_group?.name||'chuyên ngành'}. Đây là môn học cung cấp các nền tảng thiết yếu.</div>
+                    <div class="suggestion-desc">Môn học thuộc khối kiến thức ${subject.skill_group?.name||'chuyên ngành'}. Đây là môn học cung cấp các nền tảng thiết yếu.</div>
                     <div class="suggestion-actions">
                         ${actionHtml}
                     </div>

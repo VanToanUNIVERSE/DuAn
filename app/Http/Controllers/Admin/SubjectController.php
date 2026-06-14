@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Subject;
 use App\Models\SkillGroup;
 use App\Models\ProgramGroup;
-use App\Models\SubjectType;
 use App\Models\Semester;
 use App\Imports\SubjectsImport;
 use App\Exports\SubjectsTemplateExport;
@@ -17,7 +16,7 @@ class SubjectController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Subject::with(['subjectType', 'skillGroup', 'programGroup']);
+        $query = Subject::with(['skillGroup', 'programGroup']);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -35,17 +34,12 @@ class SubjectController extends Controller
             $query->where('skill_group_id', $request->skill_group_id);
         }
 
-        if ($request->filled('subject_type_id')) {
-            $query->where('subject_type_id', $request->subject_type_id);
-        }
-
         $subjects      = $query->orderBy('name')->paginate(20)->withQueryString();
         $programGroups = ProgramGroup::orderBy('name')->get();
         $skillGroups   = SkillGroup::orderBy('name')->get();
-        $subjectTypes  = SubjectType::orderBy('name')->get();
 
         return view('admin.subjects.index', compact(
-            'subjects', 'programGroups', 'skillGroups', 'subjectTypes'
+            'subjects', 'programGroups', 'skillGroups'
         ));
     }
 
@@ -53,11 +47,10 @@ class SubjectController extends Controller
     {
         $programGroups = ProgramGroup::orderBy('name')->get();
         $skillGroups   = SkillGroup::orderBy('name')->get();
-        $subjectTypes  = SubjectType::orderBy('name')->get();
         $allSubjects   = Subject::orderBy('name')->get(['id', 'subject_code', 'name']);
 
         return view('admin.subjects.create', compact(
-            'programGroups', 'skillGroups', 'subjectTypes', 'allSubjects'
+            'programGroups', 'skillGroups', 'allSubjects'
         ));
     }
 
@@ -67,7 +60,6 @@ class SubjectController extends Controller
             'subject_code'     => 'required|string|max:50|unique:subjects,subject_code',
             'name'             => 'required|string|max:255',
             'credits'          => 'nullable|integer|min:1|max:20',
-            'subject_type_id'  => 'nullable|exists:subject_types,id',
             'skill_group_id'   => 'nullable|exists:skill_groups,id',
             'program_group_id' => 'nullable|exists:program_groups,id',
             'note'             => 'nullable|string',
@@ -113,14 +105,13 @@ class SubjectController extends Controller
     {
         $programGroups = ProgramGroup::orderBy('name')->get();
         $skillGroups   = SkillGroup::orderBy('name')->get();
-        $subjectTypes  = SubjectType::orderBy('name')->get();
-        $allSubjects   = Subject::orderBy('name')->get(['id', 'subject_code', 'name']);
+        $allSubjects   = Subject::where('id', '!=', $subject->id)->orderBy('name')->get(['id', 'subject_code', 'name']);
         
-        $prerequisiteIds = $subject->prerequisites()->pluck('subjects.id')->toArray();
-        $corequisiteIds  = $subject->corequisites()->pluck('subjects.id')->toArray();
+        $prerequisiteIds = $subject->prerequisites()->pluck('related_subject_id')->toArray();
+        $corequisiteIds  = $subject->corequisites()->pluck('related_subject_id')->toArray();
 
         return view('admin.subjects.edit', compact(
-            'subject', 'programGroups', 'skillGroups', 'subjectTypes', 'allSubjects', 'prerequisiteIds', 'corequisiteIds'
+            'subject', 'programGroups', 'skillGroups', 'allSubjects', 'prerequisiteIds', 'corequisiteIds'
         ));
     }
 
