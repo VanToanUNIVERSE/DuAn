@@ -39,10 +39,13 @@ Route::middleware('auth')->group(function () {
 
     // ── Trang chính ─────────────────────────────────────────────────────────
     Route::get('/suggest', function () {
-        $subjects = App\Models\Subject::with(['skillGroup', 'programGroup'])
+        $subjects = App\Models\Subject::with(['skillGroup', 'programGroup', 'assignedSemesters'])
             ->get()
             ->groupBy(function ($subject) {
-                return $subject->programGroup?->name ?? 'Môn khác';
+                return $subject->assignedSemesters->first()?->name ?? 'Khác';
+            })->sortBy(function ($group, $key) {
+                // Để "Khác" xuống cuối, các số thì sort theo số
+                return $key === 'Khác' ? 999 : (int)$key;
             });
 
         $totalCredits = App\Models\Subject::sum('credits');
