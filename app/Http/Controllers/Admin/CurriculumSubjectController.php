@@ -130,6 +130,32 @@ class CurriculumSubjectController extends Controller
     }
 
     /**
+     * Xóa tất cả môn học khỏi một học kỳ
+     */
+    public function clearSemester(CurriculumFramework $curriculumFramework, Semester $semester)
+    {
+        if ($semester->curriculum_framework_id !== $curriculumFramework->id) {
+            return back()->with('error', 'Học kỳ không thuộc chương trình này.');
+        }
+
+        CurriculumSubject::where('curriculum_framework_id', $curriculumFramework->id)
+            ->where('semester_id', $semester->id)
+            ->delete();
+
+        return back()->with('success', "Đã xóa tất cả môn học khỏi {$semester->name}.");
+    }
+
+    /**
+     * Xóa tất cả môn học khỏi TẤT CẢ học kỳ của chương trình
+     */
+    public function clearAll(CurriculumFramework $curriculumFramework)
+    {
+        CurriculumSubject::where('curriculum_framework_id', $curriculumFramework->id)->delete();
+
+        return back()->with('success', "Đã xóa toàn bộ môn học khỏi tất cả học kỳ của chương trình.");
+    }
+
+    /**
      * Phân công tự động nhiều môn học vào các học kỳ theo Topological Sort
      */
     public function autoAssign(Request $request, CurriculumFramework $curriculumFramework)

@@ -477,6 +477,9 @@
         <a href="{{ route('admin.program-groups.index') }}" class="nav-item {{ request()->routeIs('admin.program-groups.*') ? 'active' : '' }}">
             <span class="nav-icon">🗂️</span> Program Groups
         </a>
+        <a href="{{ route('admin.training-programs.index') }}" class="nav-item {{ request()->routeIs('admin.training-programs.*') ? 'active' : '' }}">
+            <span class="nav-icon">🎓</span> Chương trình đào tạo
+        </a>
         <a href="{{ route('admin.curriculum.index') }}" class="nav-item {{ request()->routeIs('admin.curriculum.*') ? 'active' : '' }}">
             <span class="nav-icon">📅</span> Phân công môn học
         </a>

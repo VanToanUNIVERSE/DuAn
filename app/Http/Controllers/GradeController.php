@@ -111,8 +111,8 @@ class GradeController extends Controller
         // Niên khóa của user (dùng để lọc "cùng khóa")
         $academicYear = $user->pref_academic_year;
 
-        // Lấy tất cả môn học kèm học kỳ
-        $subjects = Subject::with('semester')->orderBy('id')->get();
+        // Lấy tất cả môn học kèm học kỳ (thông qua curriculum_subject)
+        $subjects = Subject::with('assignedSemesters')->orderBy('id')->get();
 
         // Điểm của user hiện tại (indexed by subject_id)
         $myGradesRaw = UserGrade::where('user_id', $user->id)
@@ -148,7 +148,7 @@ class GradeController extends Controller
             $avgGrades[] = isset($peerAvgRaw[$subject->id])
                 ? (float) $peerAvgRaw[$subject->id]->avg_grade
                 : null;
-            $semesters[] = $subject->semester?->name ?? '?';
+            $semesters[] = $subject->assignedSemesters->first()?->name ?? '?';
         }
 
         return response()->json([

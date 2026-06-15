@@ -109,12 +109,17 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::put('/program-groups/{programGroup}',    [App\Http\Controllers\Admin\ProgramGroupController::class, 'update'])->name('program-groups.update');
     Route::delete('/program-groups/{programGroup}', [App\Http\Controllers\Admin\ProgramGroupController::class, 'destroy'])->name('program-groups.destroy');
 
+    // Quản lý Chương trình đào tạo
+    Route::resource('/training-programs', App\Http\Controllers\Admin\TrainingProgramController::class)->except(['create', 'show', 'edit']);
+
     // Phân công môn học vào học kỳ theo chương trình đào tạo
     Route::get('/curriculum',                                           [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'index'])->name('curriculum.index');
     Route::get('/curriculum/{curriculumFramework}',                     [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'show'])->name('curriculum.show');
     Route::post('/curriculum/{curriculumFramework}/assign',             [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'assign'])->name('curriculum.assign');
     Route::post('/curriculum/{curriculumFramework}/auto-assign',           [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'autoAssign'])->name('curriculum.auto-assign');
     Route::delete('/curriculum/{curriculumFramework}/remove/{assignment}', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'remove'])->name('curriculum.remove');
+    Route::delete('/curriculum/{curriculumFramework}/semester/{semester}/clear', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'clearSemester'])->name('curriculum.clear-semester');
+    Route::delete('/curriculum/{curriculumFramework}/clear-all', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'clearAll'])->name('curriculum.clear-all');
 });
 
 

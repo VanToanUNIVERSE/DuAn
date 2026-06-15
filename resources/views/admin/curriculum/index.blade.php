@@ -43,9 +43,14 @@
                         <td style="text-align:center;"><code style="font-size:11px;">{{ $program->program_code }}</code></td>
                         <td style="text-align:center;"><span class="badge badge-muted">{{ $program->academic_year }}</span></td>
                         <td style="text-align:center;">{{ $fw->number_of_semesters }} HK</td>
-                        <td style="text-align:center;">{{ $fw->total_credits }} TC</td>
+                        @php 
+                            $subjectCount = \App\Models\CurriculumSubject::where('curriculum_framework_id', $fw->id)->count(); 
+                            $totalCredits = \App\Models\CurriculumSubject::where('curriculum_framework_id', $fw->id)
+                                ->join('subjects', 'curriculum_subject.subject_id', '=', 'subjects.id')
+                                ->sum('subjects.credits');
+                        @endphp
+                        <td style="text-align:center;">{{ $totalCredits }} TC</td>
                         <td style="text-align:center;">
-                            @php $subjectCount = \App\Models\CurriculumSubject::where('curriculum_framework_id', $fw->id)->count(); @endphp
                             <span class="badge badge-{{ $subjectCount > 0 ? 'teal' : 'muted' }}">{{ $subjectCount }} môn</span>
                         </td>
                         <td style="text-align:center;">
