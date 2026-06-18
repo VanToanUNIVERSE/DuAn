@@ -834,6 +834,49 @@ function showSemResultModal(semNumber, snapshot) {
 
 function closeSemResultModal() { document.getElementById('sem-result-overlay').classList.remove('open'); }
 
+let _pendingEvaluation = null;
+let _pendingPlanId = null;
+
+function showDynamicModeModal(planId, evaluation) {
+    _pendingEvaluation = evaluation;
+    _pendingPlanId = planId;
+    
+    document.getElementById('dyn-modal-message').innerHTML = evaluation.message;
+    
+    const pros = document.getElementById('dyn-modal-pros');
+    const cons = document.getElementById('dyn-modal-cons');
+    const title = document.getElementById('dyn-modal-title');
+    const header = document.querySelector('#dynamic-mode-overlay .srm-header');
+    
+    if (evaluation.status === 'SPEED_UP') {
+        title.textContent = 'Thành tích xuất sắc! 🚀';
+        header.style.background = 'var(--success)';
+        pros.innerHTML = '+ Ra trường sớm hơn dự kiến, tiết kiệm thời gian.<br>+ Giảm chi phí sinh hoạt dài hạn.';
+        cons.innerHTML = '− Khối lượng học tập mỗi kỳ khá nặng (lên đến 25 TC).<br>− Yêu cầu duy trì sự tập trung cao độ.';
+    } else {
+        title.textContent = 'Cảnh báo học thuật ⚠️';
+        header.style.background = 'var(--brand-ochre)';
+        pros.innerHTML = '+ Giảm tải áp lực học tập xuống mức an toàn (khoảng 15 TC/kỳ).<br>+ Có thời gian học lại các môn nợ và cải thiện điểm số.';
+        cons.innerHTML = '− Kéo dài thời gian ra trường (thêm học kỳ).<br>− Phát sinh thêm chi phí sinh hoạt cho các học kỳ phụ.';
+    }
+    
+    document.getElementById('dynamic-mode-overlay').classList.add('open');
+}
+
+function closeDynamicModeModal() {
+    document.getElementById('dynamic-mode-overlay').classList.remove('open');
+    _pendingEvaluation = null;
+    _pendingPlanId = null;
+    fetchStudyPlans(); // Reload just in case
+}
+
+function confirmDynamicMode() {
+    if (_pendingPlanId && _pendingEvaluation) {
+        document.getElementById('dynamic-mode-overlay').classList.remove('open');
+        adjustStudyPlan(_pendingPlanId, _pendingEvaluation);
+    }
+}
+
 function applyCreditRecommendation() {
     localStorage.setItem('recommended_credits_per_sem', _semRecCredits);
     showToast(`Đã ghi nhớ gợi ý: ${_semRecCredits} TC/kỳ 📌`, 'success');
@@ -1916,7 +1959,9 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                 });
             } else if (resData.success && resData.evaluation) {
                 const evaluation = resData.evaluation;
-                if (evaluation.status !== 'KEEP') {
+                if (evaluation.is_dynamic && evaluation.status !== 'KEEP') {
+                    showDynamicModeModal(planId, evaluation);
+                } else if (evaluation.status !== 'KEEP') {
                     if (confirm(`Hệ thống nhận thấy tiến độ thay đổi:\n"${evaluation.message}"\n\nBạn có muốn hệ thống tự động điều chỉnh kế hoạch học tập sang chế độ "${evaluation.suggested_mode}" không?`)) {
                         adjustStudyPlan(planId, evaluation);
                     } else {

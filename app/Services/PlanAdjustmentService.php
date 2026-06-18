@@ -25,8 +25,9 @@ class PlanAdjustmentService
             $oldPlan = StudyPlan::with('semesters.subjects.subject')->find($currentPlanId);
             $planName = $oldPlan ? $oldPlan->name : 'Kế hoạch điều chỉnh';
             
-            // Re-generate the plan using the suggested mode
-            $newPlan = $this->studyPlanService->generatePlan($userId, $planName, $evaluationResult['suggested_mode']);
+            // Re-generate the plan using the suggested mode and target semesters
+            $newTargetSems = $evaluationResult['suggested_sems'] ?? null;
+            $newPlan = $this->studyPlanService->generatePlan($userId, $planName, $evaluationResult['suggested_mode'], $newTargetSems);
             
             // Save revision and then delete old plan
             if ($oldPlan && $oldPlan->id !== $newPlan->id) {

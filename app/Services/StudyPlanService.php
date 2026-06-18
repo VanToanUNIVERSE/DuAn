@@ -18,11 +18,12 @@ class StudyPlanService
      * @param int $userId
      * @param string $name
      * @param string $mode (normal, fast, slow)
+     * @param int|null $dynamicTargetSems Target semesters for dynamic mode
      * @return StudyPlan
      */
-    public function generatePlan(int $userId, string $name, string $mode = 'normal'): StudyPlan
+    public function generatePlan(int $userId, string $name, string $mode = 'normal', ?int $dynamicTargetSems = null): StudyPlan
     {
-        return DB::transaction(function () use ($userId, $name, $mode) {
+        return DB::transaction(function () use ($userId, $name, $mode, $dynamicTargetSems) {
             // Delete old plan of the same mode (optional, or just create new)
             // StudyPlan::where('user_id', $userId)->where('mode', $mode)->delete();
 
@@ -30,8 +31,8 @@ class StudyPlanService
             $progressService = new \App\Services\ProgressService();
             $progress = $progressService->evaluateProgress($userId);
             
-            // Check for low GPA and force slow mode
-            if ($progress['current_gpa'] > 0 && $progress['current_gpa'] < 2.0) {
+            // Check for low GPA and force slow mode if not already dynamic
+            if ($mode !== 'dynamic' && $progress['current_gpa'] > 0 && $progress['current_gpa'] < 2.0) {
                 $mode = 'slow';
             }
 
@@ -96,10 +97,17 @@ class StudyPlanService
 
             $plannedSubjectIds = []; // Bắt đầu rỗng để mô phỏng lại toàn bộ lộ trình từ đầu
             
+            $targetSemsToSave = $dynamicTargetSems ?? match($mode) {
+                'fast' => 6,
+                'slow' => 10,
+                default => 8
+            };
+
             $plan = StudyPlan::create([
                 'user_id' => $userId,
                 'name' => $name,
                 'mode' => $mode,
+                'target_semester_count' => $targetSemsToSave
             ]);
 
             // Nếu mode là normal VÀ sinh viên chưa có điểm nào (người dùng mới),
@@ -155,7 +163,7 @@ class StudyPlanService
                 }
                 
                 if ($unpassedCredits > 0) {
-                    $targetTotalSems = match ($mode) {
+                    $targetTotalSems = $dynamicTargetSems ?? match ($mode) {
                         'fast' => 6,
                         'slow' => 10,
                         default => 8,
@@ -340,6 +348,9 @@ class StudyPlanService
 
     private function getMaxCreditsByMode(string $mode): int
     {
+        if ($mode === 'dynamic') {
+            return 25; // Flexible max for dynamic calculations
+        }
         return match ($mode) {
             'fast' => 22,
             'slow' => 14,
@@ -570,7 +581,7 @@ class StudyPlanService
                 }
                 
                 if ($unpassedCredits > 0) {
-                    $targetTotalSems = match ($mode) {
+                    $targetTotalSems = $dynamicTargetSems ?? match ($mode) {
                         'fast' => 6,
                         'slow' => 10,
                         default => 8,

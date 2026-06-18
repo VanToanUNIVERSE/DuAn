@@ -37,6 +37,10 @@ class ProgressService
             return $grade->subject->credits ?? 0;
         });
 
+        $failedCredits = $failedGrades->sum(function ($grade) {
+            return $grade->subject->credits ?? 0;
+        });
+
         // Fetch curriculum framework total credits dynamically
         $totalRequiredCredits = 140;
         if ($user->pref_academic_year && $user->pref_program_type) {
@@ -50,6 +54,7 @@ class ProgressService
             }
         } 
         $completionPercentage = round(($earnedCredits / $totalRequiredCredits) * 100, 2);
+        $gradedCreditsPercentage = round((($earnedCredits + $failedCredits) / $totalRequiredCredits) * 100, 2);
 
         // Simple GPA calculation (assuming 4.0 scale and grade is numeric)
         // If grade is not numeric, this logic needs adjustment based on actual grading system
@@ -72,6 +77,7 @@ class ProgressService
             'current_gpa' => $currentGpa,
             'passed_subjects_count' => $passedGrades->count(),
             'failed_subjects_count' => $failedGrades->count(),
+            'graded_credits_percentage' => $gradedCreditsPercentage,
         ];
     }
 

@@ -20,6 +20,40 @@
 <body>
 
     {{-- ══════════════════════════════════════════════════════════════════
+    DYNAMIC MODE MODAL
+    ══════════════════════════════════════════════════════════════════ --}}
+    <div class="sem-result-overlay" id="dynamic-mode-overlay" style="z-index: 100000;">
+        <div class="sem-result-modal" style="max-width: 500px;">
+            <div class="srm-header" style="background: var(--brand-ochre); color: white;">
+                <button class="srm-close" style="color: white; opacity: 0.8;" onclick="closeDynamicModeModal()">✕</button>
+                <div class="srm-semester-label" style="color: rgba(255,255,255,0.8);">Đánh giá tiến độ 30%</div>
+                <div class="srm-title" id="dyn-modal-title">Cảnh báo học thuật</div>
+                <div class="srm-subtitle" style="color: rgba(255,255,255,0.9);">Hệ thống đề xuất điều chỉnh lộ trình học</div>
+            </div>
+            
+            <div style="padding: 24px;">
+                <div id="dyn-modal-message" style="font-size: 0.95rem; color: var(--ink); line-height: 1.6; margin-bottom: 20px; padding: 16px; background: #fffbeb; border-radius: 8px; border: 1px solid #fde68a;">
+                    Message goes here...
+                </div>
+
+                <div style="background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="color: var(--brand-ochre);"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        Lợi ích & Bất lợi
+                    </h4>
+                    <div id="dyn-modal-pros" style="font-size: 0.85rem; color: var(--success-dark); margin-bottom: 8px;">+ Giảm tải áp lực học tập xuống mức an toàn.</div>
+                    <div id="dyn-modal-cons" style="font-size: 0.85rem; color: var(--error);">− Ra trường trễ hơn dự kiến.</div>
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button class="btn-secondary" onclick="closeDynamicModeModal()">Từ chối (Giữ nguyên)</button>
+                    <button class="btn-primary" id="dyn-modal-confirm-btn" onclick="confirmDynamicMode()">Đồng ý điều chỉnh</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ══════════════════════════════════════════════════════════════════
     SEMESTER RESULT MODAL
     ══════════════════════════════════════════════════════════════════ --}}
     <div class="sem-result-overlay" id="sem-result-overlay">

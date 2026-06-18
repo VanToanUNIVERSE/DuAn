@@ -240,8 +240,23 @@ class StudyPlanController extends Controller
                 }
             }
         }
+        $currentTargetSemesters = $studyPlan ? ($studyPlan->target_semester_count ?? 8) : 8;
+        
+        $currentSem = 1;
+        if ($studyPlan) {
+            $gradedSubjectIds = UserGrade::where('user_id', $userId)->pluck('subject_id')->toArray();
+            foreach ($studyPlan->semesters as $sem) {
+                foreach ($sem->subjects as $ss) {
+                    if (in_array($ss->subject_id, $gradedSubjectIds)) {
+                        if ($sem->semester_index >= $currentSem) {
+                            $currentSem = $sem->semester_index + 1;
+                        }
+                    }
+                }
+            }
+        }
 
-        $evaluation = $this->evaluationService->evaluate($userId, $studyPlan->mode ?? 'normal');
+        $evaluation = $this->evaluationService->evaluate($userId, $studyPlan->mode ?? 'normal', $currentTargetSemesters, $currentSem);
 
         return response()->json([
             'success' => true,
