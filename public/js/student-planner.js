@@ -712,12 +712,16 @@ function showSemResultModal(semNumber, snapshot) {
     const creditsThisSem = snapshot.reduce((s, c) => s + (c.credits || 0), 0);
     const passedCredits = passSubjects.reduce((s, c) => s + (c.credits || 0), 0);
     let totalEarned = 0;
-    if (typeof obData !== 'undefined' && obData && obData.grades && typeof subjectMap !== 'undefined') {
-        totalEarned = Object.values(obData.grades)
-            .filter(g => g.grade > 5.0 || ['passed', 'pass'].includes(g.status))
-            .reduce((sum, g) => sum + (parseInt(subjectMap[g.subject_id]?.credits || 0)), 0);
-    } else {
-        document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 5.0) totalEarned += parseInt(input.dataset.credits || 0); });
+    if (window.currentActivePlan && window.currentActivePlan.semesters) {
+        window.currentActivePlan.semesters.forEach(sem => {
+            if (sem.subjects) {
+                sem.subjects.forEach(ss => {
+                    if (ss.grade !== null && ss.grade > 5.0 && ss.subject) {
+                        totalEarned += parseInt(ss.subject.credits || 0);
+                    }
+                });
+            }
+        });
     }
     const planMode = window.currentActivePlan ? window.currentActivePlan.mode : (document.getElementById('planner-mode')?.value || 'normal');
     const totalSem = planMode === 'fast' ? 6 : (planMode === 'slow' ? 10 : 8);
@@ -766,6 +770,30 @@ function showSemResultModal(semNumber, snapshot) {
     // Ensure suggestion is bounded safely, but allow 15 if forced
     let suggestedCredits = Math.max(10, Math.min(25, avgPerSem + recDelta));
     if ((gpa < 5.5 || passRate < 0.6) && neededPerSem > 20) suggestedCredits = 15;
+
+    // Recalculate true delta to ensure consistency
+    recDelta = suggestedCredits - avgPerSem;
+
+    // Synchronize visual tags with the actual math
+    if (recDelta > 0) {
+        recType = 'increase';
+        recIcon = '📈';
+        if (gpa < 5.5 || passRate < 0.6) recTag = 'Cần nỗ lực hơn';
+        else if (recTag.includes('giảm') || recTag.includes('Giữ')) recTag = 'Gợi ý tăng tín chỉ';
+    } else if (recDelta < 0) {
+        recType = 'decrease';
+        recIcon = '📉';
+        if (recTag.includes('tăng') || recTag.includes('Giữ')) recTag = 'Gợi ý giảm tín chỉ';
+    } else {
+        recType = 'maintain';
+        recIcon = '✨';
+        if (gpa < 5.5 || passRate < 0.6) {
+            recTag = 'Giữ mức an toàn';
+            recIcon = '⚠️';
+        } else {
+            recTag = 'Giữ nguyên tiến độ';
+        }
+    }
 
     _semRecCredits = suggestedCredits;
     const gpaClass = gpa === null ? '' : gpa >= 8.0 ? 'gpa-ex' : gpa >= 7.0 ? 'gpa-good' : gpa >= 5.5 ? 'gpa-ok' : 'gpa-bad';

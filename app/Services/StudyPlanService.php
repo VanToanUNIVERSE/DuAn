@@ -102,8 +102,9 @@ class StudyPlanService
                 'mode' => $mode,
             ]);
 
-            // Nếu mode là normal, chỉ cần copy 100% từ chương trình khung
-            if ($mode === 'normal') {
+            // Nếu mode là normal VÀ sinh viên chưa có điểm nào (người dùng mới),
+            // copy 100% từ chương trình khung gốc để giữ đúng lộ trình chuẩn mực của trường.
+            if ($mode === 'normal' && empty($gradedSubjectIds)) {
                 $groupedSubjects = $allSubjects->groupBy('assigned_semester_index')->sortKeys();
                 $maxSemesterIndex = 0;
                 
@@ -121,7 +122,7 @@ class StudyPlanService
                         StudyPlanSubject::create([
                             'study_plan_semester_id' => $semester->id,
                             'subject_id' => $subject->id,
-                            'is_completed' => in_array($subject->id, $passedSubjectIds),
+                            'is_completed' => false,
                         ]);
                     }
                 }
@@ -130,7 +131,9 @@ class StudyPlanService
                 return $plan->load('semesters.subjects.subject');
             }
 
-            // Các mode khác (fast, slow) sẽ dùng Greedy Algorithm
+            // Sử dụng Greedy Algorithm cho:
+            // 1. Các mode fast, slow
+            // 2. Mode normal nhưng sinh viên ĐÃ CÓ ĐIỂM (đang học dở dang), cần rải lại môn học.
             $semesterIndex = 1;
 
             $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
@@ -481,7 +484,19 @@ class StudyPlanService
                 }
             }
             
-            // Đảm bảo suggestions cũng nằm trong mảng cần phân bổ (thường là đã có)
+            // Lọc bỏ những suggestions đã nằm trong quá khứ NHƯNG KHÔNG PHẢI MÔN RỚT
+            $validSuggestedSubjectIds = [];
+            foreach ($suggestedSubjectIds as $subId) {
+                if (in_array($subId, $plannedSubjectIds) && !in_array($subId, $failedSubjectIds)) {
+                    // Đã có trong kế hoạch cũ, và chưa rớt (tức là chưa học tới hoặc đã pass)
+                    // Không gợi ý thêm vào học kỳ mục tiêu (để tránh lặp môn)
+                    continue;
+                }
+                $validSuggestedSubjectIds[] = $subId;
+            }
+            $suggestedSubjectIds = $validSuggestedSubjectIds;
+
+            // Đảm bảo suggestions cũng nằm trong mảng cần phân bổ
             $remainingSubjectIds = array_unique(array_merge($remainingSubjectIds, $suggestedSubjectIds));
             
             // Xóa các học kỳ từ targetSemesterIndex trở đi
