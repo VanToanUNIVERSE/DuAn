@@ -448,18 +448,7 @@ class StudyPlanService
             $allowedSubjectIds = $allProgramSubjects->pluck('id')->toArray();
             $suggestedSubjectIds = array_values(array_unique(array_intersect($suggestedSubjectIds, $allowedSubjectIds)));
 
-            // Tính toán lại chính xác Học kỳ hiện tại dựa trên dữ liệu điểm số thật trong DB
-            // để tránh trường hợp frontend gửi sai target_semester_index do localStorage bị lỗi/trống
-            $actualTargetSemester = 1;
-            foreach ($passedSubjectIds as $pid) {
-                $sub = $allProgramSubjects->firstWhere('id', $pid);
-                if ($sub && isset($sub->assigned_semester_index)) {
-                    if ($sub->assigned_semester_index >= $actualTargetSemester) {
-                        $actualTargetSemester = $sub->assigned_semester_index + 1;
-                    }
-                }
-            }
-            $targetSemesterIndex = $actualTargetSemester;
+            // We now trust $targetSemesterIndex from the frontend because the frontend bug was fixed.
 
             // Lấy program_group_ids cho greedy
             $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')

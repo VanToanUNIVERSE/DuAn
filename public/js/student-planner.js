@@ -530,12 +530,18 @@ async function fetchSuggestions() {
             skill_evaluation: item.reasons.join(', ')
         }));
 
-        // Limit subjects by max credits of active plan mode
+        // Limit subjects by max credits of active plan mode or personalized recommendation
         if (window.currentActivePlan && window.currentActivePlan.mode) {
             const mode = window.currentActivePlan.mode;
-            let maxCredits = 18; // default normal
-            if (mode === 'fast') maxCredits = 22;
-            else if (mode === 'slow') maxCredits = 14;
+            
+            // Check if there's a personalized recommendation from completing a semester
+            const savedRec = localStorage.getItem('recommended_credits_per_sem');
+            let maxCredits = savedRec ? parseInt(savedRec) : 18; 
+            
+            if (!savedRec) {
+                if (mode === 'fast') maxCredits = 22;
+                else if (mode === 'slow') maxCredits = 14;
+            }
 
             let currentTotal = 0;
             let limitedData = [];
@@ -697,9 +703,16 @@ function showSemResultModal(semNumber, snapshot) {
     const creditsThisSem = snapshot.reduce((s, c) => s + (c.credits || 0), 0);
     const passedCredits = passSubjects.reduce((s, c) => s + (c.credits || 0), 0);
     let totalEarned = 0;
-    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 5.0) totalEarned += parseInt(input.dataset.credits || 0); });
-    const totalSem = 8;
-    const nextSem = Math.min(semNumber + 1, 8);
+    if (typeof obData !== 'undefined' && obData && obData.grades && typeof subjectMap !== 'undefined') {
+        totalEarned = Object.values(obData.grades)
+            .filter(g => g.grade > 5.0 || ['passed', 'pass'].includes(g.status))
+            .reduce((sum, g) => sum + (parseInt(subjectMap[g.subject_id]?.credits || 0)), 0);
+    } else {
+        document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 5.0) totalEarned += parseInt(input.dataset.credits || 0); });
+    }
+    const planMode = window.currentActivePlan ? window.currentActivePlan.mode : (document.getElementById('planner-mode')?.value || 'normal');
+    const totalSem = planMode === 'fast' ? 6 : (planMode === 'slow' ? 10 : 8);
+    const nextSem = Math.min(semNumber + 1, totalSem);
     const remSem = Math.max(1, totalSem - semNumber);
     const remCredits = Math.max(0, TOTAL_CREDITS - totalEarned);
     const neededPerSem = remSem > 0 ? Math.ceil(remCredits / remSem) : 0;
@@ -1816,19 +1829,61 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
             } else {
                 fetchStudyPlans();
             }
-        } else if (resData.success && resData.evaluation) {
-            const evaluation = resData.evaluation;
-            if (evaluation.status !== 'KEEP') {
-                if (confirm(`Hệ thống nhận thấy tiến độ thay đổi:\n"${evaluation.message}"\n\nBạn có muốn hệ thống tự động điều chỉnh kế hoạch học tập sang chế độ "${evaluation.suggested_mode}" không?`)) {
-                    adjustStudyPlan(planId, evaluation);
+        } else {
+            // Check if all grades in this semester card are filled to trigger suggestion modal automatically
+            let allFilled = false;
+            let snapshot = [];
+            let semIndex = 1;
+            const semesterCard = inputEl.closest('.study-plan-semester');
+            if (semesterCard) {
+                semIndex = parseInt(semesterCard.dataset.semesterIndex);
+                const inputs = semesterCard.querySelectorAll('.ob-grade-input');
+                allFilled = inputs.length > 0;
+                inputs.forEach(inp => {
+                    if (inp.value.trim() === '') allFilled = false;
+                    else {
+                        const subjCard = inp.closest('.study-plan-subject');
+                        if (subjCard && subjCard.id) {
+                            const idStr = subjCard.id.split('-')[2];
+                            if (idStr) {
+                                const sid = parseInt(idStr);
+                                const gradeVal = parseFloat(inp.value);
+                                snapshot.push({ id: sid, grade: gradeVal });
+                            }
+                        }
+                    }
+                });
+            }
+
+            if (allFilled && snapshot.length > 0 && window.currentActivePlan) {
+                // Populate credits and names for the snapshot
+                const semData = window.currentActivePlan.semesters.find(s => s.semester_index === semIndex);
+                if (semData && semData.subjects) {
+                    snapshot.forEach(c => {
+                        const subData = semData.subjects.find(s => s.subject_id === c.id);
+                        c.credits = subData && subData.subject ? subData.subject.credits : 0;
+                        c.name = subData && subData.subject ? subData.subject.name : '';
+                    });
+                }
+                
+                // Show modal immediately
+                fetchStudyPlans().then(() => {
+                    showSemResultModal(semIndex, snapshot);
+                });
+            } else if (resData.success && resData.evaluation) {
+                const evaluation = resData.evaluation;
+                if (evaluation.status !== 'KEEP') {
+                    if (confirm(`Hệ thống nhận thấy tiến độ thay đổi:\n"${evaluation.message}"\n\nBạn có muốn hệ thống tự động điều chỉnh kế hoạch học tập sang chế độ "${evaluation.suggested_mode}" không?`)) {
+                        adjustStudyPlan(planId, evaluation);
+                    } else {
+                        fetchStudyPlans(); // Reload to show passed/failed state
+                    }
                 } else {
-                    fetchStudyPlans(); // Reload to show passed/failed state
+                    fetchStudyPlans();
                 }
             } else {
                 fetchStudyPlans();
             }
-        } else {
-            fetchStudyPlans();
         }
     } catch (e) {
         inputEl.disabled = false;
@@ -1905,7 +1960,7 @@ async function applySuggestionsToPlan() {
     if (plan.semesters && plan.semesters.length > 0) {
         for (let sem of plan.semesters) {
             if (sem.subjects && sem.subjects.length > 0) {
-                let hasNullGrade = sem.subjects.some(ss => ss.grade === null);
+                let hasNullGrade = sem.subjects.some(ss => ss.grade === null || ss.grade === undefined || ss.grade === '');
                 if (hasNullGrade) {
                     targetSemesterIndex = sem.semester_index;
                     found = true;
@@ -1917,9 +1972,6 @@ async function applySuggestionsToPlan() {
             targetSemesterIndex = plan.semesters[plan.semesters.length - 1].semester_index + 1;
         }
     }
-
-    const selectedSemester = getCurrentSemester();
-    targetSemesterIndex = Number.isFinite(selectedSemester) && selectedSemester > 0 ? selectedSemester : 1;
 
     const finalConfirmMsg = `Bạn sắp áp dụng gợi ý cho Học kỳ ${targetSemesterIndex}.\nLưu ý: Các môn tương lai sẽ được sắp xếp lại. Bạn có chắc chắn muốn tiếp tục không?`;
     if (!window.confirm(finalConfirmMsg)) {
