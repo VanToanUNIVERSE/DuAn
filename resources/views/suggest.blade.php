@@ -368,6 +368,51 @@
             </div>
         </div>
 
+        {{-- ════════════════════════════════════════════════════════
+             TAB: LẬP KẾ HOẠCH ĐA HỌC KỲ (NEW FEATURE)
+        ════════════════════════════════════════════════════════ --}}
+        <div class="page-content tab-panel" id="tab-planner">
+            <div style="margin-bottom:var(--sp-xl);">
+                <h2 style="font-family:'Sora',sans-serif;font-size:1.4rem;font-weight:800;color:var(--ink);letter-spacing:-0.4px;margin-bottom:4px;">Lập Kế Hoạch Đa Học Kỳ</h2>
+                <p style="color:var(--muted);font-size:0.88rem;">Hệ thống sẽ tự động rải môn học cho tất cả các học kỳ còn lại đến khi tốt nghiệp.</p>
+            </div>
+
+            <div class="clay-card" style="margin-bottom:var(--sp-xl);">
+                <div class="card-title-row">
+                    <div class="card-heading">
+                        ⚙️ Tạo Kế Hoạch Mới
+                    </div>
+                </div>
+                <div style="display:flex; gap:16px; align-items:center; margin-bottom: 20px;">
+                    <div>
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:4px;">Chế độ học (Mode)</label>
+                        <select id="planner-mode" class="clay-select" style="min-width: 150px;">
+                            <option value="normal" selected>Bình thường (~18 TC/kỳ)</option>
+                            <option value="fast">Học vượt (~22 TC/kỳ)</option>
+                            <option value="slow">Thong thả (~14 TC/kỳ)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:4px;">Tên kế hoạch</label>
+                        <input type="text" id="planner-name" class="ob-grade-input" placeholder="Ví dụ: Kế hoạch ra trường sớm" style="min-width: 250px; text-align:left; padding:0 12px; height:38px;">
+                    </div>
+                    <div style="align-self: flex-end;">
+                        <button class="btn-primary" onclick="generateStudyPlan()" style="height: 38px;">✨ Tự động tạo lộ trình</button>
+                    </div>
+                </div>
+                <div id="planner-loader" class="loader" style="display:none; text-align:center; padding:20px;">
+                    <div class="spinner" style="margin:0 auto;"></div>
+                    <p style="color:var(--muted);font-size:0.9rem;margin-top:10px;">Hệ thống đang chạy thuật toán Tham lam (Greedy) để phân bổ môn học...</p>
+                </div>
+            </div>
+
+            <div id="study-plan-results">
+                <div class="empty-state">
+                    <p>Chưa có kế hoạch nào được tạo. Chọn chế độ và nhấn nút tạo ở trên.</p>
+                </div>
+            </div>
+        </div>
+
     </div>{{-- end main-content --}}
 </div>{{-- end app-shell --}}
 

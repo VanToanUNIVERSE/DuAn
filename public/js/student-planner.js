@@ -501,20 +501,60 @@ let fetchTimer    = null;
     }
 
     async function fetchSuggestions() {
-        const academicYear=document.getElementById('academic_year').value;
-        const programType=document.getElementById('program_type').value;
         const semester=document.getElementById('target_semester').value;
-        const passedSubjects=getPassedSubjectIds();
         const loader=document.getElementById('loader');
         const suggestionsContainer=document.getElementById('suggestions-list');
         loader.style.display='flex'; suggestionsContainer.style.opacity='0.3';
         try {
-            const url=`/api/suggestions?academic_year=${encodeURIComponent(academicYear)}&program_type=${encodeURIComponent(programType)}&passed_subjects=${passedSubjects}&semester=${semester}&t=${new Date().getTime()}`;
+            const url=`/api/v1/recommendations`;
             const response=await fetch(url); if(!response.ok)throw new Error('API error');
-            const data=await response.json(); renderSuggestions(data,semester);
+            const resData=await response.json(); 
+            const mappedData = (resData.data || []).map(item => ({
+                ...item.subject,
+                suggestion_score: item.score,
+                can_study: true,
+                skill_evaluation: item.reasons.join(', ')
+            }));
+            renderSuggestions(mappedData,semester);
+            fetchProgress(); // Update progress and warnings
         } catch(error) {
             suggestionsContainer.innerHTML=`<div class="empty-state"><p style="color:var(--error);font-weight:600;">⚠️ Đã có lỗi xảy ra khi phân tích dữ liệu.</p></div>`;
         } finally { loader.style.display='none'; suggestionsContainer.style.opacity='1'; }
+    }
+
+    async function fetchProgress() {
+        try {
+            const response = await fetch('/api/v1/progress');
+            if(!response.ok) return;
+            const resData = await response.json();
+            if(resData.success && resData.data) {
+                const prog = resData.data.progress;
+                const warnings = resData.data.warnings;
+
+                // Update UI KPI
+                document.getElementById('kpi-progress').textContent = prog.completion_percentage + '%';
+                document.getElementById('kpi-progress-sub').textContent = `${prog.earned_credits} / ${prog.total_required_credits} TC hoàn thành`;
+                
+                const gpaEl = document.getElementById('kpi-gpa');
+                if (gpaEl) gpaEl.textContent = prog.current_gpa || '—';
+
+                // Update Warnings
+                const warnContainer = document.getElementById('dash-global-warning');
+                if (warnContainer) {
+                    if (warnings && warnings.length > 0) {
+                        warnContainer.innerHTML = warnings.map(w => `
+                            <div style="background:#fee2e2;color:#b91c1c;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+                                ⚠️ <strong>Cảnh báo học vụ:</strong> ${w.message}
+                            </div>
+                        `).join('');
+                    } else {
+                        warnContainer.innerHTML = '';
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Lỗi khi fetch progress', e);
+        }
     }
 
     function renderSuggestions(subjects,targetSemester) {
@@ -1310,3 +1350,103 @@ function openScoreInfoModal() {
 function closeScoreInfoModal() {
     document.getElementById('score-info-modal-overlay').classList.add('hidden');
 }
+
+// ═══════════════════════════════════════════════════════════════
+// STUDY PLANNER (NEW FEATURE)
+// ═══════════════════════════════════════════════════════════════
+async function fetchStudyPlans() {
+    try {
+        const res = await fetch('/api/v1/study-plans');
+        if(!res.ok) return;
+        const resData = await res.json();
+        if(resData.success && resData.data && resData.data.length > 0) {
+            // Render the latest plan
+            const latestPlan = resData.data[resData.data.length - 1];
+            renderStudyPlan(latestPlan);
+        }
+    } catch(e) {
+        console.error('Lỗi khi fetch study plans', e);
+    }
+}
+
+async function generateStudyPlan() {
+    const mode = document.getElementById('planner-mode').value;
+    const name = document.getElementById('planner-name').value || 'Kế hoạch học tập cá nhân';
+    const loader = document.getElementById('planner-loader');
+    const container = document.getElementById('study-plan-results');
+
+    loader.style.display = 'block';
+    container.style.opacity = '0.3';
+
+    try {
+        const res = await fetch('/api/v1/study-plans/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ mode, name })
+        });
+        if(!res.ok) throw new Error('API error');
+        const resData = await res.json();
+        if(resData.success && resData.data) {
+            renderStudyPlan(resData.data);
+            showToast('Tạo kế hoạch học tập thành công! 🎉', 'success');
+        }
+    } catch(e) {
+        showToast('Lỗi khi tạo kế hoạch học tập.', 'error');
+    } finally {
+        loader.style.display = 'none';
+        container.style.opacity = '1';
+    }
+}
+
+function renderStudyPlan(plan) {
+    const container = document.getElementById('study-plan-results');
+    if(!plan.semesters || plan.semesters.length === 0) {
+        container.innerHTML = `<div class="empty-state">Không có môn học nào cần học nữa. Bạn đã đủ tín chỉ!</div>`;
+        return;
+    }
+
+    let html = `
+        <div style="background:var(--surface-soft); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--hairline);">
+            <h3 style="margin:0 0 8px 0;">${plan.name} <span class="pill pill-lavender">${plan.mode.toUpperCase()}</span></h3>
+            <p style="margin:0; color:var(--muted); font-size:0.9rem;">Dự kiến hoàn thành trong <strong>${plan.target_semester_count}</strong> học kỳ.</p>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:20px;">
+    `;
+
+    plan.semesters.forEach(sem => {
+        html += `
+            <div class="clay-card">
+                <div class="card-title-row" style="border-bottom:1px solid var(--hairline); padding-bottom:12px; margin-bottom:12px;">
+                    <strong>Học kỳ ${sem.semester_index}</strong>
+                    <span class="pill" style="background:#e8f8f3; color:#10b981;">${sem.expected_credits} Tín chỉ</span>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:12px;">
+        `;
+
+        sem.subjects.forEach(ss => {
+            const sub = ss.subject;
+            if(sub) {
+                html += `
+                    <div style="padding:12px; border:1px solid var(--hairline); border-radius:8px; background:var(--surface);">
+                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:4px;">${sub.name}</div>
+                        <div style="font-size:0.8rem; color:var(--muted);">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
+                    </div>
+                `;
+            }
+        });
+
+        html += '</div></div>';
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Initialize fetch study plans on load
+window.addEventListener('DOMContentLoaded', () => {
+    fetchStudyPlans();
+});

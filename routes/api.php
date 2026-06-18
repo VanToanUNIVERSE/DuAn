@@ -23,8 +23,18 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 // ─── Route gợi ý môn học (không cần đăng nhập) ──────────────────────────────
 Route::get('/suggestions', [SuggestionController::class, 'index']);
 
+// ─── LuanVan New API Routes ───────────────────────────────────────────────
+Route::prefix('v1')->middleware('web')->group(function () {
+    Route::get('/recommendations', [\App\Http\Controllers\Api\RecommendationController::class, 'index']);
+    
+    Route::prefix('study-plans')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\StudyPlanController::class, 'index']);
+        Route::post('/generate', [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
+    });
+
+    Route::get('/progress', [\App\Http\Controllers\Api\ProgressController::class, 'index']);
+});
+
 // LƯU Ý: Các route lưu/tải điểm (grades) đã được chuyển sang routes/web.php
 // vì chúng cần session authentication (middleware 'web') để hoạt động đúng.
 // Xem thêm: routes/web.php phần 'Routes điểm số'.
-
-
