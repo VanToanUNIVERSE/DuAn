@@ -397,6 +397,7 @@
                                 <option value="fast">Nhanh (6 kỳ - 3 năm)</option>
                                 <option value="slow">Chậm (10 kỳ - 5 năm)</option>
                             </select>
+                            <div id="planner-target-credits" style="font-size:0.82rem; color:var(--primary); margin-top:8px; font-weight:500; display:none;"></div>
                         </div>
                         <div>
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Tên kế hoạch <span style="color:var(--red);">*</span></label>

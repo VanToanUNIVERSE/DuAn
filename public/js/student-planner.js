@@ -843,7 +843,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         fetchSuggestions();
         fetchChartData();
     }
+    
+    // Khởi tạo và lắng nghe thay đổi chế độ học (Mode) để tính toán số tín chỉ mục tiêu
+    const modeSelect = document.getElementById('planner-mode');
+    if (modeSelect) {
+        modeSelect.addEventListener('change', updateTargetCreditsUI);
+        // Đợi load xong điểm để tính cho chính xác
+        setTimeout(updateTargetCreditsUI, 500); 
+    }
 });
+
+function updateTargetCreditsUI() {
+    const targetEl = document.getElementById('planner-target-credits');
+    const modeSelect = document.getElementById('planner-mode');
+    if (!targetEl || !modeSelect) return;
+
+    // TOTAL_CREDITS có sẵn từ HTML render
+    let earned = 0;
+    if (obData && obData.grades) {
+        earned = Object.values(obData.grades)
+            .filter(g => g.grade > 5.0 || ['passed', 'pass'].includes(g.status))
+            .reduce((sum, g) => sum + (parseInt(subjectMap[g.subject_id]?.credits || 0)), 0);
+    }
+
+    const unpassed = Math.max(0, TOTAL_CREDITS - earned);
+    const currentSem = getCurrentSemester();
+    
+    let targetTotalSems = 8;
+    if (modeSelect.value === 'fast') targetTotalSems = 6;
+    if (modeSelect.value === 'slow') targetTotalSems = 10;
+    
+    const remainingSems = Math.max(1, targetTotalSems - currentSem + 1);
+    const targetPerSem = Math.ceil(unpassed / remainingSems);
+
+    targetEl.style.display = 'block';
+    targetEl.innerHTML = `Mục tiêu cần đạt: <strong>~${targetPerSem} tín chỉ/kỳ</strong> (để ra trường đúng tiến độ)`;
+}
 
 
 // ═══════════════════════════════════════════════════════════════

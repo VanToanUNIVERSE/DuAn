@@ -141,6 +141,7 @@ class StudyPlanService
             $specializedGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Chuyên ngành%')
                 ->pluck('id')->toArray();
             
+            $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
             while ($remainingSubjects->count() > 0) {
                 // Tính toán để rải đều số tín chỉ
                 $unpassedCredits = 0;
@@ -151,11 +152,18 @@ class StudyPlanService
                 }
                 
                 if ($unpassedCredits > 0) {
-                    $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
-                    $estimatedSems = ceil($unpassedCredits / $maxCreditsModeLimit);
-                    $estimatedSems = max(1, $estimatedSems);
+                    $targetTotalSems = match ($mode) {
+                        'fast' => 6,
+                        'slow' => 10,
+                        default => 8,
+                    };
+                    $estimatedSems = max(1, $targetTotalSems - $semesterIndex + 1);
                     // Số tín chỉ mục tiêu để chia đều
                     $maxCredits = ceil($unpassedCredits / $estimatedSems);
+                    
+                    if ($maxCredits > $maxCreditsModeLimit) {
+                        $maxCredits = $maxCreditsModeLimit; // Đảm bảo không vượt quá giới hạn tuyệt đối của mode
+                    }
                     
                     // Thêm một chút linh hoạt (buffer) để dễ xếp môn (ví dụ môn 3 chỉ làm lố 1 chỉ)
                     $maxCredits += 2; 
@@ -231,11 +239,20 @@ class StudyPlanService
                 }
 
                 // Sort available subjects by priority
-                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode) {
+                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode, $basicGroupIds, $majorGroupIds) {
                     $score = 0;
+                    if (in_array($subject->program_group_id, $basicGroupIds)) {
+                        $score += 200; // Ưu tiên Đại cương hoàn thành sớm nhất
+                    } elseif (in_array($subject->program_group_id, $majorGroupIds)) {
+                        $score += 150; // Ưu tiên Cơ sở ngành hoàn thành sớm để mở khóa Đồ án
+                    }
                     if (in_array($subject->id, $failedSubjectIds)) $score += 100; // Failed subjects first
                     if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30; // Core subjects
-                    $score += (5 * $subject->relatedRelations->where('type', 'prerequisite')->count()); // Unlocks more subjects
+                    $score += (50 * $subject->relatedRelations->where('type', 'prerequisite')->count()); // Unlocks more subjects
+                    
+                    if (stripos($subject->name, 'Đồ án') !== false || stripos($subject->name, 'Thực tập') !== false) {
+                        $score += 300; // Ưu tiên xếp các môn Đồ án, Thực tập sớm nhất có thể nếu đủ điều kiện
+                    }
                     
                     if ($mode === 'normal' || $mode === 'slow') {
                         $assignedSem = $subject->assigned_semester_index;
@@ -431,6 +448,19 @@ class StudyPlanService
             $allowedSubjectIds = $allProgramSubjects->pluck('id')->toArray();
             $suggestedSubjectIds = array_values(array_unique(array_intersect($suggestedSubjectIds, $allowedSubjectIds)));
 
+            // Tính toán lại chính xác Học kỳ hiện tại dựa trên dữ liệu điểm số thật trong DB
+            // để tránh trường hợp frontend gửi sai target_semester_index do localStorage bị lỗi/trống
+            $actualTargetSemester = 1;
+            foreach ($passedSubjectIds as $pid) {
+                $sub = $allProgramSubjects->firstWhere('id', $pid);
+                if ($sub && isset($sub->assigned_semester_index)) {
+                    if ($sub->assigned_semester_index >= $actualTargetSemester) {
+                        $actualTargetSemester = $sub->assigned_semester_index + 1;
+                    }
+                }
+            }
+            $targetSemesterIndex = $actualTargetSemester;
+
             // Lấy program_group_ids cho greedy
             $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
                 ->orWhere('name', 'like', '%Anh văn%')
@@ -492,14 +522,9 @@ class StudyPlanService
             });
 
             foreach ($targetCandidates as $subject) {
-                if (!$this->canScheduleSubject($subject, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allProgramSubjects)) {
-                    continue;
-                }
-
-                if ($targetCredits + $subject->credits > $maxCredits) {
-                    continue;
-                }
-
+                // Bỏ qua các ràng buộc xếp môn thông thường vì danh sách gợi ý đã được 
+                // RecommendationService kiểm duyệt kỹ lưỡng (đã check điều kiện tiên quyết, 
+                // số tín chỉ, và học kỳ mở môn). Bắt buộc phải xếp vào học kỳ mục tiêu.
                 $targetSubjects->push($subject);
                 $targetCredits += $subject->credits;
             }
@@ -530,6 +555,7 @@ class StudyPlanService
             }
 
             // Tiếp tục vòng lặp greedy cho các môn còn lại
+            $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
             while ($remainingSubjects->count() > 0) {
                 // Tính toán để rải đều số tín chỉ
                 $unpassedCredits = 0;
@@ -540,10 +566,16 @@ class StudyPlanService
                 }
                 
                 if ($unpassedCredits > 0) {
-                    $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
-                    $estimatedSems = ceil($unpassedCredits / $maxCreditsModeLimit);
-                    $estimatedSems = max(1, $estimatedSems);
+                    $targetTotalSems = match ($mode) {
+                        'fast' => 6,
+                        'slow' => 10,
+                        default => 8,
+                    };
+                    $estimatedSems = max(1, $targetTotalSems - $semesterIndex + 1);
                     $maxCredits = ceil($unpassedCredits / $estimatedSems);
+                    if ($maxCredits > 30) {
+                        $maxCredits = 30;
+                    }
                     $maxCredits += 2; 
                 } else {
                     $maxCredits = $this->getMaxCreditsByMode($mode);
@@ -558,11 +590,20 @@ class StudyPlanService
                     break;
                 }
 
-                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode) {
+                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode, $basicGroupIds, $majorGroupIds) {
                     $score = 0;
+                    if (in_array($subject->program_group_id, $basicGroupIds)) {
+                        $score += 200;
+                    } elseif (in_array($subject->program_group_id, $majorGroupIds)) {
+                        $score += 150;
+                    }
                     if (in_array($subject->id, $failedSubjectIds)) $score += 100;
                     if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30;
-                    $score += (5 * $subject->relatedRelations->where('type', 'prerequisite')->count());
+                    $score += (50 * $subject->relatedRelations->where('type', 'prerequisite')->count());
+                    
+                    if (stripos($subject->name, 'Đồ án') !== false || stripos($subject->name, 'Thực tập') !== false) {
+                        $score += 300; // Ưu tiên xếp các môn Đồ án, Thực tập sớm nhất có thể nếu đủ điều kiện
+                    }
                     
                     if ($mode === 'normal' || $mode === 'slow') {
                         $assignedSem = $subject->assigned_semester_index;
