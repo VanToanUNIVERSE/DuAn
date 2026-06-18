@@ -1,114 +1,179 @@
 <?php
-$file = 'public/js/student-planner.js';
-$content = file_get_contents($file);
 
-$target1 = '    let html = `
-        <div style="background:var(--surface-soft); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--hairline);">
-            <h3 style="margin:0 0 8px 0;">${plan.name} <span class="pill pill-lavender">${plan.mode.toUpperCase()}</span></h3>
-            <p style="margin:0; color:var(--muted); font-size:0.9rem;">Dự kiến hoàn thành trong <strong>${plan.target_semester_count}</strong> học kỳ.</p>
-        </div>';
+$filepath = 'e:\\LuanVan\\DuAn\\public\\js\\student-planner.js';
+$content = file_get_contents($filepath);
 
-$replace1 = '    let html = `
-        <div style="background:var(--surface-soft); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--hairline); display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <h3 style="margin:0 0 8px 0;">${plan.name} <span class="pill pill-lavender">${plan.mode.toUpperCase()}</span></h3>
-                <p style="margin:0; color:var(--muted); font-size:0.9rem;">Dự kiến hoàn thành trong <strong>${plan.target_semester_count}</strong> học kỳ.</p>
-            </div>
-            ${!plan.is_saved ? `<button class="btn-primary" onclick="saveCurrentPlan(${plan.id})" style="height:34px; padding:0 16px; font-size:0.85rem; background:var(--brand-mint); color:var(--ink); border:none; border-radius:6px; font-weight:600; cursor:pointer;">💾 Lưu kế hoạch</button>` : `<span style="color:#10b981; font-weight:600; font-size:0.85rem;">✅ Đã lưu</span>`}
-        </div>';
+$helperCode = <<<EOT
 
-$target2 = 'async function generateStudyPlan() {';
-
-$replace2 = 'async function saveCurrentPlan(planId) {
-    const name = prompt("Nhập tên để dễ nhớ cho kế hoạch này:", window.currentActivePlan.name);
-    if (name === null) return;
-    
-    try {
-        const res = await fetch(`/api/v1/study-plans/${planId}/save`, {
-            method: \'POST\',
-            headers: { \'Content-Type\': \'application/json\', \'X-CSRF-TOKEN\': CSRF_TOKEN },
-            body: JSON.stringify({ name: name })
+function getCurrentSemester() {
+    let maxSem = 0;
+    const grades = {};
+    document.querySelectorAll('.grade-input').forEach(input => {
+        if (input.value !== '') {
+            grades[parseInt(input.dataset.subjectId)] = parseFloat(input.value);
+        }
+    });
+    if (typeof currentCourses !== 'undefined') {
+        currentCourses.forEach(c => {
+            if (c.grade !== null) grades[c.id] = c.grade;
         });
-        const resData = await res.json();
-        if (resData.success) {
-            showToast(\'Đã lưu kế hoạch thành công!\', \'success\');
-            window.currentActivePlan.is_saved = true;
-            window.currentActivePlan.name = name;
-            renderStudyPlan(window.currentActivePlan);
-        } else {
-            showToast(\'Có lỗi xảy ra khi lưu kế hoạch\', \'error\');
-        }
-    } catch(e) {
-        showToast(\'Lỗi mạng\', \'error\');
     }
-}
 
-function openSavedPlansModal() {
-    const modal = document.getElementById(\'saved-plans-modal-overlay\');
-    modal.style.display = \'flex\';
-    fetchSavedPlansList();
-}
-
-function closeSavedPlansModal() {
-    const modal = document.getElementById(\'saved-plans-modal-overlay\');
-    modal.style.display = \'none\';
-}
-
-async function fetchSavedPlansList() {
-    const listContainer = document.getElementById(\'saved-plans-list\');
-    listContainer.innerHTML = \'<p style="color:var(--muted); text-align:center;">Đang tải...</p>\';
-    try {
-        const res = await fetch(\'/api/v1/study-plans/saved\');
-        const resData = await res.json();
-        if(resData.success && resData.data.length > 0) {
-            listContainer.innerHTML = resData.data.map(plan => `
-                <div class="saved-plan-item" onclick="loadSavedPlan(${plan.id})">
-                    <div style="font-weight:600; margin-bottom:4px;">${plan.name} <span class="pill pill-lavender" style="font-size:0.7rem; padding:2px 6px;">${plan.mode.toUpperCase()}</span></div>
-                    <div style="font-size:0.8rem; color:var(--muted);">Cập nhật: ${new Date(plan.updated_at).toLocaleString(\'vi-VN\')}</div>
-                </div>
-            `).join(\'\');
-        } else {
-            listContainer.innerHTML = \'<p style="color:var(--muted); text-align:center;">Chưa có kế hoạch nào được lưu.</p>\';
+    if (typeof SUBJECTS_BY_SEM !== 'undefined') {
+        for (const [semName, subjects] of Object.entries(SUBJECTS_BY_SEM)) {
+            const semNum = parseInt(semName);
+            for (const sub of subjects) {
+                if (grades[sub.id] !== undefined) {
+                    if (!isNaN(semNum) && semNum > maxSem) {
+                        maxSem = semNum;
+                    }
+                }
+            }
         }
-    } catch(e) {
-        listContainer.innerHTML = \'<p style="color:var(--error); text-align:center;">Lỗi tải dữ liệu.</p>\';
     }
+    return maxSem + 1;
 }
 
-async function loadSavedPlan(planId) {
-    closeSavedPlansModal();
-    const loader = document.getElementById(\'planner-loader\');
-    const container = document.getElementById(\'study-plan-results\');
-    loader.style.display = \'block\';
-    container.style.opacity = \'0.3\';
-    try {
-        const res = await fetch(`/api/v1/study-plans/${planId}/load`);
-        const resData = await res.json();
-        if(resData.success) {
-            renderStudyPlan(resData.data);
-            showToast(\'Đã tải kế hoạch đã lưu!\', \'success\');
-        }
-    } catch(e) {
-        showToast(\'Lỗi khi tải kế hoạch.\', \'error\');
-    } finally {
-        loader.style.display = \'none\';
-        container.style.opacity = \'1\';
+EOT;
+
+if (strpos($content, 'function getCurrentSemester()') === false) {
+    $content = str_replace('let obStep = 0;', $helperCode . 'let obStep = 0;', $content);
+}
+
+$target1 = <<<EOT
+const OB_STEPS = [
+    { label: 'Bước 1 / 4', icon: '🎓', iconBg: '#f5f0e0', title: 'Chào mừng bạn!', desc: 'Hãy cho chúng tôi biết bạn đang theo học chương trình nào để hệ thống gợi ý chính xác nhất.' },
+    { label: 'Bước 2 / 4', icon: '📅', iconBg: '#faf5e8', title: 'Bạn đang học kỳ nào?', desc: 'Chọn học kỳ hiện tại để hệ thống xác định các môn phù hợp với tiến độ.' },
+    { label: 'Bước 3 / 4', icon: '📝', iconBg: '#faf5e8', title: 'Điểm số của bạn', desc: 'Nhập điểm các môn bạn đã học. Chỉ nhập những môn đã có điểm.' },
+    { label: 'Bước 4 / 4', icon: '🏆', iconBg: '#f0fdf4', title: 'Mục tiêu tốt nghiệp', desc: 'Bạn muốn hoàn thành chương trình trong bao nhiêu năm?' },
+];
+EOT;
+
+$rep1 = <<<EOT
+const OB_STEPS = [
+    { label: 'Bước 1 / 2', icon: '🎓', iconBg: '#f5f0e0', title: 'Chào mừng bạn!', desc: 'Hãy cho chúng tôi biết bạn đang theo học chương trình nào để hệ thống gợi ý chính xác nhất.' },
+    { label: 'Bước 2 / 2', icon: '📝', iconBg: '#faf5e8', title: 'Điểm số của bạn', desc: 'Nhập điểm các môn bạn đã học. Chỉ nhập những môn đã có điểm.' },
+];
+EOT;
+$content = str_replace($target1, $rep1, $content);
+
+$target2 = <<<EOT
+    } else if (obStep === 1) {
+        const btns = Array.from({ length: 8 }, (_, i) => i + 1).map(i => `<button class="ob-sem-btn \${obData.current_semester === i ? 'selected' : ''}" onclick="obSelectSem(\${i},this)">Học kỳ \${i}</button>`).join('');
+        body.innerHTML = `<div class="ob-semester-grid">\${btns}</div>`;
+    } else if (obStep === 2) {
+EOT;
+$rep2 = <<<EOT
+    } else if (obStep === 1) {
+EOT;
+$content = str_replace($target2, $rep2, $content);
+
+$target3 = <<<EOT
+    } else if (obStep === 3) {
+        const years = [3, 4, 5, 6];
+        const descs = { 3: 'Rất nhanh', 4: 'Tiêu chuẩn', 5: 'Bình thường', 6: 'Linh hoạt' };
+        const btns = years.map(y => `<button class="ob-year-btn \${obData.target_years === y ? 'selected' : ''}" onclick="obSelectYear(\${y},this)">\${y} năm<small>\${descs[y]}</small></button>`).join('');
+        body.innerHTML = `<div class="ob-year-grid">\${btns}</div><p style="margin-top:var(--sp-md);font-size:0.8rem;color:var(--muted);text-align:center;">Thông thường chương trình Đại học 4 năm gồm 8 học kỳ.</p>`;
     }
-}
+EOT;
+$rep3 = <<<EOT
 
-async function generateStudyPlan() {';
+EOT;
+$content = str_replace($target3, $rep3, $content);
 
-$contentNorm = str_replace("\r\n", "\n", $content);
-$target1Norm = str_replace("\r\n", "\n", $target1);
-$replace1Norm = str_replace("\r\n", "\n", $replace1);
-$target2Norm = str_replace("\r\n", "\n", $target2);
-$replace2Norm = str_replace("\r\n", "\n", $replace2);
+$target4 = <<<EOT
+    progText.textContent = `Bước \${obStep + 1} / 4`;
+    if (obStep === 3) { btnNext.textContent = '🎉 Hoàn thành!'; btnNext.className = 'ob-btn-next finish'; }
+EOT;
+$rep4 = <<<EOT
+    progText.textContent = `Bước \${obStep + 1} / 2`;
+    if (obStep === 1) { btnNext.textContent = '🎉 Hoàn thành!'; btnNext.className = 'ob-btn-next finish'; }
+EOT;
+$content = str_replace($target4, $rep4, $content);
 
-if (strpos($contentNorm, $target1Norm) !== false) {
-    $contentNorm = str_replace($target1Norm, $replace1Norm, $contentNorm);
-    $contentNorm = str_replace($target2Norm, $replace2Norm, $contentNorm);
-    file_put_contents($file, $contentNorm);
-    echo "Success\n";
-} else {
-    echo "Failed to find target1\n";
-}
+$target5 = <<<EOT
+    if (obStep === 1 && !obData.current_semester) { showToast('Vui lòng chọn học kỳ hiện tại!', 'error'); return; }
+    if (obStep === 3) { if (!obData.target_years) { showToast('Vui lòng chọn mục tiêu tốt nghiệp!', 'error'); return; } obFinish(); return; }
+EOT;
+$rep5 = <<<EOT
+    if (obStep === 1) { obFinish(); return; }
+EOT;
+$content = str_replace($target5, $rep5, $content);
+
+$content = str_replace("JSON.stringify({ academic_year: obData.academic_year, program_type: obData.program_type, current_semester: obData.current_semester, target_years: obData.target_years })", "JSON.stringify({ academic_year: obData.academic_year, program_type: obData.program_type })", $content);
+
+$target6 = <<<EOT
+    if (data.current_semester) document.getElementById('target_semester').value = data.current_semester;
+    if (data.target_years) document.getElementById('target_years').value = data.target_years;
+EOT;
+$content = str_replace($target6, "", $content);
+
+$content = str_replace("current_semester: parseInt(document.getElementById('target_semester').value), target_years: parseInt(document.getElementById('target_years').value), ", "", $content);
+$content = str_replace("current_semester: parseInt(document.getElementById('target_semester').value), target_years: parseInt(document.getElementById('target_years').value)", "", $content);
+
+$content = str_replace("document.getElementById('target_semester').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); updateEarnedCredits(); fetchSuggestions(); });", "", $content);
+$content = str_replace("document.getElementById('target_years').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); updateCreditStats(); });", "", $content);
+
+$target7 = <<<EOT
+        if (prefs.current_semester) document.getElementById('target_semester').value = prefs.current_semester;
+        if (prefs.target_years) document.getElementById('target_years').value = prefs.target_years;
+EOT;
+$content = str_replace($target7, "", $content);
+
+$target8 = <<<EOT
+    const years = parseInt(document.getElementById('target_years').value);
+    const totalSem = years * 2;
+    document.getElementById('stat-total-semesters').textContent = totalSem;
+    updateEarnedCredits();
+
+    // Update KPI card
+    const curSem = document.getElementById('target_semester')?.value;
+EOT;
+$rep8 = <<<EOT
+    document.getElementById('stat-total-semesters').textContent = 8;
+    updateEarnedCredits();
+
+    // Update KPI card
+    const curSem = getCurrentSemester();
+EOT;
+$content = str_replace($target8, $rep8, $content);
+
+$target9 = <<<EOT
+    const years = parseInt(document.getElementById('target_years').value);
+    const totalSem = years * 3;
+    const currentSem = parseInt(document.getElementById('target_semester').value);
+EOT;
+$rep9 = <<<EOT
+    const totalSem = 8;
+    const currentSem = getCurrentSemester();
+EOT;
+$content = str_replace($target9, $rep9, $content);
+
+$content = str_replace("const semester = document.getElementById('target_semester').value;", "const semester = getCurrentSemester();", $content);
+
+$target10 = <<<EOT
+    const sel = document.getElementById('target_semester');
+    const cur = parseInt(sel.value);
+EOT;
+$rep10 = <<<EOT
+    const cur = getCurrentSemester();
+EOT;
+$content = str_replace($target10, $rep10, $content);
+$content = str_replace("if (cur < 8) { sel.value = cur + 1; } else { showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success'); }", "if (cur >= 8) { showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success'); }", $content);
+
+$target11 = <<<EOT
+    const targetYears = parseInt(document.getElementById('target_years')?.value || 4);
+    const currentSem = parseInt(document.getElementById('target_semester')?.value || 1);
+    const totalSem = targetYears * 3;
+EOT;
+$rep11 = <<<EOT
+    const currentSem = getCurrentSemester();
+    const totalSem = 8;
+EOT;
+$content = str_replace($target11, $rep11, $content);
+
+
+file_put_contents($filepath, $content);
+echo "JS modified successfully.\n";
+
+?>

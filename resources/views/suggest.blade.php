@@ -119,22 +119,6 @@
                     @endforeach
                 </select>
             </div>
-            <div class="input-group">
-                <label class="input-label" for="target_semester">Học kỳ hiện tại</label>
-                <select id="target_semester" class="clay-select" onchange="savePreferences()">
-                    @for($i = 1; $i <= 8; $i++)
-                        <option value="{{ $i }}" {{ (Auth::user()->pref_current_semester ?? 1) == $i ? 'selected' : '' }}>Học kỳ {{ $i }}</option>
-                    @endfor
-                </select>
-            </div>
-            <div class="input-group">
-                <label class="input-label" for="target_years">Mục tiêu tốt nghiệp</label>
-                <select id="target_years" class="clay-select" onchange="updateCreditStats(); savePreferences()">
-                    @for($y = 3; $y <= 6; $y++)
-                        <option value="{{ $y }}" {{ (Auth::user()->pref_target_years ?? 4) == $y ? 'selected' : '' }}>{{ $y }} năm</option>
-                    @endfor
-                </select>
-            </div>
         </div>
         <div class="config-stats">
             <div class="config-stat">

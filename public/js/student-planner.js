@@ -44,14 +44,41 @@ function switchTab(tabId, navEl) {
 }
 
 // ─── Onboarding State ────────────────────────────────────────────────────
+
+function getCurrentSemester() {
+    let maxSem = 0;
+    const grades = {};
+    document.querySelectorAll('.grade-input').forEach(input => {
+        if (input.value !== '') {
+            grades[parseInt(input.dataset.subjectId)] = parseFloat(input.value);
+        }
+    });
+    if (typeof currentCourses !== 'undefined') {
+        currentCourses.forEach(c => {
+            if (c.grade !== null) grades[c.id] = c.grade;
+        });
+    }
+
+    if (typeof SUBJECTS_BY_SEM !== 'undefined') {
+        for (const [semName, subjects] of Object.entries(SUBJECTS_BY_SEM)) {
+            const semNum = parseInt(semName);
+            for (const sub of subjects) {
+                if (grades[sub.id] !== undefined) {
+                    if (!isNaN(semNum) && semNum > maxSem) {
+                        maxSem = semNum;
+                    }
+                }
+            }
+        }
+    }
+    return maxSem + 1;
+}
 let obStep = 0;
 let obData = { academic_year: null, program_type: null, current_semester: null, target_years: null, grades: {} };
 
 const OB_STEPS = [
-    { label: 'Bước 1 / 4', icon: '🎓', iconBg: '#f5f0e0', title: 'Chào mừng bạn!', desc: 'Hãy cho chúng tôi biết bạn đang theo học chương trình nào để hệ thống gợi ý chính xác nhất.' },
-    { label: 'Bước 2 / 4', icon: '📅', iconBg: '#faf5e8', title: 'Bạn đang học kỳ nào?', desc: 'Chọn học kỳ hiện tại để hệ thống xác định các môn phù hợp với tiến độ.' },
-    { label: 'Bước 3 / 4', icon: '📝', iconBg: '#faf5e8', title: 'Điểm số của bạn', desc: 'Nhập điểm các môn bạn đã học. Chỉ nhập những môn đã có điểm.' },
-    { label: 'Bước 4 / 4', icon: '🏆', iconBg: '#f0fdf4', title: 'Mục tiêu tốt nghiệp', desc: 'Bạn muốn hoàn thành chương trình trong bao nhiêu năm?' },
+    { label: 'Bước 1 / 2', icon: '🎓', iconBg: '#f5f0e0', title: 'Chào mừng bạn!', desc: 'Hãy cho chúng tôi biết bạn đang theo học chương trình nào để hệ thống gợi ý chính xác nhất.' },
+    { label: 'Bước 2 / 2', icon: '📝', iconBg: '#faf5e8', title: 'Điểm số của bạn', desc: 'Nhập điểm các môn bạn đã học. Chỉ nhập những môn đã có điểm.' },
 ];
 
 function renderObDots() {
@@ -85,9 +112,6 @@ function renderObBody() {
                 <div class="ob-input-group"><label>Hệ đào tạo</label><select class="ob-select" id="ob-program-type" onchange="obData.program_type=this.value"><option value="">-- Chọn hệ đào tạo --</option>${typeOpts}</select></div>
             </div>`;
     } else if (obStep === 1) {
-        const btns = Array.from({ length: 8 }, (_, i) => i + 1).map(i => `<button class="ob-sem-btn ${obData.current_semester === i ? 'selected' : ''}" onclick="obSelectSem(${i},this)">Học kỳ ${i}</button>`).join('');
-        body.innerHTML = `<div class="ob-semester-grid">${btns}</div>`;
-    } else if (obStep === 2) {
         let sectionsHtml = '';
         for (const [semName, subjects] of Object.entries(SUBJECTS_BY_SEM)) {
             const rows = subjects.map(sub => {
@@ -106,19 +130,14 @@ function renderObBody() {
             sectionsHtml += `<div class="ob-semester-section"><div class="ob-semester-section-title">Học kỳ chuẩn ${semName}</div>${rows}</div>`;
         }
         body.innerHTML = `<div class="ob-warning"><span class="ob-warning-icon">⚠️</span><p><strong>Lưu ý:</strong> Chỉ nhập điểm những môn bạn <strong>đã học và có kết quả</strong>.</p></div><div class="ob-subjects-scroll">${sectionsHtml}</div>`;
-    } else if (obStep === 3) {
-        const years = [3, 4, 5, 6];
-        const descs = { 3: 'Rất nhanh', 4: 'Tiêu chuẩn', 5: 'Bình thường', 6: 'Linh hoạt' };
-        const btns = years.map(y => `<button class="ob-year-btn ${obData.target_years === y ? 'selected' : ''}" onclick="obSelectYear(${y},this)">${y} năm<small>${descs[y]}</small></button>`).join('');
-        body.innerHTML = `<div class="ob-year-grid">${btns}</div><p style="margin-top:var(--sp-md);font-size:0.8rem;color:var(--muted);text-align:center;">Thông thường chương trình Đại học 4 năm gồm 8 học kỳ.</p>`;
     }
 
     const btnBack = document.getElementById('ob-btn-back');
     const btnNext = document.getElementById('ob-btn-next');
     const progText = document.getElementById('ob-progress-text');
     btnBack.disabled = obStep === 0;
-    progText.textContent = `Bước ${obStep + 1} / 4`;
-    if (obStep === 3) { btnNext.textContent = '🎉 Hoàn thành!'; btnNext.className = 'ob-btn-next finish'; }
+    progText.textContent = `Bước ${obStep + 1} / 2`;
+    if (obStep === 1) { btnNext.textContent = '🎉 Hoàn thành!'; btnNext.className = 'ob-btn-next finish'; }
     else { btnNext.innerHTML = 'Tiếp theo →'; btnNext.className = 'ob-btn-next'; }
 }
 
@@ -142,8 +161,7 @@ function obGradeChange(id, input) {
 
 function obNext() {
     if (obStep === 0) { const yr = document.getElementById('ob-academic-year')?.value; const pt = document.getElementById('ob-program-type')?.value; if (!yr || !pt) { showToast('Vui lòng chọn đầy đủ niên khóa và hệ đào tạo!', 'error'); return; } obData.academic_year = yr; obData.program_type = pt; }
-    if (obStep === 1 && !obData.current_semester) { showToast('Vui lòng chọn học kỳ hiện tại!', 'error'); return; }
-    if (obStep === 3) { if (!obData.target_years) { showToast('Vui lòng chọn mục tiêu tốt nghiệp!', 'error'); return; } obFinish(); return; }
+    if (obStep === 1) { obFinish(); return; }
     obStep++; renderObDots(); renderObHeader(); renderObBody();
 }
 
@@ -153,7 +171,7 @@ async function obFinish() {
     const btnNext = document.getElementById('ob-btn-next');
     btnNext.disabled = true; btnNext.textContent = '⏳ Đang lưu...';
     try {
-        await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify({ academic_year: obData.academic_year, program_type: obData.program_type, current_semester: obData.current_semester, target_years: obData.target_years }) });
+        await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify({ academic_year: obData.academic_year, program_type: obData.program_type }) });
         const gradesToSave = Object.entries(obData.grades).map(([sid, grade]) => ({ subject_id: parseInt(sid), grade }));
         if (gradesToSave.length > 0) await fetch('/grades/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify(gradesToSave) });
         closeOnboarding(); applyPreferencesToUI(obData);
@@ -167,8 +185,7 @@ function closeOnboarding() { document.getElementById('ob-overlay').classList.add
 function applyPreferencesToUI(data) {
     if (data.academic_year) document.getElementById('academic_year').value = data.academic_year;
     if (data.program_type) document.getElementById('program_type').value = data.program_type;
-    if (data.current_semester) document.getElementById('target_semester').value = data.current_semester;
-    if (data.target_years) document.getElementById('target_years').value = data.target_years;
+
     Object.entries(data.grades).forEach(([sid, grade]) => { const input = document.getElementById(`grade-${sid}`); if (input) { input.value = grade; onGradeChange(parseInt(sid), input, true); } });
     document.getElementById('config-dot')?.remove();
     updateCreditStats(); fetchSuggestions();
@@ -221,7 +238,7 @@ function savePreferences() {
     clearTimeout(prefTimer);
     prefTimer = setTimeout(async () => {
         try {
-            const payload = { academic_year: document.getElementById('academic_year').value, program_type: document.getElementById('program_type').value, current_semester: parseInt(document.getElementById('target_semester').value), target_years: parseInt(document.getElementById('target_years').value), current_courses: currentCourses };
+            const payload = { academic_year: document.getElementById('academic_year').value, program_type: document.getElementById('program_type').value, current_courses: currentCourses };
             const res = await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify(payload) });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             showSaveIndicator('saved', 'Đã lưu cấu hình ✓');
@@ -284,13 +301,11 @@ async function loadGradesFromDB() {
 // CREDIT STATS
 // ═══════════════════════════════════════════════════════════════
 function updateCreditStats() {
-    const years = parseInt(document.getElementById('target_years').value);
-    const totalSem = years * 2;
-    document.getElementById('stat-total-semesters').textContent = totalSem;
+    document.getElementById('stat-total-semesters').textContent = 8;
     updateEarnedCredits();
 
     // Update KPI card
-    const curSem = document.getElementById('target_semester')?.value;
+    const curSem = getCurrentSemester();
     if (curSem) document.getElementById('kpi-semester').textContent = `HK ${curSem}`;
 }
 
@@ -300,9 +315,8 @@ function updateEarnedCredits() {
     currentCourses.forEach(c => { if (c.grade !== null && c.grade > 5.0) earned += (c.credits || 0); });
     document.getElementById('stat-earned-credits').textContent = earned;
 
-    const years = parseInt(document.getElementById('target_years').value);
-    const totalSem = years * 3;
-    const currentSem = parseInt(document.getElementById('target_semester').value);
+    const totalSem = 8;
+    const currentSem = getCurrentSemester();
     const remaining = Math.max(0, TOTAL_CREDITS - earned);
     const remSem = Math.max(1, totalSem - (currentSem - 1));
     const perSem = remaining === 0 ? 0 : Math.ceil(remaining / remSem);
@@ -502,7 +516,7 @@ function getFailedSubjectIds() {
 }
 
 async function fetchSuggestions() {
-    const semester = document.getElementById('target_semester').value;
+    const semester = getCurrentSemester();
     const loader = document.getElementById('loader');
     const suggestionsContainer = document.getElementById('suggestions-list');
     loader.style.display = 'flex'; suggestionsContainer.style.opacity = '0.3';
@@ -520,7 +534,7 @@ async function fetchSuggestions() {
         if (window.currentActivePlan && window.currentActivePlan.mode) {
             const mode = window.currentActivePlan.mode;
             let maxCredits = 18; // default normal
-            if (mode === 'fast') maxCredits = 25;
+            if (mode === 'fast') maxCredits = 22;
             else if (mode === 'slow') maxCredits = 14;
 
             let currentTotal = 0;
@@ -652,8 +666,7 @@ function completeSemester() {
     if (unfilled.length > 0) { showToast(`Còn ${unfilled.length} môn chưa điền điểm!`, 'error'); return; }
     if (currentCourses.length === 0) { showToast('Chưa có môn nào trong danh sách!', 'error'); return; }
     const snapshot = currentCourses.map(c => ({ ...c }));
-    const sel = document.getElementById('target_semester');
-    const cur = parseInt(sel.value);
+    const cur = getCurrentSemester();
     saveSemesterHistory(cur, snapshot.map(c => ({ id: c.id, grade: c.grade })));
     currentCourses = []; renderCurrentCourses();
     snapshot.forEach(({ id, grade }) => {
@@ -663,7 +676,7 @@ function completeSemester() {
         input.value = grade; onGradeChange(id, input, true);
     });
     saveMultipleGrades(snapshot.map(c => ({ subject_id: c.id, grade: c.grade })));
-    if (cur < 8) { sel.value = cur + 1; } else { showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success'); }
+    if (cur >= 8) { showToast('Đã hoàn thành toàn bộ chương trình! 🎓', 'success'); }
     savePreferences(); fetchSuggestions(); updateEarnedCredits(); scheduleChartRefresh();
     showSemResultModal(cur, snapshot);
     // Update nav badge
@@ -685,8 +698,7 @@ function showSemResultModal(semNumber, snapshot) {
     const passedCredits = passSubjects.reduce((s, c) => s + (c.credits || 0), 0);
     let totalEarned = 0;
     document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 5.0) totalEarned += parseInt(input.dataset.credits || 0); });
-    const targetYears = parseInt(document.getElementById('target_years').value) || 4;
-    const totalSem = targetYears * 2;
+    const totalSem = 8;
     const nextSem = Math.min(semNumber + 1, 8);
     const remSem = Math.max(1, totalSem - semNumber);
     const remCredits = Math.max(0, TOTAL_CREDITS - totalEarned);
@@ -805,8 +817,8 @@ function showToast(msg, type = 'success') {
 // ═══════════════════════════════════════════════════════════════
 document.getElementById('academic_year').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); fetchSuggestions(); });
 document.getElementById('program_type').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); fetchSuggestions(); });
-document.getElementById('target_semester').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); updateEarnedCredits(); fetchSuggestions(); });
-document.getElementById('target_years').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); updateCreditStats(); });
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // INIT
@@ -819,8 +831,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else {
         if (prefs.academic_year) document.getElementById('academic_year').value = prefs.academic_year;
         if (prefs.program_type) document.getElementById('program_type').value = prefs.program_type;
-        if (prefs.current_semester) document.getElementById('target_semester').value = prefs.current_semester;
-        if (prefs.target_years) document.getElementById('target_years').value = prefs.target_years;
+
         if (prefs.current_courses && prefs.current_courses.length > 0) {
             currentCourses = prefs.current_courses;
             localStorage.setItem('current_courses', JSON.stringify(currentCourses));
@@ -1194,9 +1205,8 @@ function renderDashboard() {
     for (const subs of Object.values(SUBJECTS_BY_SEM)) { subs.forEach(s => { subjectMap[s.id] = s; }); }
     allGrades = allGrades.map(g => ({ ...g, groupName: subjectMap[g.id]?.skillGroupName || 'Khác', name: subjectMap[g.id]?.name || '?' }));
 
-    const targetYears = parseInt(document.getElementById('target_years')?.value || 4);
-    const currentSem = parseInt(document.getElementById('target_semester')?.value || 1);
-    const totalSem = targetYears * 3;
+    const currentSem = getCurrentSemester();
+    const totalSem = 8;
     const remSem = Math.max(1, totalSem - currentSem + 1);
     const remCredits = Math.max(0, TOTAL_CREDITS - totalEarned);
     const neededPerSem = Math.ceil(remCredits / remSem);
@@ -1325,7 +1335,7 @@ const __origGradeChangeDash = window.onGradeChange;
 window.onGradeChange = function (id, input, skipSave = false) { __origGradeChangeDash(id, input, skipSave); clearTimeout(window._dashTimer); window._dashTimer = setTimeout(renderDashboard, 500); };
 const __origLoadGradesDash = window.loadGradesFromDB;
 window.loadGradesFromDB = async function () { await __origLoadGradesDash(); setTimeout(renderDashboard, 300); };
-['target_semester', 'target_years', 'academic_year'].forEach(id => { document.getElementById(id)?.addEventListener('change', () => { clearTimeout(window._dashTimer); window._dashTimer = setTimeout(renderDashboard, 300); }); });
+['academic_year'].forEach(id => { document.getElementById(id)?.addEventListener('change', () => { clearTimeout(window._dashTimer); window._dashTimer = setTimeout(renderDashboard, 300); }); });
 document.addEventListener('DOMContentLoaded', () => { renderDashboard(); });
 
 function openPrereqModal(subjectData) {
@@ -1873,8 +1883,11 @@ async function applySuggestionsToPlan() {
         }
     }
 
-    const confirmMsg = `Bạn sắp áp dụng gợi ý cho Học kỳ ${targetSemesterIndex}.\nLƯU Ý: Các môn học trong tương lai sẽ bị hệ thống tự động sắp xếp lại để tối ưu hóa lộ trình. Bạn có chắc chắn muốn tiếp tục không?`;
-    if (!window.confirm(confirmMsg)) {
+    const selectedSemester = getCurrentSemester();
+    targetSemesterIndex = Number.isFinite(selectedSemester) && selectedSemester > 0 ? selectedSemester : 1;
+
+    const finalConfirmMsg = `Bạn sắp áp dụng gợi ý cho Học kỳ ${targetSemesterIndex}.\nLưu ý: Các môn tương lai sẽ được sắp xếp lại. Bạn có chắc chắn muốn tiếp tục không?`;
+    if (!window.confirm(finalConfirmMsg)) {
         return;
     }
 

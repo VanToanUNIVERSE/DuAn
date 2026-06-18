@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\Subject;
+use App\Models\TrainingProgram;
 use App\Models\UserGrade;
-use Illuminate\Support\Facades\Log;
 
 class RecommendationService
 {
@@ -18,11 +18,28 @@ class RecommendationService
     {
         // 1. Get user's grades
         $userGrades = UserGrade::where('user_id', $userId)->get();
-        $passedSubjectIds = $userGrades->where('status', 'passed')->pluck('subject_id')->toArray();
-        $failedSubjectIds = $userGrades->where('status', 'failed')->pluck('subject_id')->toArray();
+        $passedSubjectIds = $userGrades->filter(function ($grade) {
+            return $grade->grade > 5.0 || in_array($grade->status, ['passed', 'pass']);
+        })->pluck('subject_id')->toArray();
+        $failedSubjectIds = $userGrades->filter(function ($grade) {
+            return ($grade->grade !== null && $grade->grade <= 5.0) || in_array($grade->status, ['failed', 'fail']);
+        })->pluck('subject_id')->toArray();
+        $gradedSubjectIds = $userGrades->filter(function($grade) {
+            return $grade->grade !== null || $grade->status !== null;
+        })->pluck('subject_id')->toArray();
 
-        // 2. Get all available subjects (could be filtered by user's curriculum in the future)
-        $allSubjects = Subject::with(['prerequisites', 'relatedRelations'])->get();
+        $user = \App\Models\User::find($userId);
+        $allSubjects = $this->getSubjectsForUserCurriculum($user);
+
+        $currentSemester = 1;
+        foreach ($gradedSubjectIds as $pid) {
+            $sub = $allSubjects->firstWhere('id', $pid);
+            if ($sub && isset($sub->assigned_semester_index)) {
+                if ($sub->assigned_semester_index >= $currentSemester) {
+                    $currentSemester = $sub->assigned_semester_index + 1;
+                }
+            }
+        }
 
         $recommendations = [];
 
@@ -117,6 +134,15 @@ class RecommendationService
                 $reasons[] = "Mở khóa {$dependentCount} môn học khác";
             }
 
+            if ($subject->assigned_semester_index) {
+                $distance = abs($subject->assigned_semester_index - $currentSemester);
+                $score -= ($distance * 10);
+
+                if ($distance === 0) {
+                    $reasons[] = 'Dung hoc ky chuan';
+                }
+            }
+
             $recommendations[] = [
                 'subject' => $subject,
                 'score' => $score,
@@ -130,5 +156,42 @@ class RecommendationService
         });
 
         return $recommendations;
+    }
+
+    private function getSubjectsForUserCurriculum($user)
+    {
+        $frameworkId = null;
+
+        if ($user && $user->pref_academic_year && $user->pref_program_type) {
+            $program = TrainingProgram::where('academic_year', $user->pref_academic_year)
+                ->where('program_type', $user->pref_program_type)
+                ->first();
+
+            if ($program && $framework = $program->curriculumFrameworks()->first()) {
+                $frameworkId = $framework->id;
+            }
+        }
+
+        if (!$frameworkId) {
+            return Subject::with(['prerequisites', 'relatedRelations'])->get();
+        }
+
+        $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+            ->with(['subject.prerequisites', 'subject.relatedRelations', 'semester'])
+            ->get();
+
+        $subjects = collect();
+        foreach ($curriculumSubjects as $curriculumSubject) {
+            if (!$curriculumSubject->subject) {
+                continue;
+            }
+
+            $subject = $curriculumSubject->subject;
+            $subject->assigned_semester_index = (int) ($curriculumSubject->semester?->name ?? $subject->semester_id ?? 1);
+            $subject->setRelation('semester', $curriculumSubject->semester);
+            $subjects->push($subject);
+        }
+
+        return $subjects->unique('id')->values();
     }
 }
