@@ -49,11 +49,7 @@
 
         <div class="sidebar-actions">
             <span class="sidebar-nav-label" style="padding:0 var(--sp-xs) 4px;">Công cụ</span>
-            <button class="btn-sidebar-action btn-grades-sb" onclick="toggleGradeDrawer()">
-                <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg>
-                Nhập điểm
-                <span class="nav-badge" id="grade-count-badge" style="position:static;margin-left:auto;">0</span>
-            </button>
+
             <button class="btn-sidebar-action btn-history-sb" onclick="toggleHistoryDrawer()">
                 <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
                 Lịch sử HK

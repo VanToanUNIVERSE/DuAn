@@ -1733,4 +1733,54 @@
             border-radius: 6px; padding: 12px; font-size: 0.95rem; font-weight: 700;
             cursor: pointer; transition: background 0.2s;
         }
-        .prereq-btn-ok:hover { background: #003db3; }
+        
+        /* ═══════════════════════════════════════════════════════════
+           DRAG AND DROP STUDY PLAN
+        ═══════════════════════════════════════════════════════════ */
+        .study-plan-semester {
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .study-plan-semester.drag-over {
+            background-color: rgba(16, 185, 129, 0.05); /* Lục nhạt */
+            border-color: #10b981;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) inset;
+        }
+
+        .study-plan-subject {
+            transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+            cursor: grab;
+        }
+        .study-plan-subject:active {
+            cursor: grabbing;
+        }
+        .study-plan-subject.is-dragging {
+            opacity: 0.4;
+            transform: scale(0.95);
+        }
+
+        /* ── Highly Recommended Effect ── */
+        .highly-recommended {
+            position: relative;
+            border-color: #eab308 !important; /* Vàng sáng */
+            box-shadow: 0 0 8px rgba(234, 179, 8, 0.3);
+            animation: pulse-glow 2s infinite ease-in-out;
+        }
+        .highly-recommended::before {
+            content: "⭐ Quan trọng";
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            background: #eab308;
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        @keyframes pulse-glow {
+            0%   { box-shadow: 0 0 4px rgba(234, 179, 8, 0.3); }
+            50%  { box-shadow: 0 0 12px rgba(234, 179, 8, 0.6); }
+            100% { box-shadow: 0 0 4px rgba(234, 179, 8, 0.3); }
+        }        .prereq-btn-ok:hover { background: #003db3; }

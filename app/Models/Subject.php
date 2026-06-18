@@ -24,6 +24,7 @@ class Subject extends Model
         'semester_id',
         'note',
         'requirement_type',
+        'offered_in',
     ];
 
 

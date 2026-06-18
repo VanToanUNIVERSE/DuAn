@@ -32,17 +32,62 @@ class RecommendationService
                 continue;
             }
 
-            // Check prerequisites
+            // Check prerequisites & Collect info
             $hasUnmetPrerequisite = false;
-            foreach ($subject->prerequisites as $prerequisite) {
-                if (!in_array($prerequisite->id, $passedSubjectIds)) {
+            $prereqDetails = [];
+            
+            // 1. Explicit prerequisites
+            foreach ($subject->prerequisites as $prereq) {
+                $isPassed = in_array($prereq->id, $passedSubjectIds);
+                if (!$isPassed) {
                     $hasUnmetPrerequisite = true;
-                    break;
+                }
+                $prereqDetails[] = [
+                    'id' => $prereq->id,
+                    'name' => $prereq->name,
+                    'is_passed' => $isPassed
+                ];
+            }
+
+            // 2. Implicit prerequisites (from requirement_type)
+            $reqType = $subject->requirement_type;
+            if ($reqType && $reqType !== 'none') {
+                $basicGroupIds = [1, 2, 3]; // Kiến thức giáo dục đại cương
+                $majorGroupIds = [4, 5];    // Kiến thức cơ sở ngành
+                $specializedGroupIds = [6, 7]; // Kiến thức chuyên ngành
+
+                $implicitPrereqSubjects = collect();
+                
+                if ($reqType === 'completed_basic') {
+                    $implicitPrereqSubjects = $allSubjects->whereIn('program_group_id', $basicGroupIds);
+                } elseif ($reqType === 'completed_major') {
+                    $implicitPrereqSubjects = $allSubjects->whereIn('program_group_id', $majorGroupIds);
+                } elseif ($reqType === 'completed_specialized') {
+                    $implicitPrereqSubjects = $allSubjects->whereIn('program_group_id', $specializedGroupIds);
+                } elseif ($reqType === 'completed_all') {
+                    $implicitPrereqSubjects = $allSubjects->where('id', '!=', $subject->id);
+                }
+
+                foreach ($implicitPrereqSubjects as $impSub) {
+                    if (collect($prereqDetails)->contains('id', $impSub->id)) continue;
+                    
+                    $isPassed = in_array($impSub->id, $passedSubjectIds);
+                    if (!$isPassed) {
+                        $hasUnmetPrerequisite = true;
+                    }
+                    $prereqDetails[] = [
+                        'id' => $impSub->id,
+                        'name' => $impSub->name,
+                        'is_passed' => $isPassed
+                    ];
                 }
             }
 
+            $subject->prerequisites_info = $prereqDetails;
+            $subject->can_study = !$hasUnmetPrerequisite;
+
             if ($hasUnmetPrerequisite) {
-                continue; // Cannot take this subject yet
+                continue;
             }
 
             // Calculate Score

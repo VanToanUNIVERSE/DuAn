@@ -30,6 +30,9 @@ Route::prefix('v1')->middleware('web')->group(function () {
     Route::prefix('study-plans')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\StudyPlanController::class, 'index']);
         Route::post('/generate', [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
+        Route::post('/update-grade', [\App\Http\Controllers\Api\StudyPlanController::class, 'updateGrade']);
+        Route::post('/adjust', [\App\Http\Controllers\Api\StudyPlanController::class, 'adjust']);
+        Route::post('/move-subject', [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
     });
 
     Route::get('/progress', [\App\Http\Controllers\Api\ProgressController::class, 'index']);

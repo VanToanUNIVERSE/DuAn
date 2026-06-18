@@ -512,7 +512,6 @@ let fetchTimer    = null;
             const mappedData = (resData.data || []).map(item => ({
                 ...item.subject,
                 suggestion_score: item.score,
-                can_study: true,
                 skill_evaluation: item.reasons.join(', ')
             }));
             renderSuggestions(mappedData,semester);
@@ -1419,21 +1418,65 @@ function renderStudyPlan(plan) {
 
     plan.semesters.forEach(sem => {
         html += `
-            <div class="clay-card">
-                <div class="card-title-row" style="border-bottom:1px solid var(--hairline); padding-bottom:12px; margin-bottom:12px;">
+            <div class="clay-card study-plan-semester" 
+                 data-semester-index="${sem.semester_index}"
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)" 
+                 ondrop="handleDrop(event, ${plan.id}, ${sem.semester_index})">
+                <div class="card-title-row" style="border-bottom:1px solid var(--hairline); padding-bottom:12px; margin-bottom:12px; pointer-events:none;">
                     <strong>Học kỳ ${sem.semester_index}</strong>
                     <span class="pill" style="background:#e8f8f3; color:#10b981;">${sem.expected_credits} Tín chỉ</span>
                 </div>
-                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:12px;">
+                <div class="semester-subjects-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:12px; min-height: 50px;">
         `;
 
         sem.subjects.forEach(ss => {
             const sub = ss.subject;
             if(sub) {
+                const hasGrade = ss.grade !== undefined && ss.grade !== null;
+                const isCompleted = hasGrade && ss.grade > 5.0;
+                const isFailed = hasGrade && ss.grade <= 5.0;
+                
+                const cardBg = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
+                const borderColor = isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
+                const draggableAttr = !isCompleted ? 'draggable="true" ondragstart="handleDragStart(event, ' + sub.id + ', ' + sem.semester_index + ')" ondragend="handleDragEnd(event)"' : '';
+                const highlyRecommendedClass = (!isCompleted && ss.is_highly_recommended) ? 'highly-recommended' : '';
+                
+                let statusHtml = '';
+                if (isCompleted) {
+                    statusHtml = '<span style="color:#10b981; font-size:0.85rem; font-weight:600;">✓ Pass</span>';
+                } else if (isFailed) {
+                    statusHtml = '<span style="color:#ef4444; font-size:0.85rem; font-weight:600;">✗ Rớt</span>';
+                }
+
                 html += `
-                    <div style="padding:12px; border:1px solid var(--hairline); border-radius:8px; background:var(--surface);">
-                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:4px;">${sub.name}</div>
-                        <div style="font-size:0.8rem; color:var(--muted);">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
+                    <div class="study-plan-subject ${highlyRecommendedClass}" 
+                         ${draggableAttr}
+                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative;">
+                        
+                        <button type="button" class="icon-btn" 
+                                style="position:absolute; top:8px; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
+                                onclick='openPrereqModal(${JSON.stringify(sub).replace(/'/g, "&#39;")})'
+                                title="Xem môn tiên quyết"
+                                onmousedown="event.stopPropagation()">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                            </svg>
+                        </button>
+
+                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:8px; padding-right:24px;">${sub.name}</div>
+                        <div style="font-size:0.8rem; color:var(--muted); margin-bottom:12px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
+                        
+                        <div style="display:flex; align-items:center; gap:8px;" onmousedown="event.stopPropagation()">
+                            <input type="number" 
+                                   class="ob-grade-input" 
+                                   placeholder="Điểm..." 
+                                   min="0" max="10" step="0.1" 
+                                   value="${hasGrade ? ss.grade : ''}"
+                                   style="width: 80px; height: 32px; font-size: 0.85rem;"
+                                   onchange="updatePlanGrade(${plan.id}, ${sub.id}, this)">
+                            ${statusHtml}
+                        </div>
                     </div>
                 `;
             }
@@ -1444,6 +1487,174 @@ function renderStudyPlan(plan) {
 
     html += '</div>';
     container.innerHTML = html;
+}
+
+// ─── Drag and Drop Handlers ───
+let draggedSubjectId = null;
+let draggedSourceSemester = null;
+
+function handleDragStart(event, subjectId, semesterIndex) {
+    draggedSubjectId = subjectId;
+    draggedSourceSemester = semesterIndex;
+    event.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => {
+        event.target.classList.add('is-dragging');
+    }, 0);
+}
+
+function handleDragEnd(event) {
+    event.target.classList.remove('is-dragging');
+    document.querySelectorAll('.study-plan-semester').forEach(el => el.classList.remove('drag-over'));
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const semesterCard = event.target.closest('.study-plan-semester');
+    if (semesterCard) {
+        semesterCard.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(event) {
+    const semesterCard = event.target.closest('.study-plan-semester');
+    if (semesterCard) {
+        semesterCard.classList.remove('drag-over');
+    }
+}
+
+async function handleDrop(event, planId, targetSemesterIndex) {
+    event.preventDefault();
+    const semesterCard = event.target.closest('.study-plan-semester');
+    if (semesterCard) {
+        semesterCard.classList.remove('drag-over');
+    }
+
+    if (!draggedSubjectId || draggedSourceSemester === targetSemesterIndex) {
+        return;
+    }
+
+    const loader = document.getElementById('planner-loader');
+    const container = document.getElementById('study-plan-results');
+    loader.style.display = 'block';
+    container.style.opacity = '0.3';
+
+    try {
+        const res = await fetch('/api/v1/study-plans/move-subject', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                study_plan_id: planId, 
+                subject_id: draggedSubjectId, 
+                target_semester_index: targetSemesterIndex 
+            })
+        });
+        
+        const resData = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(resData.error || 'Lỗi hệ thống');
+        }
+
+        if (resData.success && resData.data) {
+            renderStudyPlan(resData.data);
+            showToast('Di chuyển môn học thành công!', 'success');
+        }
+    } catch(e) {
+        showToast(e.message || 'Lỗi khi di chuyển môn học', 'error');
+    } finally {
+        loader.style.display = 'none';
+        container.style.opacity = '1';
+        draggedSubjectId = null;
+        draggedSourceSemester = null;
+    }
+}
+
+async function updatePlanGrade(planId, subjectId, inputEl) {
+    let grade = null;
+    let status = null;
+
+    if (inputEl.value.trim() !== '') {
+        grade = parseFloat(inputEl.value);
+        if (isNaN(grade) || grade < 0 || grade > 10) {
+            showToast('Điểm không hợp lệ', 'error');
+            return;
+        }
+        status = grade >= 5.0 ? 'passed' : 'failed';
+    }
+    
+    inputEl.disabled = true;
+    showSaveIndicator('saving', grade === null ? 'Đang xóa điểm...' : 'Đang cập nhật điểm...');
+    
+    try {
+        const res = await fetch('/api/v1/study-plans/update-grade', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ study_plan_id: planId, subject_id: subjectId, grade: grade, status: status })
+        });
+        
+        if (!res.ok) throw new Error('API error');
+        const resData = await res.json();
+        
+        inputEl.disabled = false;
+        showSaveIndicator('saved', grade === null ? 'Đã xóa điểm' : 'Đã lưu điểm');
+        
+        if (resData.success && resData.evaluation && grade !== null) {
+            const evaluation = resData.evaluation;
+            if (evaluation.status !== 'KEEP') {
+                if (confirm(`Hệ thống nhận thấy tiến độ thay đổi:\n"${evaluation.message}"\n\nBạn có muốn hệ thống tự động điều chỉnh kế hoạch học tập sang chế độ "${evaluation.suggested_mode}" không?`)) {
+                    adjustStudyPlan(planId, evaluation);
+                } else {
+                    fetchStudyPlans(); // Reload to show passed/failed state
+                }
+            } else {
+                fetchStudyPlans();
+            }
+        } else {
+            fetchStudyPlans();
+        }
+    } catch(e) {
+        inputEl.disabled = false;
+        showSaveIndicator('error', 'Lỗi lưu điểm');
+    }
+}
+
+async function adjustStudyPlan(planId, evaluation) {
+    const loader = document.getElementById('planner-loader');
+    const container = document.getElementById('study-plan-results');
+    loader.style.display = 'block';
+    container.style.opacity = '0.3';
+    
+    try {
+        const res = await fetch('/api/v1/study-plans/adjust', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ study_plan_id: planId, evaluation: evaluation })
+        });
+        if (!res.ok) throw new Error('API error');
+        const resData = await res.json();
+        if (resData.success && resData.data) {
+            renderStudyPlan(resData.data);
+            showToast('Đã tự động điều chỉnh kế hoạch học tập! ✨', 'success');
+        }
+    } catch(e) {
+        showToast('Lỗi khi điều chỉnh kế hoạch', 'error');
+    } finally {
+        loader.style.display = 'none';
+        container.style.opacity = '1';
+    }
 }
 
 // Initialize fetch study plans on load
