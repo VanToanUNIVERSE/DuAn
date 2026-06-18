@@ -123,11 +123,6 @@
 
 
 
-{{-- ══════════════════════════════════════════════════════════════════
-     HISTORY DRAWER (slide-in từ phải)
-══════════════════════════════════════════════════════════════════ --}}
-@include('components.history-drawer')
-
 {{-- ── SIDEBAR ── --}}
     @include('components.sidebar')
 
@@ -240,31 +235,7 @@
             </div>
         </div>
 
-        {{-- ════════════════════════════════════════════════════════
-             TAB: ĐỀ XUẤT MÔN HỌC
-        ════════════════════════════════════════════════════════ --}}
-        <div class="page-content tab-panel" id="tab-suggestions">
-            <div style="margin-bottom:var(--sp-xl);">
-                <h2 style="font-family:'Sora',sans-serif;font-size:1.4rem;font-weight:800;color:var(--ink);letter-spacing:-0.4px;margin-bottom:4px;">Môn Học Đề Xuất</h2>
-                <p style="color:var(--muted);font-size:0.88rem;">Dựa trên tiến độ và điểm số của bạn, hệ thống gợi ý các môn phù hợp.</p>
-            </div>
 
-            <div class="clay-card">
-                <div class="card-title-row">
-                    <div class="card-heading" style="display:flex; align-items:center;">
-                        ✨ Gợi Ý Học Kỳ Mới
-                        <button class="btn-info-clay" onclick="openScoreInfoModal()" title="Cách tính điểm" style="margin-left:12px; width:36px; height:36px; border-radius:50%; background:var(--canvas); color:var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.06); border:1px solid var(--hairline);">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="loader" id="loader">
-                    <div class="spinner"></div>
-                    <p style="color:var(--muted);font-size:0.9rem;">Hệ thống đang phân tích và lập lộ trình...</p>
-                </div>
-                <div id="suggestions-list" class="suggestion-list"></div>
-            </div>
-        </div>
 
         {{-- ════════════════════════════════════════════════════════
              TAB: BIỂU ĐỒ ĐIỂM (chi tiết)
@@ -339,33 +310,6 @@
         </div>
 
         {{-- ════════════════════════════════════════════════════════
-             TAB: MÔN ĐANG HỌC
-        ════════════════════════════════════════════════════════ --}}
-        <div class="page-content tab-panel" id="tab-courses">
-            <div style="margin-bottom:var(--sp-xl);">
-                <h2 style="font-family:'Sora',sans-serif;font-size:1.4rem;font-weight:800;color:var(--ink);letter-spacing:-0.4px;margin-bottom:4px;">Môn Đang Học Kỳ Này</h2>
-                <p style="color:var(--muted);font-size:0.88rem;">Thêm môn từ phần Đề Xuất, nhập điểm và hoàn tất học kỳ khi kết thúc.</p>
-            </div>
-
-            <div class="clay-card" id="current-courses-card">
-                <div class="card-title-row">
-                    <div class="card-heading" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                        📖 Danh Sách Môn
-                        <span class="counter-badge" id="cc-count">0</span>
-                        <span class="pill" id="cc-credits" style="background:var(--surface-soft);color:var(--muted);border:1px solid var(--hairline);font-size:0.75rem;">0 TC</span>
-                        <span class="pill" id="cc-recommend" style="background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;font-size:0.75rem;">Khuyên dùng: -- TC</span>
-                    </div>
-                    <button class="btn-complete btn-primary" id="btn-complete" onclick="completeSemester()" disabled>
-                        ✓ Hoàn tất học kỳ
-                    </button>
-                </div>
-                <div id="current-courses-list" class="course-list">
-                    <div class="current-courses-empty">Chưa có môn nào — vào <strong>Đề Xuất Môn Học</strong> và nhấn <strong>+ Thêm</strong>.</div>
-                </div>
-            </div>
-        </div>
-
-        {{-- ════════════════════════════════════════════════════════
              TAB: LẬP KẾ HOẠCH ĐA HỌC KỲ (NEW FEATURE)
         ════════════════════════════════════════════════════════ --}}
         <div class="page-content tab-panel" id="tab-planner">
@@ -384,9 +328,9 @@
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:4px;">Chế độ học (Mode)</label>
                         <select id="planner-mode" class="clay-select" style="min-width: 150px;">
-                            <option value="normal" selected>Bình thường (~18 TC/kỳ)</option>
-                            <option value="fast">Học vượt (~22 TC/kỳ)</option>
-                            <option value="slow">Thong thả (~14 TC/kỳ)</option>
+                            <option value="normal" selected>Bình thường (8 kỳ - 4 năm)</option>
+                            <option value="fast">Nhanh (6 kỳ - 3 năm)</option>
+                            <option value="slow">Chậm (10 kỳ - 5 năm)</option>
                         </select>
                     </div>
                     <div>
@@ -402,6 +346,48 @@
                     <p style="color:var(--muted);font-size:0.9rem;margin-top:10px;">Hệ thống đang chạy thuật toán Tham lam (Greedy) để phân bổ môn học...</p>
                 </div>
             </div>
+
+            <!-- Floating Action Button for Suggestions -->
+            <button class="btn-primary suggestion-fab" onclick="toggleSuggestionDrawer()" title="Xem môn học gợi ý" style="position: fixed; right: -5px; top: 50%; transform: translateY(-50%); background: var(--brand-mint); color: var(--ink); font-size: 1.5rem; padding: 12px 14px 12px 18px; border-radius: 24px 0 0 24px; display: flex; align-items: center; justify-content: center; box-shadow: -4px 0 16px rgba(0,0,0,0.1); z-index: 998; transition: all 0.2s; border: 1px solid var(--hairline); border-right: none; cursor: pointer;" onmouseover="this.style.right='0px'" onmouseout="this.style.right='-5px'">
+                ✨
+            </button>
+
+            <div id="suggestion-drawer" style="position: fixed; top: 0; right: -450px; width: 450px; max-width: 100vw; height: 100vh; background: var(--surface); box-shadow: -4px 0 24px rgba(0,0,0,0.12); z-index: 9999; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column;">
+                <div style="padding: 20px; border-bottom: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center; background: var(--brand-mint);">
+                    <div style="display:flex; align-items:center; gap: 8px;">
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--ink); font-weight: 700;">✨ Môn học gợi ý cho kỳ tới</h3>
+                        <span class="btn-info-clay" onclick="openScoreInfoModal()" title="Cách tính điểm" style="cursor:pointer; display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.5); color:var(--ink); border:1px solid rgba(0,0,0,0.1);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:16px;height:16px;"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
+                        </span>
+                    </div>
+                    <button onclick="toggleSuggestionDrawer()" style="background: none; border: none; font-size: 1.8rem; cursor: pointer; color: var(--ink); padding: 0; line-height: 1;">&times;</button>
+                </div>
+                <div style="padding: 16px; border-bottom: 1px solid var(--hairline); background: var(--surface-soft);">
+                    <button class="btn-primary" id="btn-apply-suggestions" onclick="applySuggestionsToPlan()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                        Áp dụng ngay vào kế hoạch
+                    </button>
+                    <p style="margin: 8px 0 0 0; font-size: 0.85rem; color: var(--muted); text-align: center;">Môn học sẽ được tự động thêm vào học kỳ tiếp theo</p>
+                </div>
+                <div style="padding: 20px; overflow-y: auto; flex: 1;">
+                    <div class="loader" id="loader">
+                        <div class="spinner"></div>
+                        <p style="color:var(--muted);font-size:0.9rem;">Hệ thống đang phân tích các môn học...</p>
+                    </div>
+                    <div id="suggestions-list" class="suggestion-list"></div>
+                </div>
+            </div>
+
+            <script>
+                function toggleSuggestionDrawer() {
+                    const drawer = document.getElementById('suggestion-drawer');
+                    if (drawer.style.right === '0px') {
+                        drawer.style.right = '-450px';
+                    } else {
+                        drawer.style.right = '0px';
+                    }
+                }
+            </script>
 
             <div id="study-plan-results">
                 <div class="empty-state">

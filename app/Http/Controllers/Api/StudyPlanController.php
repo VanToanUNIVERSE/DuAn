@@ -325,4 +325,38 @@ class StudyPlanController extends Controller
             'data' => $plan
         ]);
     }
+
+    public function applySuggestions(Request $request)
+    {
+        $userId = $request->input('user_id') ?? Auth::id();
+        if (!$userId) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $request->validate([
+            'study_plan_id' => 'required|exists:study_plans,id',
+            'subject_ids' => 'required|array',
+            'target_semester_index' => 'required|integer|min:1'
+        ]);
+
+        $plan = StudyPlan::with(['semesters.subjects'])->where('id', $request->input('study_plan_id'))->where('user_id', $userId)->first();
+        if (!$plan) {
+            return response()->json(['error' => 'Study plan not found'], 404);
+        }
+
+        $targetSemesterIndex = $request->input('target_semester_index');
+        $subjectIds = $request->input('subject_ids');
+
+        // Khởi tạo service để gọi hàm applySuggestionsAndRedistribute
+        $studyPlanService = app(\App\Services\StudyPlanService::class);
+        $plan = $studyPlanService->applySuggestionsAndRedistribute($plan->id, $subjectIds, $targetSemesterIndex);
+
+        $plan = $this->attachGrades($plan, $userId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Áp dụng gợi ý và rải môn thành công.',
+            'data' => $plan
+        ]);
+    }
 }

@@ -35,12 +35,12 @@ class TrainingProgramSeeder extends Seeder
             // Chương trình khung cho chính quy
             $regularFramework = CurriculumFramework::create([
                 'training_program_id' => $regularProgram->id,
-                'number_of_semesters' => 12, // 3 học kỳ / năm * 4 năm
+                'number_of_semesters' => 8, // 2 học kỳ / năm * 4 năm
                 'total_credits' => 120,
             ]);
 
-            // Học kỳ cho chính quy (12 học kỳ)
-            for ($i = 1; $i <= 12; $i++) {
+            // Học kỳ cho chính quy (8 học kỳ)
+            for ($i = 1; $i <= 8; $i++) {
                 Semester::create([
                     'curriculum_framework_id' => $regularFramework->id,
                     'name' => (string)$i,
@@ -61,12 +61,12 @@ class TrainingProgramSeeder extends Seeder
             // Chương trình khung cho tiên tiến
             $advancedFramework = CurriculumFramework::create([
                 'training_program_id' => $advancedProgram->id,
-                'number_of_semesters' => 12,
+                'number_of_semesters' => 8,
                 'total_credits' => 135, 
             ]);
 
-            // Học kỳ cho tiên tiến (12 học kỳ)
-            for ($i = 1; $i <= 12; $i++) {
+            // Học kỳ cho tiên tiến (8 học kỳ)
+            for ($i = 1; $i <= 8; $i++) {
                 Semester::create([
                     'curriculum_framework_id' => $advancedFramework->id,
                     'name' => (string)$i,

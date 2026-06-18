@@ -12,6 +12,7 @@ let fetchTimer    = null;
         chart:       { title: 'Biểu Đồ So Sánh Điểm', sub: 'So sánh điểm của bạn với sinh viên cùng khóa' },
         analysis:    { title: 'Phân Tích', sub: 'Điểm trung bình theo nhóm kỹ năng hoặc khối kiến thức' },
         courses:     { title: 'Môn Đang Học', sub: 'Quản lý môn học trong học kỳ hiện tại' },
+        planner:     { title: 'Lập Kế Hoạch Đa Học Kỳ', sub: 'Hệ thống tự động rải môn học cho các học kỳ' },
     };
 
     function switchTab(tabId, navEl) {
@@ -36,7 +37,7 @@ let fetchTimer    = null;
         if (tabId === 'chart' && chartRawData) {
             renderGradeChartDetail(chartRawData, 'all');
         }
-        if (tabId === 'suggestions') {
+        if (tabId === 'planner') {
             clearTimeout(fetchTimer);
             fetchTimer = setTimeout(fetchSuggestions, 100);
         }
@@ -509,12 +510,44 @@ let fetchTimer    = null;
             const url=`/api/v1/recommendations`;
             const response=await fetch(url); if(!response.ok)throw new Error('API error');
             const resData=await response.json(); 
-            const mappedData = (resData.data || []).map(item => ({
+            let mappedData = (resData.data || []).map(item => ({
                 ...item.subject,
                 suggestion_score: item.score,
                 skill_evaluation: item.reasons.join(', ')
             }));
+            
+            // Limit subjects by max credits of active plan mode
+            if (window.currentActivePlan && window.currentActivePlan.mode) {
+                const mode = window.currentActivePlan.mode;
+                let maxCredits = 18; // default normal
+                if (mode === 'fast') maxCredits = 25;
+                else if (mode === 'slow') maxCredits = 14;
+                
+                let currentTotal = 0;
+                let limitedData = [];
+                for (let subj of mappedData) {
+                    if (subj.can_study !== false) {
+                        if (currentTotal + subj.credits <= maxCredits) {
+                            limitedData.push(subj);
+                            currentTotal += subj.credits;
+                        }
+                    } else {
+                        limitedData.push(subj); // Keep locked subjects for reference if wanted, or just skip. We'll skip them to be clean, wait, no, the old UI showed them at the bottom.
+                        // Actually let's just keep the ones we can study for the target semester.
+                    }
+                }
+                // Also append the locked ones at the bottom if needed, but let's just show the eligible ones up to maxCredits.
+                mappedData = limitedData;
+            }
+            window.currentSuggestions = mappedData.filter(s => s.can_study !== false); // Save for apply button
+
             renderSuggestions(mappedData,semester);
+            
+            // Re-render study plan to sync the "Gợi ý cho bạn" badges
+            if (window.currentActivePlan) {
+                renderStudyPlan(window.currentActivePlan);
+            }
+            
             fetchProgress(); // Update progress and warnings
         } catch(error) {
             suggestionsContainer.innerHTML=`<div class="empty-state"><p style="color:var(--error);font-weight:600;">⚠️ Đã có lỗi xảy ra khi phân tích dữ liệu.</p></div>`;
@@ -580,7 +613,6 @@ let fetchTimer    = null;
             
             let tagHtml = '';
             let actionHtml = '';
-            let jsonSubject = JSON.stringify(subject).replace(/"/g,'&quot;');
             if (isEligible) {
                 tagHtml = `
                     <span class="pill pill-cream" style="background:#e8f8f3;color:#1a3a3a;border:none;">${subject.credits} Tín chỉ</span>
@@ -592,37 +624,21 @@ let fetchTimer    = null;
                     let evalIcon = subject.skill_evaluation.includes('+') ? '⭐' : (subject.skill_evaluation.includes('-15') ? '⚠️' : '📊');
                     tagHtml += `<span class="pill" style="background:var(--surface);color:${evalColor};border:1px solid ${evalColor}40;font-size:0.68rem;padding:2px 8px;">${evalIcon} ${subject.skill_evaluation}</span>`;
                 }
-                actionHtml = `
-                    <button id="btn-add-${subject.id}" class="btn-add-clay${isAdded?' added':''}" onclick="addToCurrentCourses(${jsonSubject})">
-                        ${isAdded?'✓ Đã thêm vào kế hoạch':'Thêm vào kế hoạch'}
-                    </button>
-                    <button class="btn-info-clay" title="Thông tin chi tiết" onclick="openPrereqModal(${jsonSubject})"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:20px;height:20px;"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg></button>
-                `;
             } else {
                 tagHtml = `
                     <span class="pill pill-cream" style="background:transparent;color:#dc2626;border:none;padding:0;font-size:0.75rem;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;margin-right:2px;vertical-align:-3px;"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg> Thiếu môn tiên quyết</span>
                 `;
-                actionHtml = `
-                    <button class="btn-add-clay" style="background:var(--surface-soft);color:var(--muted);border:1px solid var(--hairline);" onclick="openPrereqModal(${jsonSubject})">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:16px;height:16px;vertical-align:-3px;margin-right:4px;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg> Xem danh sách môn tiên quyết
-                    </button>
-                `;
             }
 
             return `
-                <div class="suggestion-card${isFailed ? ' is-locked' : (!isEligible ? ' is-locked' : '')}">
-                    <div class="suggestion-card-top">
+                <div class="suggestion-card${isFailed ? ' is-locked' : (!isEligible ? ' is-locked' : '')}" onclick="scrollToSubject(${subject.id})" style="cursor:pointer; transition: all 0.2s; border:1px solid var(--hairline);" onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='var(--brand-mint)'; this.style.boxShadow='var(--shadow-sm)'" onmouseout="this.style.transform='none'; this.style.borderColor='var(--hairline)'; this.style.boxShadow='none'">
+                    <div class="suggestion-card-top" style="padding-bottom: 0;">
                         <div class="suggestion-details">
                             <span class="suggestion-title">${subject.name}</span>
                             <div class="suggestion-tags">
                                 ${tagHtml}
                             </div>
                         </div>
-                        <div class="suggestion-icon ${isFailed||!isEligible ? 'locked' : ''}"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" /></svg></div>
-                    </div>
-                    <div class="suggestion-desc">Môn học thuộc khối kiến thức ${subject.skill_group?.name||'chuyên ngành'}. Đây là môn học cung cấp các nền tảng thiết yếu.</div>
-                    <div class="suggestion-actions">
-                        ${actionHtml}
                     </div>
                 </div>`;
         }).join('');
@@ -1369,6 +1385,13 @@ async function fetchStudyPlans() {
 }
 
 async function generateStudyPlan() {
+    if (window.currentActivePlan) {
+        const msg = "Tự động tạo sẽ ghi đè lên kế hoạch hiện tại, bạn hãy lưu lại kế hoạch, chức năng lưu này để làm sau.";
+        if (!window.confirm(msg)) {
+            return;
+        }
+    }
+
     const mode = document.getElementById('planner-mode').value;
     const name = document.getElementById('planner-name').value || 'Kế hoạch học tập cá nhân';
     const loader = document.getElementById('planner-loader');
@@ -1402,6 +1425,8 @@ async function generateStudyPlan() {
 }
 
 function renderStudyPlan(plan) {
+    window.currentActivePlan = plan; // Store active plan for suggestions
+    
     const container = document.getElementById('study-plan-results');
     if(!plan.semesters || plan.semesters.length === 0) {
         container.innerHTML = `<div class="empty-state">Không có môn học nào cần học nữa. Bạn đã đủ tín chỉ!</div>`;
@@ -1440,7 +1465,10 @@ function renderStudyPlan(plan) {
                 const cardBg = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
                 const borderColor = isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
                 const draggableAttr = !isCompleted ? 'draggable="true" ondragstart="handleDragStart(event, ' + sub.id + ', ' + sem.semester_index + ')" ondragend="handleDragEnd(event)"' : '';
-                const highlyRecommendedClass = (!isCompleted && ss.is_highly_recommended) ? 'highly-recommended' : '';
+                
+                // Đồng bộ nhãn Gợi ý với danh sách gợi ý hiện tại
+                const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
+                const highlyRecommendedClass = (!isCompleted && isSuggested) ? 'highly-recommended' : '';
                 
                 let statusHtml = '';
                 if (isCompleted) {
@@ -1451,8 +1479,9 @@ function renderStudyPlan(plan) {
 
                 html += `
                     <div class="study-plan-subject ${highlyRecommendedClass}" 
+                         id="plan-subject-${sub.id}"
                          ${draggableAttr}
-                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative;">
+                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top: 100px;">
                         
                         <button type="button" class="icon-btn" 
                                 style="position:absolute; top:8px; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
@@ -1661,3 +1690,94 @@ async function adjustStudyPlan(planId, evaluation) {
 window.addEventListener('DOMContentLoaded', () => {
     fetchStudyPlans();
 });
+
+function scrollToSubject(id) {
+    const el = document.getElementById('plan-subject-' + id);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transition = 'box-shadow 0.3s';
+        el.style.boxShadow = '0 0 0 4px rgba(16, 185, 129, 0.4)';
+        setTimeout(() => el.style.boxShadow = 'none', 2000);
+        
+        // Close the drawer if it exists
+        const drawer = document.getElementById('suggestion-drawer');
+        if (drawer) drawer.style.right = '-450px';
+    } else {
+        showToast('Môn học này chưa có trong lộ trình.', 'warning');
+    }
+}
+
+async function applySuggestionsToPlan() {
+    if (!window.currentActivePlan || !window.currentSuggestions || window.currentSuggestions.length === 0) {
+        showToast('Không có gợi ý nào hợp lệ để áp dụng.', 'warning');
+        return;
+    }
+    
+    const plan = window.currentActivePlan;
+    const subjectIds = window.currentSuggestions.map(s => s.id);
+    
+    // Tìm học kỳ mục tiêu: học kỳ đầu tiên có môn học nhưng chưa có điểm (grade === null)
+    // Hoặc nếu tất cả đều có điểm, lấy học kỳ tiếp theo
+    let targetSemesterIndex = 1;
+    let found = false;
+    if (plan.semesters && plan.semesters.length > 0) {
+        for (let sem of plan.semesters) {
+            if (sem.subjects && sem.subjects.length > 0) {
+                let hasNullGrade = sem.subjects.some(ss => ss.grade === null);
+                if (hasNullGrade) {
+                    targetSemesterIndex = sem.semester_index;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            targetSemesterIndex = plan.semesters[plan.semesters.length - 1].semester_index + 1;
+        }
+    }
+    
+    const confirmMsg = `Bạn sắp áp dụng gợi ý cho Học kỳ ${targetSemesterIndex}.\nLƯU Ý: Các môn học trong tương lai sẽ bị hệ thống tự động sắp xếp lại để tối ưu hóa lộ trình. Bạn có chắc chắn muốn tiếp tục không?`;
+    if (!window.confirm(confirmMsg)) {
+        return;
+    }
+    
+    const btn = document.getElementById('btn-apply-suggestions');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;border-top-color:#fff;"></div> Đang xử lý...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/v1/study-plans/apply-suggestions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                study_plan_id: plan.id, 
+                subject_ids: subjectIds, 
+                target_semester_index: targetSemesterIndex 
+            })
+        });
+        
+        const resData = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(resData.error || 'Lỗi hệ thống');
+        }
+
+        if (resData.success && resData.data) {
+            renderStudyPlan(resData.data);
+            showToast('Đã áp dụng môn học vào học kỳ ' + targetSemesterIndex + '!', 'success');
+            
+            const drawer = document.getElementById('suggestion-drawer');
+            if (drawer) drawer.style.right = '-450px';
+        }
+    } catch (e) {
+        showToast(e.message || 'Lỗi khi áp dụng gợi ý.', 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}

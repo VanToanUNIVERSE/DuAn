@@ -1766,7 +1766,7 @@
             animation: pulse-glow 2s infinite ease-in-out;
         }
         .highly-recommended::before {
-            content: "⭐ Quan trọng";
+            content: "✨ Gợi ý cho bạn";
             position: absolute;
             top: -10px;
             right: 10px;
@@ -1784,3 +1784,5 @@
             50%  { box-shadow: 0 0 12px rgba(234, 179, 8, 0.6); }
             100% { box-shadow: 0 0 4px rgba(234, 179, 8, 0.3); }
         }        .prereq-btn-ok:hover { background: #003db3; }
+.hidden { display: none !important; }
+

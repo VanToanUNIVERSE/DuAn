@@ -43,8 +43,8 @@ class StudyPlanService
                 return $grades->sortByDesc('grade')->first();
             })->values();
 
-            $passedSubjectIds = $userGrades->where('status', 'passed')->pluck('subject_id')->toArray();
-            $failedSubjectIds = $userGrades->where('status', 'failed')->pluck('subject_id')->toArray();
+            $passedSubjectIds = $userGrades->filter(function($g) { return $g->grade > 5.0 || $g->status === 'passed'; })->pluck('subject_id')->toArray();
+            $failedSubjectIds = $userGrades->filter(function($g) { return $g->grade <= 5.0 && $g->grade !== null; })->pluck('subject_id')->toArray();
 
             // Lấy chương trình khung của sinh viên
             $user = \App\Models\User::find($userId);
@@ -91,6 +91,35 @@ class StudyPlanService
                 'mode' => $mode,
             ]);
 
+            // Nếu mode là normal, chỉ cần copy 100% từ chương trình khung
+            if ($mode === 'normal') {
+                $groupedSubjects = $allSubjects->groupBy('assigned_semester_index')->sortKeys();
+                $maxSemesterIndex = 0;
+                
+                foreach ($groupedSubjects as $semIndex => $subjectsForThisSemester) {
+                    $currentSemesterCredits = $subjectsForThisSemester->sum('credits');
+                    $maxSemesterIndex = max($maxSemesterIndex, $semIndex);
+                    
+                    $semester = StudyPlanSemester::create([
+                        'study_plan_id' => $plan->id,
+                        'semester_index' => $semIndex,
+                        'expected_credits' => $currentSemesterCredits,
+                    ]);
+
+                    foreach ($subjectsForThisSemester as $subject) {
+                        StudyPlanSubject::create([
+                            'study_plan_semester_id' => $semester->id,
+                            'subject_id' => $subject->id,
+                            'is_completed' => in_array($subject->id, $passedSubjectIds),
+                        ]);
+                    }
+                }
+                
+                $plan->update(['target_semester_count' => $maxSemesterIndex]);
+                return $plan->load('semesters.subjects.subject');
+            }
+
+            // Các mode khác (fast, slow) sẽ dùng Greedy Algorithm
             $semesterIndex = 1;
 
             $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
@@ -103,7 +132,7 @@ class StudyPlanService
             
             while ($remainingSubjects->count() > 0) {
                 // Find available subjects for this semester
-                $availableSubjects = $remainingSubjects->filter(function ($subject) use ($plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allSubjects) {
+                $availableSubjects = $remainingSubjects->filter(function ($subject) use ($passedSubjectIds, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allSubjects) {
                     // Check semester availability (offered_in)
                     $isOddSemester = ($semesterIndex % 2) !== 0;
                     if ($isOddSemester && $subject->offered_in === '2') {
@@ -111,6 +140,14 @@ class StudyPlanService
                     }
                     if (!$isOddSemester && $subject->offered_in === '1') {
                         return false; // Subject only offered in odd semesters
+                    }
+
+                    // Không dồn các môn đã Pass lên quá sớm, giữ chúng ở đúng hoặc sau học kỳ chuẩn của chương trình khung
+                    if (in_array($subject->id, $passedSubjectIds)) {
+                        $assignedSem = $subject->assigned_semester_index ?? 1;
+                        if ($assignedSem > $semesterIndex) {
+                            return false;
+                        }
                     }
 
                     // Check if all prerequisites are met in planned/passed subjects
@@ -179,12 +216,17 @@ class StudyPlanService
                 });
 
                 $currentSemesterCredits = 0;
+                $actualSemesterCredits = 0;
                 $subjectsForThisSemester = [];
 
                 foreach ($availableSubjects as $key => $subject) {
-                    if ($currentSemesterCredits + $subject->credits <= $maxCredits) {
+                    $isPassed = in_array($subject->id, $passedSubjectIds);
+                    $effectiveCredits = $isPassed ? 0 : $subject->credits;
+
+                    if ($currentSemesterCredits + $effectiveCredits <= $maxCredits) {
                         $subjectsForThisSemester[] = $subject;
-                        $currentSemesterCredits += $subject->credits;
+                        $currentSemesterCredits += $effectiveCredits;
+                        $actualSemesterCredits += $subject->credits;
                         
                         // Remove from remaining
                         $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
@@ -197,7 +239,7 @@ class StudyPlanService
                     $semester = StudyPlanSemester::create([
                         'study_plan_id' => $plan->id,
                         'semester_index' => $semesterIndex,
-                        'expected_credits' => $currentSemesterCredits,
+                        'expected_credits' => $actualSemesterCredits,
                     ]);
 
                     foreach ($subjectsForThisSemester as $subject) {
@@ -230,5 +272,208 @@ class StudyPlanService
             'slow' => 14,
             default => 18,
         };
+    }
+
+    public function applySuggestionsAndRedistribute(int $planId, array $suggestedSubjectIds, int $targetSemesterIndex): StudyPlan
+    {
+        return DB::transaction(function () use ($planId, $suggestedSubjectIds, $targetSemesterIndex) {
+            $plan = StudyPlan::with(['semesters.subjects.subject'])->findOrFail($planId);
+            $userId = $plan->user_id;
+            $mode = $plan->mode;
+            $maxCredits = $this->getMaxCreditsByMode($mode);
+
+            // Fetch passed/failed subjects
+            $allUserGrades = UserGrade::where('user_id', $userId)->get();
+            $userGrades = $allUserGrades->groupBy('subject_id')->map(function ($grades) {
+                return $grades->sortByDesc('grade')->first();
+            })->values();
+
+            $passedSubjectIds = $userGrades->filter(function($g) { return $g->grade > 5.0 || $g->status === 'passed'; })->pluck('subject_id')->toArray();
+            $failedSubjectIds = $userGrades->filter(function($g) { return $g->grade <= 5.0 && $g->grade !== null; })->pluck('subject_id')->toArray();
+
+            // Lấy program_group_ids cho greedy
+            $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
+                ->orWhere('name', 'like', '%Anh văn%')
+                ->pluck('id')->toArray();
+            $majorGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Cơ sở ngành%')
+                ->pluck('id')->toArray();
+            $specializedGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Chuyên ngành%')
+                ->pluck('id')->toArray();
+
+            // Gather past subjects (semesters < targetSemesterIndex)
+            $plannedSubjectIds = [];
+            foreach ($plan->semesters as $sem) {
+                if ($sem->semester_index < $targetSemesterIndex) {
+                    foreach ($sem->subjects as $ss) {
+                        $plannedSubjectIds[] = $ss->subject_id;
+                    }
+                }
+            }
+
+            // Get remaining subjects to distribute (semesters >= targetSemesterIndex)
+            $remainingSubjectIds = [];
+            $semestersToDelete = [];
+            foreach ($plan->semesters as $sem) {
+                if ($sem->semester_index >= $targetSemesterIndex) {
+                    $semestersToDelete[] = $sem->id;
+                    foreach ($sem->subjects as $ss) {
+                        $remainingSubjectIds[] = $ss->subject_id;
+                    }
+                }
+            }
+            
+            // Đảm bảo suggestions cũng nằm trong mảng cần phân bổ (thường là đã có)
+            $remainingSubjectIds = array_unique(array_merge($remainingSubjectIds, $suggestedSubjectIds));
+            
+            // Xóa các học kỳ từ targetSemesterIndex trở đi
+            StudyPlanSubject::whereIn('study_plan_semester_id', $semestersToDelete)->delete();
+            StudyPlanSemester::whereIn('id', $semestersToDelete)->delete();
+
+            // Load đầy đủ thông tin của các remaining subjects
+            $allSubjects = Subject::whereIn('id', $remainingSubjectIds)->with(['prerequisites', 'relatedRelations'])->get();
+            
+            // Gắn assigned_semester_index để dùng cho greedy (nếu cần, nhưng rải môn có thể bỏ qua assigned vì đã ở giai đoạn sau, cứ cho mặc định là 1)
+            foreach ($allSubjects as $sub) {
+                $sub->assigned_semester_index = (int) $sub->semester_id;
+            }
+            
+            $remainingSubjects = clone $allSubjects;
+            $semesterIndex = $targetSemesterIndex;
+
+            // Xử lý riêng học kỳ targetSemesterIndex: CHỈ CHỨA CÁC MÔN ĐƯỢC GỢI Ý
+            $targetSubjects = $remainingSubjects->whereIn('id', $suggestedSubjectIds);
+            if ($targetSubjects->count() > 0) {
+                $actualSemesterCredits = $targetSubjects->sum('credits');
+                
+                $semester = StudyPlanSemester::create([
+                    'study_plan_id' => $plan->id,
+                    'semester_index' => $semesterIndex,
+                    'expected_credits' => $actualSemesterCredits,
+                ]);
+
+                foreach ($targetSubjects as $subject) {
+                    StudyPlanSubject::create([
+                        'study_plan_semester_id' => $semester->id,
+                        'subject_id' => $subject->id,
+                        'is_completed' => in_array($subject->id, $passedSubjectIds),
+                    ]);
+                    $plannedSubjectIds[] = $subject->id;
+                }
+                
+                // Xóa khỏi remaining
+                $remainingSubjects = $remainingSubjects->reject(function ($s) use ($suggestedSubjectIds) {
+                    return in_array($s->id, $suggestedSubjectIds);
+                });
+            }
+            
+            $semesterIndex++;
+
+            // Tiếp tục vòng lặp greedy cho các môn còn lại
+            while ($remainingSubjects->count() > 0) {
+                $availableSubjects = $remainingSubjects->filter(function ($subject) use ($passedSubjectIds, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allSubjects) {
+                    $isOddSemester = ($semesterIndex % 2) !== 0;
+                    if ($isOddSemester && $subject->offered_in === '2') return false;
+                    if (!$isOddSemester && $subject->offered_in === '1') return false;
+
+                    foreach ($subject->prerequisites as $prereq) {
+                        if (!in_array($prereq->id, $plannedSubjectIds)) return false;
+                    }
+
+                    $reqType = $subject->requirement_type;
+                    if ($reqType && $reqType !== 'none') {
+                        if ($reqType === 'completed_all') {
+                            $otherSubjectIds = $allSubjects->pluck('id')->reject(fn($id) => $id == $subject->id)->toArray();
+                            foreach ($otherSubjectIds as $id) {
+                                if (!in_array($id, $plannedSubjectIds)) return false;
+                            }
+                        } elseif ($reqType === 'completed_basic') {
+                            $basicSubjectIds = $allSubjects->whereIn('program_group_id', $basicGroupIds)->pluck('id')->toArray();
+                            foreach ($basicSubjectIds as $id) {
+                                if (!in_array($id, $plannedSubjectIds)) return false;
+                            }
+                        } elseif ($reqType === 'completed_major') {
+                            $majorSubjectIds = $allSubjects->whereIn('program_group_id', $majorGroupIds)->pluck('id')->toArray();
+                            foreach ($majorSubjectIds as $id) {
+                                if (!in_array($id, $plannedSubjectIds)) return false;
+                            }
+                        } elseif ($reqType === 'completed_specialized') {
+                            $specializedSubjectIds = $allSubjects->whereIn('program_group_id', $specializedGroupIds)->pluck('id')->toArray();
+                            foreach ($specializedSubjectIds as $id) {
+                                if (!in_array($id, $plannedSubjectIds)) return false;
+                            }
+                        }
+                    }
+                    return true;
+                });
+
+                if ($availableSubjects->count() === 0) {
+                    Log::warning("Cannot resolve prerequisites in redistribute for User {$userId}");
+                    break;
+                }
+
+                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode) {
+                    $score = 0;
+                    if (in_array($subject->id, $failedSubjectIds)) $score += 100;
+                    if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30;
+                    $score += (5 * $subject->relatedRelations->where('type', 'prerequisite')->count());
+                    
+                    if ($mode === 'normal' || $mode === 'slow') {
+                        $assignedSem = $subject->assigned_semester_index;
+                        if ($assignedSem) {
+                            if ($assignedSem > $semesterIndex) {
+                                $score -= (($assignedSem - $semesterIndex) * 100);
+                            } elseif ($assignedSem == $semesterIndex) {
+                                $score += 200;
+                            } else {
+                                $score += 150;
+                            }
+                        }
+                    }
+                    return $score;
+                });
+
+                $currentSemesterCredits = 0;
+                $actualSemesterCredits = 0;
+                $subjectsForThisSemester = [];
+
+                foreach ($availableSubjects as $key => $subject) {
+                    $isPassed = in_array($subject->id, $passedSubjectIds);
+                    $effectiveCredits = $isPassed ? 0 : $subject->credits;
+
+                    if ($currentSemesterCredits + $effectiveCredits <= $maxCredits) {
+                        $subjectsForThisSemester[] = $subject;
+                        $currentSemesterCredits += $effectiveCredits;
+                        $actualSemesterCredits += $subject->credits;
+                        
+                        $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
+                            return $s->id === $subject->id;
+                        });
+                    }
+                }
+
+                if (count($subjectsForThisSemester) > 0) {
+                    $semester = StudyPlanSemester::create([
+                        'study_plan_id' => $plan->id,
+                        'semester_index' => $semesterIndex,
+                        'expected_credits' => $actualSemesterCredits,
+                    ]);
+
+                    foreach ($subjectsForThisSemester as $subject) {
+                        StudyPlanSubject::create([
+                            'study_plan_semester_id' => $semester->id,
+                            'subject_id' => $subject->id,
+                            'is_completed' => in_array($subject->id, $passedSubjectIds),
+                        ]);
+                        $plannedSubjectIds[] = $subject->id;
+                    }
+                    $semesterIndex++;
+                } else {
+                    break; 
+                }
+            }
+
+            $plan->update(['target_semester_count' => $semesterIndex - 1]);
+            return $plan->load('semesters.subjects.subject');
+        });
     }
 }
