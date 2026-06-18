@@ -439,8 +439,10 @@
                 <div
                     style="padding: 20px; border-bottom: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center; background: var(--brand-mint);">
                     <div style="display:flex; align-items:center; gap: 8px;">
-                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--ink); font-weight: 700;">✨ Môn học gợi ý
-                            cho kỳ tới</h3>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--ink); font-weight: 700; display: flex; align-items: center;">
+                            ✨ Môn học gợi ý cho kỳ tới
+                            <span id="suggested-total-credits" style="font-size: 0.95rem; font-weight: 500; color: var(--muted); margin-left: 8px;"></span>
+                        </h3>
                         <span class="btn-info-clay" onclick="openScoreInfoModal()" title="Cách tính điểm"
                             style="cursor:pointer; display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.5); color:var(--ink); border:1px solid rgba(0,0,0,0.1);">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"

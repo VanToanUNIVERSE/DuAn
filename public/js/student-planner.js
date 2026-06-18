@@ -611,10 +611,19 @@ async function fetchProgress() {
 
 function renderSuggestions(subjects, targetSemester) {
     const container = document.getElementById('suggestions-list');
+    const creditsSpan = document.getElementById('suggested-total-credits');
+    
     if (subjects.length === 0) {
+        if (creditsSpan) creditsSpan.textContent = '(0 TC)';
         container.innerHTML = `<div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg><h3>Không có môn học đề xuất nào!</h3><p>Hãy thử đổi niên khóa, loại chương trình hoặc học kỳ mong muốn phù hợp hơn.</p></div>`;
         return;
     }
+    
+    let totalCredits = 0;
+    subjects.forEach(s => {
+        if (s.can_study !== false) totalCredits += parseInt(s.credits || 0);
+    });
+    if (creditsSpan) creditsSpan.textContent = `(${totalCredits} TC)`;
     container.innerHTML = subjects.map(subject => {
         const subSem = parseInt(subject.semester?.name || 1);
         const targetSem = parseInt(targetSemester);
