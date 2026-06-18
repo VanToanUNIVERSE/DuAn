@@ -30,7 +30,7 @@ class StudyPlanController extends Controller
     public function generate(Request $request)
     {
         $userId = $request->input('user_id') ?? Auth::id();
-        
+
         if (!$userId) {
             return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
         }
@@ -67,7 +67,7 @@ class StudyPlanController extends Controller
     {
         $plan->loadMissing('semesters.subjects.subject.relatedRelations', 'semesters.subjects.subject.prerequisites');
         $userGrades = UserGrade::where('user_id', $userId)->pluck('grade', 'subject_id')->toArray();
-        
+
         foreach ($plan->semesters as $semester) {
             foreach ($semester->subjects as $ss) {
                 if ($ss->subject) {
@@ -76,7 +76,7 @@ class StudyPlanController extends Controller
                     } else {
                         $ss->grade = null;
                     }
-                    
+
                     // Tính điểm ưu tiên cơ bản để giao diện (FE) biết môn này có quan trọng không
                     $dependentCount = $ss->subject->relatedRelations->where('type', 'prerequisite')->count();
                     $ss->is_highly_recommended = $dependentCount >= 2 || in_array($ss->subject->requirement_type, ['completed_basic', 'completed_major']);
@@ -84,7 +84,8 @@ class StudyPlanController extends Controller
                     // Gắn thông tin tiên quyết cho Modal
                     $prereqDetails = [];
                     // 1. Tiên quyết cứng
-                    $passedSubjectIds = array_keys(array_filter($userGrades, function($g) { return $g > 5.0; }));
+                    $passedSubjectIds = array_keys(array_filter($userGrades, function ($g) {
+                        return $g > 5.0; }));
                     foreach ($ss->subject->prerequisites as $prereq) {
                         $isPassed = in_array($prereq->id, $passedSubjectIds);
                         $prereqDetails[] = [
@@ -115,7 +116,8 @@ class StudyPlanController extends Controller
                         }
 
                         foreach ($implicitPrereqSubjects as $impSub) {
-                            if (collect($prereqDetails)->contains('id', $impSub->id)) continue;
+                            if (collect($prereqDetails)->contains('id', $impSub->id))
+                                continue;
                             $isPassed = in_array($impSub->id, $passedSubjectIds);
                             $prereqDetails[] = [
                                 'id' => $impSub->id,
@@ -251,7 +253,7 @@ class StudyPlanController extends Controller
         if (!$sourcePlanSubject) {
             return response()->json(['error' => 'Subject not found in plan'], 404);
         }
-        
+
         if ($sourcePlanSubject->is_completed) {
             return response()->json(['error' => 'Không thể di chuyển môn đã hoàn thành'], 400);
         }

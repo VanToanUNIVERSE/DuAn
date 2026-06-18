@@ -26,7 +26,7 @@ Route::get('/suggestions', [SuggestionController::class, 'index']);
 // ─── LuanVan New API Routes ───────────────────────────────────────────────
 Route::prefix('v1')->middleware('web')->group(function () {
     Route::get('/recommendations', [\App\Http\Controllers\Api\RecommendationController::class, 'index']);
-    
+
     Route::prefix('study-plans')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\StudyPlanController::class, 'index']);
         Route::post('/generate', [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
