@@ -131,8 +131,29 @@ class StudyPlanService
                 ->pluck('id')->toArray();
             
             while ($remainingSubjects->count() > 0) {
+                // Tính toán để rải đều số tín chỉ
+                $unpassedCredits = 0;
+                foreach ($remainingSubjects as $rs) {
+                    if (!in_array($rs->id, $passedSubjectIds)) {
+                        $unpassedCredits += $rs->credits;
+                    }
+                }
+                
+                if ($unpassedCredits > 0) {
+                    $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
+                    $estimatedSems = ceil($unpassedCredits / $maxCreditsModeLimit);
+                    $estimatedSems = max(1, $estimatedSems);
+                    // Số tín chỉ mục tiêu để chia đều
+                    $maxCredits = ceil($unpassedCredits / $estimatedSems);
+                    
+                    // Thêm một chút linh hoạt (buffer) để dễ xếp môn (ví dụ môn 3 chỉ làm lố 1 chỉ)
+                    $maxCredits += 2; 
+                } else {
+                    $maxCredits = $this->getMaxCreditsByMode($mode);
+                }
+
                 // Find available subjects for this semester
-                $availableSubjects = $remainingSubjects->filter(function ($subject) use ($passedSubjectIds, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allSubjects) {
+                $availableSubjects = $remainingSubjects->filter(function ($subject) use ($passedSubjectIds, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allSubjects, $user) {
                     // Check semester availability (offered_in)
                     $isOddSemester = ($semesterIndex % 2) !== 0;
                     if ($isOddSemester && $subject->offered_in === '2') {
@@ -142,10 +163,17 @@ class StudyPlanService
                         return false; // Subject only offered in odd semesters
                     }
 
-                    // Không dồn các môn đã Pass lên quá sớm, giữ chúng ở đúng hoặc sau học kỳ chuẩn của chương trình khung
+                    // Cố định các môn đã Pass vào đúng học kỳ chuẩn của chương trình khung
                     if (in_array($subject->id, $passedSubjectIds)) {
                         $assignedSem = $subject->assigned_semester_index ?? 1;
-                        if ($assignedSem > $semesterIndex) {
+                        if ($assignedSem !== $semesterIndex) {
+                            return false;
+                        }
+                        return true; // Bỏ qua check prereq vì môn này đã học và pass rồi
+                    } else {
+                        // Các môn CHƯA HỌC (chưa pass) thì không được xếp vào học kỳ trong quá khứ
+                        $currentSem = (int) ($user->pref_current_semester ?? 1);
+                        if ($semesterIndex < $currentSem) {
                             return false;
                         }
                     }
@@ -221,11 +249,26 @@ class StudyPlanService
 
                 foreach ($availableSubjects as $key => $subject) {
                     $isPassed = in_array($subject->id, $passedSubjectIds);
-                    $effectiveCredits = $isPassed ? 0 : $subject->credits;
 
-                    if ($currentSemesterCredits + $effectiveCredits <= $maxCredits) {
+                    if ($isPassed) {
+                        // Môn đã pass thì LUÔN LUÔN được đưa vào học kỳ cố định của nó
                         $subjectsForThisSemester[] = $subject;
-                        $currentSemesterCredits += $effectiveCredits;
+                        $actualSemesterCredits += $subject->credits;
+                        
+                        $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
+                            return $s->id === $subject->id;
+                        });
+                        continue;
+                    }
+
+                    // Môn chưa học: 
+                    // 1. Phải thỏa mãn số tín chỉ phân bổ đều (currentSemesterCredits)
+                    // 2. TỔNG số tín chỉ thực tế của học kỳ (bao gồm cả môn đã pass) KHÔNG được vượt quá giới hạn tuyệt đối của Mode
+                    if ($currentSemesterCredits + $subject->credits <= $maxCredits && 
+                        $actualSemesterCredits + $subject->credits <= $maxCreditsModeLimit) {
+                        
+                        $subjectsForThisSemester[] = $subject;
+                        $currentSemesterCredits += $subject->credits;
                         $actualSemesterCredits += $subject->credits;
                         
                         // Remove from remaining
@@ -370,6 +413,24 @@ class StudyPlanService
 
             // Tiếp tục vòng lặp greedy cho các môn còn lại
             while ($remainingSubjects->count() > 0) {
+                // Tính toán để rải đều số tín chỉ
+                $unpassedCredits = 0;
+                foreach ($remainingSubjects as $rs) {
+                    if (!in_array($rs->id, $passedSubjectIds)) {
+                        $unpassedCredits += $rs->credits;
+                    }
+                }
+                
+                if ($unpassedCredits > 0) {
+                    $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
+                    $estimatedSems = ceil($unpassedCredits / $maxCreditsModeLimit);
+                    $estimatedSems = max(1, $estimatedSems);
+                    $maxCredits = ceil($unpassedCredits / $estimatedSems);
+                    $maxCredits += 2; 
+                } else {
+                    $maxCredits = $this->getMaxCreditsByMode($mode);
+                }
+
                 $availableSubjects = $remainingSubjects->filter(function ($subject) use ($passedSubjectIds, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allSubjects) {
                     $isOddSemester = ($semesterIndex % 2) !== 0;
                     if ($isOddSemester && $subject->offered_in === '2') return false;
@@ -438,11 +499,21 @@ class StudyPlanService
 
                 foreach ($availableSubjects as $key => $subject) {
                     $isPassed = in_array($subject->id, $passedSubjectIds);
-                    $effectiveCredits = $isPassed ? 0 : $subject->credits;
 
-                    if ($currentSemesterCredits + $effectiveCredits <= $maxCredits) {
+                    if ($isPassed) {
                         $subjectsForThisSemester[] = $subject;
-                        $currentSemesterCredits += $effectiveCredits;
+                        $actualSemesterCredits += $subject->credits;
+                        $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
+                            return $s->id === $subject->id;
+                        });
+                        continue;
+                    }
+
+                    if ($currentSemesterCredits + $subject->credits <= $maxCredits && 
+                        $actualSemesterCredits + $subject->credits <= $maxCreditsModeLimit) {
+                        
+                        $subjectsForThisSemester[] = $subject;
+                        $currentSemesterCredits += $subject->credits;
                         $actualSemesterCredits += $subject->credits;
                         
                         $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {

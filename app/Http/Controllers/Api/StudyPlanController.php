@@ -44,6 +44,9 @@ class StudyPlanController extends Controller
         $name = $request->input('name');
 
         $plan = $this->studyPlanService->generatePlan($userId, $name, $mode);
+        // Tự động lưu ngay khi tạo
+        $plan->update(['is_saved' => true]);
+        
         $plan = $this->attachGrades($plan, $userId);
 
         return response()->json([
@@ -56,11 +59,69 @@ class StudyPlanController extends Controller
     public function index(Request $request)
     {
         $userId = $request->input('user_id') ?? Auth::id();
-        $plans = StudyPlan::where('user_id', $userId)->get();
+        // Lấy kế hoạch vừa được chỉnh sửa gần nhất
+        $plans = StudyPlan::where('user_id', $userId)->where('is_saved', true)->orderBy('updated_at', 'desc')->take(1)->get();
         foreach ($plans as $plan) {
             $this->attachGrades($plan, $userId);
         }
+
+        return response()->json([
+            'success' => true,
+            'data' => $plans
+        ]);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $userId = Auth::id();
+        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
+        if (!$plan) {
+            return response()->json(['success' => false, 'error' => 'Không tìm thấy kế hoạch'], 404);
+        }
+        
+        $plan->delete(); // Soft delete
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã xóa kế hoạch'
+        ]);
+    }
+
+    public function getSavedPlans(Request $request)
+    {
+        $userId = $request->input('user_id') ?? Auth::id();
+        $plans = StudyPlan::where('user_id', $userId)->where('is_saved', true)->orderBy('updated_at', 'desc')->get();
+        // Only return basic info to list them
         return response()->json(['success' => true, 'data' => $plans]);
+    }
+
+    public function savePlan($id, Request $request)
+    {
+        $userId = $request->input('user_id') ?? Auth::id();
+        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
+        if (!$plan) {
+            return response()->json(['success' => false, 'error' => 'Plan not found'], 404);
+        }
+        
+        $plan->is_saved = true;
+        if ($request->has('name') && !empty($request->name)) {
+            $plan->name = $request->name;
+        }
+        $plan->save();
+
+        return response()->json(['success' => true, 'message' => 'Lưu kế hoạch thành công']);
+    }
+
+    public function loadPlan($id, Request $request)
+    {
+        $userId = $request->input('user_id') ?? Auth::id();
+        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
+        if (!$plan) {
+            return response()->json(['success' => false, 'error' => 'Plan not found'], 404);
+        }
+        
+        $this->attachGrades($plan, $userId);
+        return response()->json(['success' => true, 'data' => $plan]);
     }
 
     private function attachGrades($plan, $userId)

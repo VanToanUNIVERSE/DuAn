@@ -105,33 +105,33 @@
         <div class="config-form-grid">
             <div class="input-group">
                 <label class="input-label" for="academic_year">Niên khóa</label>
-                <select id="academic_year" class="clay-select">
+                <select id="academic_year" class="clay-select" onchange="savePreferences()">
                     @foreach($academicYears as $year)
-                        <option value="{{ $year }}" {{ $year == '2022-2026' ? 'selected' : '' }}>{{ $year }}</option>
+                        <option value="{{ $year }}" {{ Auth::user()->pref_academic_year == $year ? 'selected' : '' }}>{{ $year }}</option>
                     @endforeach
                 </select>
             </div>
             <div class="input-group">
                 <label class="input-label" for="program_type">Hệ đào tạo</label>
-                <select id="program_type" class="clay-select">
+                <select id="program_type" class="clay-select" onchange="savePreferences()">
                     @foreach($programTypes as $type)
-                        <option value="{{ $type }}" {{ $type == 'Chính quy' ? 'selected' : '' }}>{{ $type }}</option>
+                        <option value="{{ $type }}" {{ Auth::user()->pref_program_type == $type ? 'selected' : '' }}>{{ $type }}</option>
                     @endforeach
                 </select>
             </div>
             <div class="input-group">
                 <label class="input-label" for="target_semester">Học kỳ hiện tại</label>
-                <select id="target_semester" class="clay-select">
+                <select id="target_semester" class="clay-select" onchange="savePreferences()">
                     @for($i = 1; $i <= 8; $i++)
-                        <option value="{{ $i }}" {{ $i == 3 ? 'selected' : '' }}>Học kỳ {{ $i }}</option>
+                        <option value="{{ $i }}" {{ (Auth::user()->pref_current_semester ?? 1) == $i ? 'selected' : '' }}>Học kỳ {{ $i }}</option>
                     @endfor
                 </select>
             </div>
             <div class="input-group">
                 <label class="input-label" for="target_years">Mục tiêu tốt nghiệp</label>
-                <select id="target_years" class="clay-select" onchange="updateCreditStats()">
+                <select id="target_years" class="clay-select" onchange="updateCreditStats(); savePreferences()">
                     @for($y = 3; $y <= 6; $y++)
-                        <option value="{{ $y }}" {{ $y == 4 ? 'selected' : '' }}>{{ $y }} năm</option>
+                        <option value="{{ $y }}" {{ (Auth::user()->pref_target_years ?? 4) == $y ? 'selected' : '' }}>{{ $y }} năm</option>
                     @endfor
                 </select>
             </div>
@@ -275,7 +275,7 @@
                         📊 Biểu Đồ So Sánh Điểm
                         <span class="chart-peer-info" id="chart-peer-label"></span>
                     </div>
-                    <button class="btn-primary" onclick="switchTab('chart', document.getElementById('nav-chart'))"
+                    <button class="btn-primary" onclick="switchTab('analysis', document.getElementById('nav-analysis'))"
                         style="height:36px;font-size:0.78rem;padding:0 14px;">Xem đầy đủ →</button>
                 </div>
                 <div class="chart-sem-filter" id="chart-sem-filter-dash">
@@ -308,15 +308,28 @@
 
 
         {{-- ════════════════════════════════════════════════════════
-        TAB: BIỂU ĐỒ ĐIỂM (chi tiết)
+        TAB: PHÂN TÍCH & BIỂU ĐỒ
         ════════════════════════════════════════════════════════ --}}
-        <div class="page-content tab-panel" id="tab-chart">
+        <div class="page-content tab-panel" id="tab-analysis">
             <div style="margin-bottom:var(--sp-xl);">
                 <h2
                     style="font-family:'Sora',sans-serif;font-size:1.4rem;font-weight:800;color:var(--ink);letter-spacing:-0.4px;margin-bottom:4px;">
-                    Biểu Đồ So Sánh Điểm</h2>
-                <p style="color:var(--muted);font-size:0.88rem;">So sánh điểm số của bạn với sinh viên cùng khóa theo
-                    từng môn học.</p>
+                    Phân Tích & Biểu Đồ</h2>
+                <p style="color:var(--muted);font-size:0.88rem;">Xem biểu đồ so sánh điểm số, nhận phân tích và cảnh báo theo nhóm kỹ năng hoặc khối kiến thức.</p>
+            </div>
+
+            {{-- Summary stats for chart tab --}}
+            <div class="content-grid" style="margin-bottom:var(--sp-xl);">
+                <div class="feat-card feat-card-mint">
+                    <div class="feat-card-label">Môn đã nhập điểm</div>
+                    <div class="feat-card-value-sm" id="chart-stat-graded">0 môn</div>
+                    <div class="feat-card-sub">trong tổng số các môn</div>
+                </div>
+                <div class="feat-card feat-card-peach">
+                    <div class="feat-card-label">GPA tích lũy hiện tại</div>
+                    <div class="feat-card-value-sm" id="chart-stat-gpa">—</div>
+                    <div class="feat-card-sub">Điểm trung bình tất cả môn</div>
+                </div>
             </div>
 
             <div class="clay-card" style="margin-bottom:var(--sp-xl);">
@@ -352,33 +365,6 @@
                 </div>
             </div>
 
-            {{-- Summary stats for chart tab --}}
-            <div class="content-grid">
-                <div class="feat-card feat-card-mint">
-                    <div class="feat-card-label">Môn đã nhập điểm</div>
-                    <div class="feat-card-value-sm" id="chart-stat-graded">0 môn</div>
-                    <div class="feat-card-sub">trong tổng số các môn</div>
-                </div>
-                <div class="feat-card feat-card-peach">
-                    <div class="feat-card-label">GPA tích lũy hiện tại</div>
-                    <div class="feat-card-value-sm" id="chart-stat-gpa">—</div>
-                    <div class="feat-card-sub">Điểm trung bình tất cả môn</div>
-                </div>
-            </div>
-        </div>
-
-        {{-- ════════════════════════════════════════════════════════
-        TAB: PHÂN TÍCH
-        ════════════════════════════════════════════════════════ --}}
-        <div class="page-content tab-panel" id="tab-analysis">
-            <div style="margin-bottom:var(--sp-xl);">
-                <h2
-                    style="font-family:'Sora',sans-serif;font-size:1.4rem;font-weight:800;color:var(--ink);letter-spacing:-0.4px;margin-bottom:4px;">
-                    Phân Tích Điểm</h2>
-                <p style="color:var(--muted);font-size:0.88rem;">Xem điểm trung bình và nhận cảnh báo theo nhóm kỹ năng
-                    hoặc khối kiến thức.</p>
-            </div>
-
             <div class="analysis-toggle-group"
                 style="display:inline-flex;background:var(--surface-soft);border:1px solid var(--hairline);border-radius:10px;padding:4px;margin-bottom:var(--sp-lg);gap:4px;">
                 <button class="toggle-btn active" onclick="setAnalysisType('skill')" id="toggle-analysis-skill"
@@ -411,38 +397,48 @@
                     còn lại đến khi tốt nghiệp.</p>
             </div>
 
-            <div class="clay-card" style="margin-bottom:var(--sp-xl);">
-                <div class="card-title-row">
-                    <div class="card-heading">
-                        ⚙️ Tạo Kế Hoạch Mới
+            <div id="planner-selection-view" style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:var(--sp-xl);">
+                <!-- Cột Tạo Kế Hoạch Mới -->
+                <div class="clay-card">
+                    <div class="card-title-row">
+                        <div class="card-heading">
+                            ⚙️ Tạo Kế Hoạch Mới
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+                        <div>
+                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Chế độ học (Mode)</label>
+                            <select id="planner-mode" class="clay-select" style="width: 100%;">
+                                <option value="normal" selected>Bình thường (8 kỳ - 4 năm)</option>
+                                <option value="fast">Nhanh (6 kỳ - 3 năm)</option>
+                                <option value="slow">Chậm (10 kỳ - 5 năm)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Tên kế hoạch <span style="color:var(--red);">*</span></label>
+                            <input type="text" id="planner-name" class="ob-grade-input"
+                                placeholder="Ví dụ: Kế hoạch ra trường sớm"
+                                style="width: 100%; text-align:left; padding:0 12px; height:42px;">
+                        </div>
+                        <button class="btn-primary" onclick="generateStudyPlan()" style="height: 42px; width:100%; justify-content:center; margin-top:8px;">✨ Tạo kế hoạch</button>
+                    </div>
+                    <div id="planner-loader" class="loader" style="display:none; text-align:center; padding:20px;">
+                        <div class="spinner" style="margin:0 auto;"></div>
+                        <p style="color:var(--muted);font-size:0.9rem;margin-top:10px;">Hệ thống đang chạy thuật toán Tham lam (Greedy)...</p>
                     </div>
                 </div>
-                <div style="display:flex; gap:16px; align-items:center; margin-bottom: 20px;">
-                    <div>
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:4px;">Chế độ học
-                            (Mode)</label>
-                        <select id="planner-mode" class="clay-select" style="min-width: 150px;">
-                            <option value="normal" selected>Bình thường (8 kỳ - 4 năm)</option>
-                            <option value="fast">Nhanh (6 kỳ - 3 năm)</option>
-                            <option value="slow">Chậm (10 kỳ - 5 năm)</option>
-                        </select>
+
+                <!-- Cột Danh Sách Kế Hoạch Đã Lưu -->
+                <div class="clay-card">
+                    <div class="card-title-row">
+                        <div class="card-heading">
+                            📂 Kế Hoạch Của Bạn
+                        </div>
                     </div>
-                    <div>
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:4px;">Tên kế
-                            hoạch</label>
-                        <input type="text" id="planner-name" class="ob-grade-input"
-                            placeholder="Ví dụ: Kế hoạch ra trường sớm"
-                            style="min-width: 250px; text-align:left; padding:0 12px; height:38px;">
+                    <div id="inline-saved-plans-list" style="display:flex; flex-direction:column; gap:12px; max-height:260px; overflow-y:auto; padding-right:8px;">
+                        <!-- Danh sách kế hoạch load bằng JS -->
+                        <p style="color:var(--muted); text-align:center; padding:20px;">Đang tải danh sách...</p>
                     </div>
-                    <div style="align-self: flex-end;">
-                        <button class="btn-primary" onclick="generateStudyPlan()" style="height: 38px;">✨ Tự động tạo lộ
-                            trình</button>
-                    </div>
-                </div>
-                <div id="planner-loader" class="loader" style="display:none; text-align:center; padding:20px;">
-                    <div class="spinner" style="margin:0 auto;"></div>
-                    <p style="color:var(--muted);font-size:0.9rem;margin-top:10px;">Hệ thống đang chạy thuật toán Tham
-                        lam (Greedy) để phân bổ môn học...</p>
                 </div>
             </div>
 
@@ -505,7 +501,7 @@
                 }
             </script>
 
-            <div id="study-plan-results">
+            <div id="study-plan-results" style="display:none;">
                 <div class="empty-state">
                     <p>Chưa có kế hoạch nào được tạo. Chọn chế độ và nhấn nút tạo ở trên.</p>
                 </div>
@@ -622,7 +618,10 @@
             </div>
         </div>
     </div>
-
+    <script>
+        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    </script>
+    <script src="{{ asset('js/student-planner.js') }}"></script>
 </body>
 
 </html>

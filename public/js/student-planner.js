@@ -9,8 +9,7 @@ let syncLock = false;
 const TAB_TITLES = {
     dashboard: { title: 'Dashboard', sub: 'Tổng quan tiến độ học tập của bạn' },
     suggestions: { title: 'Đề Xuất Môn Học', sub: 'Gợi ý môn học phù hợp với tiến độ của bạn' },
-    chart: { title: 'Biểu Đồ So Sánh Điểm', sub: 'So sánh điểm của bạn với sinh viên cùng khóa' },
-    analysis: { title: 'Phân Tích', sub: 'Điểm trung bình theo nhóm kỹ năng hoặc khối kiến thức' },
+    analysis: { title: 'Phân Tích & Biểu Đồ', sub: 'So sánh điểm và phân tích theo nhóm kỹ năng' },
     courses: { title: 'Môn Đang Học', sub: 'Quản lý môn học trong học kỳ hiện tại' },
     planner: { title: 'Lập Kế Hoạch Đa Học Kỳ', sub: 'Hệ thống tự động rải môn học cho các học kỳ' },
 };
@@ -40,6 +39,7 @@ function switchTab(tabId, navEl) {
     if (tabId === 'planner') {
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(fetchSuggestions, 100);
+        fetchSavedPlansList();
     }
 }
 
@@ -1410,28 +1410,23 @@ async function saveCurrentPlan(planId) {
     }
 }
 
-function openSavedPlansModal() {
-    const modal = document.getElementById('saved-plans-modal-overlay');
-    modal.style.display = 'flex';
-    fetchSavedPlansList();
-}
-
-function closeSavedPlansModal() {
-    const modal = document.getElementById('saved-plans-modal-overlay');
-    modal.style.display = 'none';
-}
-
 async function fetchSavedPlansList() {
-    const listContainer = document.getElementById('saved-plans-list');
-    listContainer.innerHTML = '<p style="color:var(--muted); text-align:center;">Đang tải...</p>';
+    const listContainer = document.getElementById('inline-saved-plans-list');
+    if (!listContainer) return;
+    listContainer.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px;">Đang tải danh sách...</p>';
     try {
         const res = await fetch('/api/v1/study-plans/saved');
         const resData = await res.json();
         if(resData.success && resData.data.length > 0) {
             listContainer.innerHTML = resData.data.map(plan => `
-                <div class="saved-plan-item" onclick="loadSavedPlan(${plan.id})">
-                    <div style="font-weight:600; margin-bottom:4px;">${plan.name} <span class="pill pill-lavender" style="font-size:0.7rem; padding:2px 6px;">${plan.mode.toUpperCase()}</span></div>
-                    <div style="font-size:0.8rem; color:var(--muted);">Cập nhật: ${new Date(plan.updated_at).toLocaleString('vi-VN')}</div>
+                <div class="saved-plan-item" style="padding:12px 16px; border:1px solid var(--hairline); border-radius:8px; background:var(--surface); transition:all 0.2s; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="flex:1; cursor:pointer;" onclick="loadSavedPlan(${plan.id})">
+                        <div style="font-weight:600; margin-bottom:4px;">${plan.name} <span class="pill pill-lavender" style="font-size:0.7rem; padding:2px 6px;">${plan.mode.toUpperCase()}</span></div>
+                        <div style="font-size:0.8rem; color:var(--muted);">Cập nhật: ${new Date(plan.updated_at).toLocaleString('vi-VN')}</div>
+                    </div>
+                    <button onclick="deleteSavedPlan(${plan.id}, event)" title="Xóa kế hoạch này" style="background:none; border:none; color:var(--red); padding:8px; cursor:pointer; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:background 0.2s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'">
+                        <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
+                    </button>
                 </div>
             `).join('');
         } else {
@@ -1443,7 +1438,6 @@ async function fetchSavedPlansList() {
 }
 
 async function loadSavedPlan(planId) {
-    closeSavedPlansModal();
     const loader = document.getElementById('planner-loader');
     const container = document.getElementById('study-plan-results');
     loader.style.display = 'block';
@@ -1454,6 +1448,7 @@ async function loadSavedPlan(planId) {
         if(resData.success) {
             renderStudyPlan(resData.data);
             showToast('Đã tải kế hoạch đã lưu!', 'success');
+            fetchSuggestions(); // Cập nhật lại danh sách gợi ý theo mode của kế hoạch mới tải
         }
     } catch(e) {
         showToast('Lỗi khi tải kế hoạch.', 'error');
@@ -1463,16 +1458,52 @@ async function loadSavedPlan(planId) {
     }
 }
 
-async function generateStudyPlan() {
-    if (window.currentActivePlan) {
-        const msg = "Tự động tạo sẽ ghi đè lên kế hoạch hiện tại, bạn hãy lưu lại kế hoạch, chức năng lưu này để làm sau.";
-        if (!window.confirm(msg)) {
-            return;
-        }
-    }
+function backToPlannerSelection() {
+    window.currentActivePlan = null;
+    document.getElementById('planner-selection-view').style.display = 'grid';
+    document.getElementById('study-plan-results').style.display = 'none';
+    fetchSavedPlansList();
+}
 
+async function deleteSavedPlan(planId, event) {
+    if (event) event.stopPropagation(); // Ngăn sự kiện click vào item
+    
+    if (!confirm('Bạn có chắc chắn muốn xóa kế hoạch này không?')) return;
+
+    try {
+        const res = await fetch(`/api/v1/study-plans/${planId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            }
+        });
+        const resData = await res.json();
+        if (resData.success) {
+            showToast('Đã xóa kế hoạch thành công!', 'success');
+            // Nếu kế hoạch đang mở là kế hoạch bị xóa, thì trở lại danh sách
+            if (window.currentActivePlan && window.currentActivePlan.id === planId) {
+                backToPlannerSelection();
+            } else {
+                fetchSavedPlansList();
+            }
+        } else {
+            showToast(resData.error || 'Lỗi khi xóa kế hoạch', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi mạng khi xóa', 'error');
+    }
+}
+
+async function generateStudyPlan() {
     const mode = document.getElementById('planner-mode').value;
-    const name = document.getElementById('planner-name').value || 'Kế hoạch học tập cá nhân';
+    const name = document.getElementById('planner-name').value.trim();
+    
+    if (!name) {
+        showToast('Vui lòng nhập tên kế hoạch!', 'error');
+        return;
+    }
     const loader = document.getElementById('planner-loader');
     const container = document.getElementById('study-plan-results');
 
@@ -1494,6 +1525,8 @@ async function generateStudyPlan() {
         if (resData.success && resData.data) {
             renderStudyPlan(resData.data);
             showToast('Tạo kế hoạch học tập thành công! 🎉', 'success');
+            fetchSavedPlansList(); // Cập nhật lại danh sách kế hoạch bên cạnh
+            fetchSuggestions(); // Cập nhật lại danh sách gợi ý theo mode vừa tạo
         }
     } catch (e) {
         showToast('Lỗi khi tạo kế hoạch học tập.', 'error');
@@ -1507,18 +1540,29 @@ function renderStudyPlan(plan) {
     window.currentActivePlan = plan; // Store active plan for suggestions
 
     const container = document.getElementById('study-plan-results');
+    document.getElementById('planner-selection-view').style.display = 'none';
+    container.style.display = 'block';
+
     if (!plan.semesters || plan.semesters.length === 0) {
-        container.innerHTML = `<div class="empty-state">Không có môn học nào cần học nữa. Bạn đã đủ tín chỉ!</div>`;
+        container.innerHTML = `
+            <button onclick="backToPlannerSelection()" class="btn-secondary" style="margin-bottom:16px;">⬅ Trở lại</button>
+            <div class="empty-state">Không có môn học nào cần học nữa. Bạn đã đủ tín chỉ!</div>`;
         return;
     }
 
     let html = `
         <div style="background:var(--surface-soft); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--hairline); display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <h3 style="margin:0 0 8px 0;">${plan.name} <span class="pill pill-lavender">${plan.mode.toUpperCase()}</span></h3>
-                <p style="margin:0; color:var(--muted); font-size:0.9rem;">Dự kiến hoàn thành trong <strong>${plan.target_semester_count}</strong> học kỳ.</p>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <button onclick="backToPlannerSelection()" style="background:var(--surface); border:1px solid var(--hairline); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:6px; color:var(--ink); transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='var(--surface)'">
+                    <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
+                    Trở lại
+                </button>
+                <div style="border-left:1px solid var(--hairline); padding-left:12px;">
+                    <h3 style="margin:0 0 4px 0;">${plan.name} <span class="pill pill-lavender">${plan.mode.toUpperCase()}</span></h3>
+                    <p style="margin:0; color:var(--muted); font-size:0.9rem;">Dự kiến hoàn thành trong <strong>${plan.target_semester_count}</strong> học kỳ.</p>
+                </div>
             </div>
-            ${!plan.is_saved ? `<button class="btn-primary" onclick="saveCurrentPlan(${plan.id})" style="height:34px; padding:0 16px; font-size:0.85rem; background:var(--brand-mint); color:var(--ink); border:none; border-radius:6px; font-weight:600; cursor:pointer;">💾 Lưu kế hoạch</button>` : `<span style="color:#10b981; font-weight:600; font-size:0.85rem;">✅ Đã lưu</span>`}
+            <span style="color:#10b981; font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:4px;" title="Mọi chỉnh sửa kéo thả của bạn đều được hệ thống tự động lưu ngay lập tức.">✅ Đã lưu <span style="font-size:0.7rem; font-weight:400; color:var(--muted);">(Auto-save)</span></span>
         </div>
         <div style="display:flex; flex-direction:column; gap:20px;">
     `;
@@ -1718,7 +1762,16 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
         inputEl.disabled = false;
         showSaveIndicator('saved', grade === null ? 'Đã xóa điểm' : 'Đã lưu điểm');
 
-        if (resData.success && resData.evaluation && grade !== null) {
+        if (grade === null) {
+            // Khi xóa điểm, cấu trúc kế hoạch bị thay đổi (môn chưa học ở quá khứ), 
+            // nên ta tự động tạo lại kế hoạch với mode hiện tại.
+            if (window.currentActivePlan && window.currentActivePlan.mode) {
+                showToast('Đang cập nhật lại lộ trình...', 'info');
+                adjustStudyPlan(planId, { suggested_mode: window.currentActivePlan.mode, message: 'Người dùng xóa điểm', gpa: 0 });
+            } else {
+                fetchStudyPlans();
+            }
+        } else if (resData.success && resData.evaluation) {
             const evaluation = resData.evaluation;
             if (evaluation.status !== 'KEEP') {
                 if (confirm(`Hệ thống nhận thấy tiến độ thay đổi:\n"${evaluation.message}"\n\nBạn có muốn hệ thống tự động điều chỉnh kế hoạch học tập sang chế độ "${evaluation.suggested_mode}" không?`)) {
@@ -1758,7 +1811,9 @@ async function adjustStudyPlan(planId, evaluation) {
         const resData = await res.json();
         if (resData.success && resData.data) {
             renderStudyPlan(resData.data);
-            showToast('Đã tự động điều chỉnh kế hoạch học tập! ✨', 'success');
+            showToast('Đã tự động cập nhật lại lộ trình! ✨', 'success');
+            fetchSavedPlansList();
+            fetchSuggestions();
         }
     } catch (e) {
         showToast('Lỗi khi điều chỉnh kế hoạch', 'error');
