@@ -1662,6 +1662,8 @@ function renderStudyPlan(plan) {
         <div style="display:flex; flex-direction:column; gap:20px;">
     `;
 
+    const seenSubjects = new Set();
+
     plan.semesters.forEach(sem => {
         html += `
             <div class="clay-card study-plan-semester" 
@@ -1691,6 +1693,11 @@ function renderStudyPlan(plan) {
                 const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
                 const highlyRecommendedClass = (!isCompleted && isSuggested) ? 'highly-recommended' : '';
 
+                // Đánh dấu môn Học lại (nếu đã xuất hiện ở các kỳ trước)
+                const isRetake = seenSubjects.has(sub.id);
+                seenSubjects.add(sub.id);
+                const retakeBadge = isRetake ? '<span class="pill" style="background:#fef3c7; color:#d97706; margin-left:8px; font-size:0.7rem; padding:2px 6px;">Học lại</span>' : '';
+
                 let statusHtml = '';
                 if (isCompleted) {
                     statusHtml = '<span style="color:#10b981; font-size:0.85rem; font-weight:600;">✓ Pass</span>';
@@ -1714,7 +1721,7 @@ function renderStudyPlan(plan) {
                             </svg>
                         </button>
 
-                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:8px; padding-right:24px;">${sub.name}</div>
+                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:8px; padding-right:24px;">${sub.name}${retakeBadge}</div>
                         <div style="font-size:0.8rem; color:var(--muted); margin-bottom:12px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
                         
                         <div style="display:flex; align-items:center; gap:8px;" onmousedown="event.stopPropagation()">
