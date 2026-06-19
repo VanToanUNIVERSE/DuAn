@@ -110,10 +110,70 @@ class StudyPlanService
                 'target_semester_count' => $targetSemsToSave
             ]);
 
+            $semesterIndex = 1;
+
+            // Xây dựng lại các học kỳ đã qua từ SemesterHistory
+            $histories = \App\Models\SemesterHistory::where('user_id', $userId)
+                ->with('items.subject')
+                ->orderBy('semester_number')
+                ->get();
+
+            $historySubjectIds = []; // Danh sách tất cả các môn đã có trong lịch sử (bao gồm cả pass và fail để tránh lặp nếu không cần thiết)
+            $lastHistorySemNumber = 0;
+
+            foreach ($histories as $history) {
+                $semNumber = $history->semester_number;
+                $lastHistorySemNumber = max($lastHistorySemNumber, $semNumber);
+                
+                $semester = StudyPlanSemester::create([
+                    'study_plan_id' => $plan->id,
+                    'semester_index' => $semNumber,
+                    'expected_credits' => $history->total_credits,
+                ]);
+
+                foreach ($history->items as $item) {
+                    if ($item->subject) {
+                        StudyPlanSubject::create([
+                            'study_plan_semester_id' => $semester->id,
+                            'subject_id' => $item->subject_id,
+                            'is_completed' => $item->status === 'pass',
+                        ]);
+                        $plannedSubjectIds[] = $item->subject_id;
+                        $historySubjectIds[] = $item->subject_id;
+                    }
+                }
+            }
+
+            if ($lastHistorySemNumber > 0) {
+                $semesterIndex = $lastHistorySemNumber + 1;
+            }
+
+            // Xóa các môn đã pass hoặc đã có trong lịch sử khỏi remainingSubjects
+            // Ngoại trừ các môn fail trong lịch sử (để được học lại)
+            $remainingSubjects = clone $allSubjects;
+            $remainingSubjects = $remainingSubjects->reject(function ($s) use ($passedSubjectIds, $historySubjectIds, $failedSubjectIds) {
+                if (in_array($s->id, $passedSubjectIds)) {
+                    // Nếu môn đã pass và ĐÃ nằm trong lịch sử rồi, thì bỏ qua không rải lại nữa
+                    if (in_array($s->id, $historySubjectIds)) {
+                        return true;
+                    }
+                    // Nếu môn đã pass nhưng chưa có trong lịch sử (nhập lẻ), vẫn giữ lại để rải
+                    return false;
+                }
+                
+                // Môn chưa pass
+                if (in_array($s->id, $historySubjectIds)) {
+                    // Nếu môn nằm trong lịch sử mà chưa pass (tức là fail), ta phải rải lại để học lại!
+                    return false;
+                }
+                
+                return false;
+            });
+
             // Nếu mode là normal VÀ sinh viên chưa có điểm nào (người dùng mới),
             // copy 100% từ chương trình khung gốc để giữ đúng lộ trình chuẩn mực của trường.
-            if ($mode === 'normal' && empty($gradedSubjectIds)) {
-                $groupedSubjects = $allSubjects->groupBy('assigned_semester_index')->sortKeys();
+            if ($mode === 'normal' && empty($gradedSubjectIds) && $histories->isEmpty()) {
+                $groupedSubjects = $remainingSubjects->groupBy('assigned_semester_index')->sortKeys();
                 $maxSemesterIndex = 0;
                 
                 foreach ($groupedSubjects as $semIndex => $subjectsForThisSemester) {
@@ -140,9 +200,6 @@ class StudyPlanService
             }
 
             // Sử dụng Greedy Algorithm cho:
-            // 1. Các mode fast, slow
-            // 2. Mode normal nhưng sinh viên ĐÃ CÓ ĐIỂM (đang học dở dang), cần rải lại môn học.
-            $semesterIndex = 1;
 
             $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
                 ->orWhere('name', 'like', '%Anh văn%')
@@ -193,13 +250,15 @@ class StudyPlanService
                         return false; // Subject only offered in odd semesters
                     }
 
-                    // Cố định các môn đã Pass vào đúng học kỳ chuẩn của chương trình khung
+                    // Cố định các môn đã Pass vào đúng học kỳ chuẩn của chương trình khung (nếu môn này chưa có trong lịch sử)
                     if (in_array($subject->id, $passedSubjectIds)) {
+                        // Nếu semesterIndex hiện tại nhỏ hơn học kỳ chuẩn, chờ đến học kỳ chuẩn mới rải
                         $assignedSem = $subject->assigned_semester_index ?? 1;
-                        if ($assignedSem !== $semesterIndex) {
+                        if ($assignedSem > $semesterIndex) {
                             return false;
                         }
-                        return true; // Bỏ qua check prereq vì môn này đã học và pass rồi
+                        // Nếu đã tới hoặc qua học kỳ chuẩn, cứ xếp môn này vào học kỳ hiện tại (trả nợ/xếp bù)
+                        return true; 
                     } else {
                         // Các môn CHƯA HỌC (chưa pass) thì không được xếp vào học kỳ trong quá khứ
                         if ($semesterIndex < $currentSem) {

@@ -176,6 +176,13 @@
 
 
 
+    @include('components.history-drawer')
+
+    {{-- ══════════════════════════════════════════════════════════════════
+         APP SHELL
+    ══════════════════════════════════════════════════════════════════ --}}
+    <div class="app-shell">
+
     {{-- ── SIDEBAR ── --}}
     @include('components.sidebar')
 

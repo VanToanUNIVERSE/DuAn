@@ -1955,6 +1955,7 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                 
                 // Show modal immediately
                 fetchStudyPlans().then(() => {
+                    saveSemesterHistory(semIndex, snapshot);
                     showSemResultModal(semIndex, snapshot);
                 });
             } else if (resData.success && resData.evaluation) {

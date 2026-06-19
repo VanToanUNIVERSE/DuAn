@@ -70,15 +70,22 @@ class SemesterHistoryController extends Controller
 
         // Lưu vào DB trong transaction
         DB::transaction(function () use ($user, $validated, $totalCredits, $passedCredits, $gpa, $subjectMap) {
-            $history = SemesterHistory::create([
-                'user_id'         => $user->id,
-                'semester_number' => $validated['semester_number'],
-                'academic_year'   => $validated['academic_year'] ?? $user->pref_academic_year,
-                'program_type'    => $validated['program_type']  ?? $user->pref_program_type,
-                'total_credits'   => $totalCredits,
-                'passed_credits'  => $passedCredits,
-                'gpa'             => $gpa,
-            ]);
+            $history = SemesterHistory::updateOrCreate(
+                [
+                    'user_id'         => $user->id,
+                    'semester_number' => $validated['semester_number'],
+                ],
+                [
+                    'academic_year'   => $validated['academic_year'] ?? $user->pref_academic_year,
+                    'program_type'    => $validated['program_type']  ?? $user->pref_program_type,
+                    'total_credits'   => $totalCredits,
+                    'passed_credits'  => $passedCredits,
+                    'gpa'             => $gpa,
+                ]
+            );
+
+            // Xóa các item cũ nếu có
+            SemesterHistoryItem::where('semester_history_id', $history->id)->delete();
 
             foreach ($validated['courses'] as $course) {
                 $grade  = isset($course['grade']) ? (float) $course['grade'] : null;
