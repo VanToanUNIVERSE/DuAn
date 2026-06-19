@@ -99,18 +99,69 @@
             <div class="srm-recommend" id="srm-recommend">
                 <div class="srm-recommend-icon" id="srm-rec-icon">📈</div>
                 <div class="srm-recommend-body">
-                    <div class="srm-recommend-tag" id="srm-rec-tag">Gợi ý</div>
+                    {{-- Badge phạm vi: chỉ ảnh hưởng kỳ tiếp --}}
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <div class="srm-recommend-tag" id="srm-rec-tag">Gợi ý chung</div>
+                        <span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.03em;">CHỈ KỲ TIẾP</span>
+                    </div>
                     <div class="srm-recommend-headline" id="srm-rec-headline">Giữ nguyên số tín chỉ</div>
                     <div class="srm-credit-change" id="srm-credit-change"><span>--</span> TC/kỳ</div>
                     <div class="srm-recommend-desc" id="srm-rec-desc">--</div>
                 </div>
             </div>
             <div class="srm-reasons" id="srm-reasons"></div>
+            
+            {{-- Advisor Section: Gợi ý điều chỉnh mode lộ trình --}}
+            <div class="srm-advisor-section" id="srm-advisor-section"
+                 style="display:none; background: linear-gradient(135deg, #fefce8 0%, #f0fdf4 100%); border: 1px solid #d1fae5; border-radius: 12px; margin: 0 24px 4px; overflow: hidden;">
+
+                {{-- Header phân biệt với phần gợi ý TC bên trên --}}
+                <div style="padding: 12px 16px 0; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1rem;">🧠</span>
+                    <div>
+                        <div style="font-size: 0.88rem; font-weight: 700; color: var(--ink);">Gợi Ý Thay Đổi Cường Độ Học</div>
+                        <div style="font-size: 0.75rem; color: var(--muted); margin-top: 1px;">Áp dụng cho <strong>toàn bộ lộ trình</strong> còn lại — khác với gợi ý TC/kỳ ở trên</div>
+                    </div>
+                </div>
+
+                <div id="srm-advisor-message" style="font-size: 0.88rem; color: var(--muted); padding: 10px 16px 0; line-height: 1.6;">
+                    <!-- Message goes here -->
+                </div>
+
+                <div id="srm-adjustment-prompt"
+                     style="display:none; padding: 12px 16px; margin-top: 10px; background: rgba(255,255,255,0.7); border-top: 1px solid #d1fae5; gap: 8px; justify-content: space-between; align-items: center;">
+                    {{-- Impact warning --}}
+                    <div style="font-size: 0.75rem; color: #6b7280; display: flex; align-items: center; gap: 5px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:14px;height:14px;color:#d97706;flex-shrink:0;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"/>
+                        </svg>
+                        Sẽ tái phân bổ lại toàn bộ môn học còn lại
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                        <button class="btn-secondary" onclick="closeSemResultModal()"
+                                style="padding: 6px 14px; font-size: 0.82rem; border-radius: 8px;">
+                            Bỏ qua
+                        </button>
+                        <button class="btn-primary" onclick="applyAutoAdjustment()"
+                                style="padding: 6px 14px; font-size: 0.82rem; background: #10b981; border-radius: 8px; display: flex; align-items: center; gap: 5px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                            Áp dụng & Tái lộ trình
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="srm-subj-section" id="srm-subj-section"></div>
-            <div class="srm-footer">
-                <button class="srm-btn-close" onclick="closeSemResultModal()">Bỏ qua</button>
-                <button class="srm-btn-apply" id="srm-btn-apply" onclick="applyCreditRecommendation()">✓ Áp dụng gợi
-                    ý</button>
+
+            <div class="srm-footer" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-top: 1px solid var(--hairline);">
+                <button class="srm-btn-close" onclick="closeSemResultModal()">Đóng</button>
+
+                {{-- Nút này CHỈ đặt mục tiêu TC cho kỳ tiếp, không thay đổi lộ trình tổng thể --}}
+                <button class="srm-btn-apply" id="srm-btn-apply" onclick="applyCreditRecommendation()" style="display:none;"
+                        title="Lưu mục tiêu số tín chỉ cho kỳ học tiếp theo. Không thay đổi cấu trúc lộ trình.">
+                    <span style="font-size: 0.75rem; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; margin-right: 5px; font-weight: 700;">KỲ TIẾP</span>
+                    ✨ Áp dụng gợi ý
+                </button>
             </div>
         </div>
     </div>
@@ -461,6 +512,34 @@
                 </div>
             </div>
 
+            {{-- Widget Dự Báo Tốt Nghiệp --}}
+            <div class="graduation-forecast-card" id="grad-forecast-widget" style="display: none; background: #fff; border-radius: 16px; border: 1px solid var(--hairline); padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); flex-direction: column; gap: 12px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <h3 style="font-family: 'Sora', sans-serif; font-size: 1.05rem; margin: 0 0 6px 0; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            🎓 Dự Báo Tốt Nghiệp
+                            <span id="grad-status-badge" style="font-size: 0.75rem; padding: 4px 8px; border-radius: 20px; font-weight: 600; background: var(--surface-soft); color: var(--muted);">Đang tải...</span>
+                        </h3>
+                        <p id="grad-message" style="color: var(--muted); font-size: 0.88rem; margin: 0; line-height: 1.5; max-width: 560px;">...</p>
+                    </div>
+                    <div style="display: flex; gap: 24px; text-align: right; flex-shrink: 0;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.04em;">Kỳ vọng</div>
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--ink); font-family: 'Sora', sans-serif;" id="grad-target-sems">-</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.04em;">TC còn lại</div>
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--ink); font-family: 'Sora', sans-serif;" id="grad-remaining-credits">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Badge gợi ý đổi mode — chỉ hiện khi có gợi ý từ hệ thống --}}
+                <div id="grad-mode-suggestion" style="display:none; padding-top: 10px; border-top: 1px solid var(--hairline);">
+                    {{-- Nội dung được JS inject vào đây --}}
+                </div>
+            </div>
+
             {{-- Bento Grid --}}
             <div class="bento-grid">
                 
@@ -619,45 +698,83 @@
             </div>
 
             <div id="planner-selection-view" style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:var(--sp-xl);">
-                <!-- Cột Tạo Kế Hoạch Mới -->
+                
+                <!-- Cột 1: Quản Lý Chế Độ / Tạo Kế Hoạch -->
                 <div class="clay-card">
-                    <div class="card-title-row">
-                        <div class="card-heading">
-                            ⚙️ Tạo Kế Hoạch Mới
+                    <!-- Khối: Tạo Kế Hoạch Mới (Khi chưa có kế hoạch) -->
+                    <div id="plan-creation-wizard">
+                        <div class="card-title-row">
+                            <div class="card-heading">⚙️ Tạo Kế Hoạch Mới</div>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:16px;">
+                            <div>
+                                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Chế độ học (Mode)</label>
+                                <select id="planner-mode" class="clay-select" style="width: 100%;">
+                                    <option value="normal" selected>Bình thường (8 kỳ - 4 năm)</option>
+                                    <option value="fast">Nhanh (6 kỳ - 3 năm)</option>
+                                    <option value="slow">Chậm (10 kỳ - 5 năm)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Tên kế hoạch <span style="color:var(--red);">*</span></label>
+                                <input type="text" id="planner-name" class="ob-grade-input"
+                                    placeholder="Ví dụ: Kế hoạch ra trường sớm"
+                                    style="width: 100%; text-align:left; padding:0 12px; height:42px;">
+                            </div>
+                            <button class="btn-primary" onclick="generateStudyPlan()" style="height: 42px; width:100%; justify-content:center; margin-top:8px;">✨ Tạo kế hoạch</button>
                         </div>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:16px;">
-                        <div>
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Chế độ học (Mode)</label>
-                            <select id="planner-mode" class="clay-select" style="width: 100%;">
-                                <option value="normal" selected>Bình thường (8 kỳ - 4 năm)</option>
-                                <option value="fast">Nhanh (6 kỳ - 3 năm)</option>
-                                <option value="slow">Chậm (10 kỳ - 5 năm)</option>
-                            </select>
-                            <div id="planner-target-credits" style="font-size:0.82rem; color:var(--primary); margin-top:8px; font-weight:500; display:none;"></div>
+
+                    <!-- Khối: Đổi Chế Độ (Khi đã có kế hoạch active) -->
+                    <div id="plan-mode-switcher" style="display:none;">
+                        <div class="card-title-row">
+                            <div class="card-heading">🎛️ Điều Chỉnh Cường Độ Học</div>
                         </div>
-                        <div>
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Tên kế hoạch <span style="color:var(--red);">*</span></label>
-                            <input type="text" id="planner-name" class="ob-grade-input"
-                                placeholder="Ví dụ: Kế hoạch ra trường sớm"
-                                style="width: 100%; text-align:left; padding:0 12px; height:42px;">
+                        <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 16px;">Bạn đã có kế hoạch đang hoạt động. Bạn có thể đổi cường độ học để hệ thống tự động rải lại môn.</p>
+                        
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <label style="display:flex; align-items:center; gap:12px; padding: 12px; border: 1px solid var(--hairline); border-radius: 8px; cursor: pointer;" class="mode-radio-label">
+                                <input type="radio" name="change_mode" value="slow" style="width: 18px; height: 18px;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--ink);">🌱 Học Nhẹ (~12-14 TC/kỳ)</div>
+                                    <div style="font-size: 0.8rem; color: var(--muted);">Giảm áp lực, kéo dài thời gian</div>
+                                </div>
+                            </label>
+                            
+                            <label style="display:flex; align-items:center; gap:12px; padding: 12px; border: 1px solid var(--hairline); border-radius: 8px; cursor: pointer;" class="mode-radio-label">
+                                <input type="radio" name="change_mode" value="normal" style="width: 18px; height: 18px;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--ink);">⚖️ Cân Bằng (~15-18 TC/kỳ)</div>
+                                    <div style="font-size: 0.8rem; color: var(--muted);">Tốt nghiệp đúng hạn chuẩn</div>
+                                </div>
+                            </label>
+                            
+                            <label style="display:flex; align-items:center; gap:12px; padding: 12px; border: 1px solid var(--hairline); border-radius: 8px; cursor: pointer;" class="mode-radio-label">
+                                <input type="radio" name="change_mode" value="fast" style="width: 18px; height: 18px;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--ink);">🚀 Tăng Tốc (~20-25 TC/kỳ)</div>
+                                    <div style="font-size: 0.8rem; color: var(--muted);">Tốt nghiệp sớm hơn</div>
+                                </div>
+                            </label>
                         </div>
-                        <button class="btn-primary" onclick="generateStudyPlan()" style="height: 42px; width:100%; justify-content:center; margin-top:8px;">✨ Tạo kế hoạch</button>
+                        
+                        <button class="btn-primary" onclick="changeActivePlanMode()" style="height: 42px; width:100%; justify-content:center; margin-top:16px;">🔄 Cập nhật lộ trình</button>
                     </div>
+
                     <div id="planner-loader" class="loader" style="display:none; text-align:center; padding:20px;">
                         <div class="spinner" style="margin:0 auto;"></div>
-                        <p style="color:var(--muted);font-size:0.9rem;margin-top:10px;">Hệ thống đang chạy thuật toán Tham lam (Greedy)...</p>
+                        <p style="color:var(--muted);font-size:0.9rem;margin-top:10px;">Hệ thống đang chạy thuật toán tái phân bổ...</p>
                     </div>
                 </div>
 
-                <!-- Cột Danh Sách Kế Hoạch Đã Lưu -->
+                <!-- Cột Danh Sách Kế Hoạch -->
                 <div class="clay-card">
                     <div class="card-title-row">
                         <div class="card-heading">
                             📂 Kế Hoạch Của Bạn
                         </div>
                     </div>
-                    <div id="inline-saved-plans-list" style="display:flex; flex-direction:column; gap:12px; max-height:260px; overflow-y:auto; padding-right:8px;">
+                    <div id="inline-saved-plans-list" style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding-right:8px;">
                         <!-- Danh sách kế hoạch load bằng JS -->
                         <p style="color:var(--muted); text-align:center; padding:20px;">Đang tải danh sách...</p>
                     </div>

@@ -452,55 +452,12 @@ class StudyPlanController extends Controller
     }
 
     /**
-     * Đổi chế độ học của kế hoạch đang active.
-     * Không tạo kế hoạch mới — phân bổ lại môn từ kỳ hiện tại trở đi.
-     *
-     * POST /api/v1/study-plans/{id}/change-mode
-     */
-    public function changeMode(Request $request, $id)
-    {
-        $userId = $request->input('user_id') ?? Auth::id();
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
-
-        $request->validate([
-            'mode' => 'required|string|in:slow,normal,fast',
-        ]);
-
-        $newMode = $request->input('mode');
-
-        try {
-            $plan = $this->studyPlanService->changeMode((int)$id, $newMode, (int)$userId);
-            $plan = $this->attachGrades($plan, $userId);
-
-            $modeLabels = [
-                'slow'   => 'Học nhẹ (~14 TC/kỳ)',
-                'normal' => 'Cân bằng (~18 TC/kỳ)',
-                'fast'   => 'Tăng tốc (~22 TC/kỳ)',
-            ];
-
-            return response()->json([
-                'success' => true,
-                'message' => "Đã chuyển sang chế độ {$modeLabels[$newMode]}. Kế hoạch đã được phân bổ lại.",
-                'data'    => $plan,
-            ]);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không tìm thấy kế hoạch đang hoạt động. Hãy tạo kế hoạch trước.',
-            ], 404);
-        }
-    }
-
-    /**
      * Lấy kế hoạch học tập đang hoạt động (is_active = true) của sinh viên.
      * Đảm bảo mỗi sinh viên chỉ có 1 kế hoạch active tại mọi thời điểm.
      *
      * GET /api/v1/study-plans/active
      */
     public function getActivePlan(Request $request)
-
     {
         $userId = $request->input('user_id') ?? Auth::id();
         if (!$userId) {
@@ -519,6 +476,49 @@ class StudyPlanController extends Controller
         $this->attachGrades($plan, $userId);
 
         return response()->json(['success' => true, 'data' => $plan]);
+    }
+
+    /**
+     * Đổi chế độ học tập cho một kế hoạch hiện có (không tạo mới)
+     * và tái phân bổ môn học từ học kỳ hiện tại trở đi.
+     *
+     * POST /api/v1/study-plans/{id}/change-mode
+     */
+    public function changeMode(Request $request, $id)
+    {
+        $request->validate([
+            'mode' => 'required|in:slow,normal,fast'
+        ]);
+
+        $userId = Auth::id();
+        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
+
+        if (!$plan) {
+            return response()->json(['success' => false, 'message' => 'Study plan not found'], 404);
+        }
+
+        // Cập nhật mode
+        $plan->update(['mode' => $request->mode]);
+
+        // Cập nhật target_semester_count tương ứng với mode mới nếu muốn
+        $currentSem = 1; // Mặc định nếu chưa có grade
+        $progressService = new \App\Services\ProgressService();
+        $progress = $progressService->evaluateProgress($userId);
+        if ($progress && isset($progress['completed_semesters'])) {
+             $currentSem = $progress['completed_semesters'] + 1;
+        }
+
+        // Gọi service tái phân bổ môn học
+        $plan = $this->studyPlanService->applySuggestionsAndRedistribute($plan->id, [], $currentSem);
+
+        // Nạp lại dữ liệu
+        $plan = $this->attachGrades($plan, $userId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã thay đổi chế độ học tập và rải lại môn thành công.',
+            'data'    => $plan
+        ]);
     }
 }
 

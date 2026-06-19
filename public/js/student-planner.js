@@ -626,6 +626,80 @@ async function fetchProgress() {
     } catch (e) {
         console.error('Lỗi khi fetch progress', e);
     }
+    
+    // Gọi thêm API dự báo tốt nghiệp
+    fetchGraduationForecast();
+}
+
+async function fetchGraduationForecast() {
+    try {
+        const response = await fetch('/api/v1/graduation-forecast');
+        if (!response.ok) return;
+        const resData = await response.json();
+        if (resData.success && resData.data) {
+            const data = resData.data;
+            const widget = document.getElementById('grad-forecast-widget');
+            if (!widget) return;
+            
+            const badge = document.getElementById('grad-status-badge');
+            badge.textContent = data.status === 'ON_TRACK' ? 'Đúng tiến độ' : (data.status === 'AHEAD' ? 'Vượt tiến độ' : 'Chậm tiến độ');
+            badge.style.color = data.status_color;
+            badge.style.backgroundColor = data.status_color + '20';
+            
+            document.getElementById('grad-message').textContent = data.message;
+            document.getElementById('grad-target-sems').textContent = data.target_semesters + ' kỳ';
+            document.getElementById('grad-remaining-credits').textContent = data.remaining_credits + ' TC';
+            
+            widget.style.display = 'flex';
+
+            // Nếu có pending evaluation từ lần nhập điểm, hiện badge gợi ý mode
+            if (window._pendingModeEvaluation) {
+                updateModeSuggestionBadge(window._pendingModeEvaluation);
+            }
+        }
+    } catch (e) { console.error('Lỗi khi fetch graduation forecast', e); }
+}
+
+/**
+ * Hiển thị badge gợi ý mode nhẹ nhàng trong widget Dự Báo Tốt Nghiệp.
+ * KHÔNG hiện popup — người dùng có thể đọc và tự quyết định khi nào phù hợp.
+ *
+ * Chỉ gợi ý khi:
+ *   - GPA tốt (≥ 7.5) + đúng/vượt tiến độ → gợi ý FAST
+ *   - GPA trung bình (6.0-7.4) + chậm tiến độ → gợi ý giữ NORMAL hoặc xem xét
+ *   - GPA yếu/nguy hiểm (< 6.0) → gợi ý SLOW
+ */
+function updateModeSuggestionBadge(evaluation) {
+    const badgeEl = document.getElementById('grad-mode-suggestion');
+    if (!badgeEl) return;
+
+    const modeMap = {
+        fast:   { icon: '🚀', label: 'Tăng Tốc',  color: '#10b981', bg: '#d1fae5' },
+        normal: { icon: '⚖️', label: 'Cân Bằng',  color: '#1a3a3a', bg: '#e8f8f3' },
+        slow:   { icon: '🌱', label: 'Học Nhẹ',   color: '#d97706', bg: '#fef3c7' },
+    };
+
+    const suggested = evaluation.suggested_mode || 'normal';
+    const current   = window.currentActivePlan?.mode || 'normal';
+    const status    = evaluation.status; // KEEP | REPLAN | SPEED_UP | REDUCE
+
+    // Không hiện gì nếu không cần thay đổi
+    if (status === 'KEEP' || suggested === current) {
+        badgeEl.style.display = 'none';
+        return;
+    }
+
+    const m = modeMap[suggested] || modeMap['normal'];
+    const arrow = suggested === 'fast' ? '↑' : '↓';
+
+    badgeEl.innerHTML = `
+        <span style="font-size:0.78rem; color:${m.color}; background:${m.bg}; padding:4px 10px; border-radius:20px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px;"
+              title="${evaluation.message}"
+              onclick="document.getElementById('tab-planner') && switchTab('study-plan', document.getElementById('nav-study-plan'))">
+            ${arrow} Nên chuyển sang ${m.icon} ${m.label}
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:12px;height:12px;"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+        </span>`;
+    badgeEl.style.display = 'block';
 }
 
 function renderSuggestions(subjects, targetSemester) {
@@ -695,13 +769,39 @@ function renderSuggestions(subjects, targetSemester) {
 // ═══════════════════════════════════════════════════════════════
 // COMPLETE SEMESTER
 // ═══════════════════════════════════════════════════════════════
-function completeSemester() {
+async function completeSemester() {
     const unfilled = currentCourses.filter(c => c.grade === null || c.grade === undefined);
     if (unfilled.length > 0) { showToast(`Còn ${unfilled.length} môn chưa điền điểm!`, 'error'); return; }
     if (currentCourses.length === 0) { showToast('Chưa có môn nào trong danh sách!', 'error'); return; }
+    
     const snapshot = currentCourses.map(c => ({ ...c }));
     const cur = getCurrentSemester();
-    saveSemesterHistory(cur, snapshot.map(c => ({ id: c.id, grade: c.grade })));
+    
+    // Gọi API để trigger đánh giá ở backend
+    try {
+        const res = await fetch('/semester-history/complete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                semester_number: cur,
+                courses: snapshot.map(c => ({ subject_id: c.id, grade: c.grade }))
+            })
+        });
+        const resData = await res.json();
+        _semEvaluation = resData.evaluation || null;
+    } catch(e) {
+        console.error('Lỗi khi lưu lịch sử', e);
+    }
+
+    // Xóa badge gợi ý cũ từ kỳ trước (nếu có) vì sắp có đánh giá mới
+    window._pendingModeEvaluation = null;
+    const oldBadge = document.getElementById('grad-mode-suggestion');
+    if (oldBadge) oldBadge.style.display = 'none';
+
     currentCourses = []; renderCurrentCourses();
     snapshot.forEach(({ id, grade }) => {
         const input = document.getElementById(`grade-${id}`); if (!input) return;
@@ -722,6 +822,7 @@ function completeSemester() {
 // SEMESTER RESULT MODAL
 // ═══════════════════════════════════════════════════════════════
 let _semRecCredits = 0;
+let _semEvaluation = null;
 
 function showSemResultModal(semNumber, snapshot) {
     const graded = snapshot.filter(c => c.grade !== null && c.grade !== undefined);
@@ -731,6 +832,41 @@ function showSemResultModal(semNumber, snapshot) {
     const creditsThisSem = snapshot.reduce((s, c) => s + (c.credits || 0), 0);
     const passedCredits = passSubjects.reduce((s, c) => s + (c.credits || 0), 0);
     let totalEarned = 0;
+    
+    // Nếu có evaluation từ backend (gọi từ completeSemester)
+    if (_semEvaluation) {
+        const evalData = _semEvaluation;
+        const modeDisplayMap = {
+            fast:   { icon: '🚀', label: 'Tăng Tốc',  color: '#10b981' },
+            normal: { icon: '⚖️', label: 'Cân Bằng',  color: '#1a3a3a' },
+            slow:   { icon: '🌱', label: 'Học Nhẹ',   color: '#d97706' },
+        };
+        const modeInfo = modeDisplayMap[evalData.suggested_mode] || modeDisplayMap['normal'];
+        const currentMode = window.currentActivePlan?.mode || 'normal';
+        const currentInfo = modeDisplayMap[currentMode] || modeDisplayMap['normal'];
+        const needsChange = evalData.status !== 'KEEP' && evalData.suggested_mode !== currentMode;
+
+        document.getElementById('srm-advisor-section').style.display = 'block';
+        document.getElementById('srm-advisor-message').innerHTML = `
+            <p style="margin:0 0 10px 0;">${evalData.message}</p>
+            <div style="display:flex; align-items:center; gap:12px; background:#f8fafc; border-radius:8px; padding:10px 14px;">
+                <div style="font-size:0.85rem; color:var(--muted);">Mode hiện tại:</div>
+                <span style="font-weight:700; color:${currentInfo.color}">${currentInfo.icon} ${currentInfo.label}</span>
+                ${needsChange ? `<span style="color:var(--muted); font-size:1rem;">→</span>
+                <div style="font-size:0.85rem; color:var(--muted);">Gợi ý:</div>
+                <span style="font-weight:700; color:${modeInfo.color}">${modeInfo.icon} ${modeInfo.label}</span>` : ''}
+            </div>
+        `;
+
+        if (needsChange) {
+            document.getElementById('srm-adjustment-prompt').style.display = 'flex';
+        } else {
+            document.getElementById('srm-adjustment-prompt').style.display = 'none';
+        }
+    } else {
+        document.getElementById('srm-advisor-section').style.display = 'none';
+    }
+
     if (window.currentActivePlan && window.currentActivePlan.semesters) {
         window.currentActivePlan.semesters.forEach(sem => {
             if (sem.subjects) {
@@ -846,12 +982,34 @@ function showSemResultModal(semNumber, snapshot) {
     const failHtml = subjectData.filter(c => c.grade <= 5.0).map(c => `<div class="srm-subj-row fail"><span class="srm-subj-name">${c.name}</span><span class="srm-subj-credits">${c.credits} TC</span><span class="srm-subj-grade fail">${c.grade}</span></div>`).join('');
     subjEl.innerHTML = `${passHtml ? `<div class="srm-subj-title">✓ Môn đạt (${passSubjects.length})</div><div class="srm-subj-list">${passHtml}</div>` : ''}${failHtml ? `<div class="srm-subj-title" style="color:var(--error);">✗ Môn chưa đạt (${failSubjects.length})</div><div class="srm-subj-list">${failHtml}</div>` : ''}`;
     const applyBtn = document.getElementById('srm-btn-apply');
-    if (recDelta !== 0) { applyBtn.style.display = ''; applyBtn.innerHTML = `✨ Áp dụng gợi ý (${suggestedCredits} TC)`; }
-    else { applyBtn.style.display = 'none'; }
+    const hasModeSuggestion = _semEvaluation && _semEvaluation.status !== 'KEEP' &&
+        _semEvaluation.suggested_mode !== (window.currentActivePlan?.mode || 'normal');
+
+    if (hasModeSuggestion) {
+        // Đã có gợi ý đổi mode (tái tạo toàn bộ lộ trình) → ẩn nút TC riêng lẻ tránh chồng chéo
+        applyBtn.style.display = 'none';
+    } else if (recDelta !== 0) {
+        // Chỉ hiện nút TC khi không có gợi ý đổi mode
+        applyBtn.style.display = '';
+        applyBtn.innerHTML = `✨ Áp dụng gợi ý kỳ tiếp (${suggestedCredits} TC)`;
+    } else {
+        applyBtn.style.display = 'none';
+    }
     document.getElementById('sem-result-overlay').classList.add('open');
 }
 
 function closeSemResultModal() { document.getElementById('sem-result-overlay').classList.remove('open'); }
+
+function applyAutoAdjustment() {
+    if (window.currentActivePlan && _semEvaluation) {
+        closeSemResultModal();
+        // Xóa badge gợi ý vì user đã chấp nhận điều chỉnh
+        window._pendingModeEvaluation = null;
+        const badgeEl = document.getElementById('grad-mode-suggestion');
+        if (badgeEl) badgeEl.style.display = 'none';
+        adjustStudyPlan(window.currentActivePlan.id, _semEvaluation);
+    }
+}
 
 let _pendingEvaluation = null;
 let _pendingPlanId = null;
@@ -898,22 +1056,18 @@ function confirmDynamicMode() {
 
 function applyCreditRecommendation() {
     localStorage.setItem('recommended_credits_per_sem', _semRecCredits);
-    showToast(`Đã ghi nhớ gợi ý: ${_semRecCredits} TC/kỳ 📌`, 'success');
     closeSemResultModal();
-    document.getElementById('stat-credits-per-sem').textContent = _semRecCredits;
+    // Cập nhật hiển thị nếu có element thống kê
+    const statEl = document.getElementById('stat-credits-per-sem');
+    if (statEl) statEl.textContent = _semRecCredits;
+    showToast(
+        `✅ Đã đặt mục tiêu ${_semRecCredits} TC cho kỳ tiếp — Không ảnh hưởng lộ trình tổng thể`,
+        'success'
+    );
 }
 
 document.getElementById('sem-result-overlay').addEventListener('click', function (e) { if (e.target === this) closeSemResultModal(); });
 
-async function saveSemesterHistory(semesterNumber, snapshot) {
-    try {
-        const courses = snapshot.map(({ id, grade }) => ({ subject_id: id, grade }));
-        const payload = { semester_number: semesterNumber, academic_year: document.getElementById('academic_year')?.value || null, program_type: document.getElementById('program_type')?.value || null, courses };
-        const res = await fetch('/semester-history/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify(payload) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        loadSemesterHistory();
-    } catch (err) { console.warn('[Lưu lịch sử thất bại]', err); }
-}
 
 // ═══════════════════════════════════════════════════════════════
 // TOAST
@@ -1542,6 +1696,12 @@ async function fetchStudyPlans() {
     }
 }
 
+// Initialize fetch study plans on load
+window.addEventListener('DOMContentLoaded', () => {
+    fetchStudyPlans();
+    checkActivePlanStatus();
+});
+
 async function saveCurrentPlan(planId) {
     const name = prompt("Nhập tên để dễ nhớ cho kế hoạch này:", window.currentActivePlan.name);
     if (name === null) return;
@@ -1619,6 +1779,83 @@ function backToPlannerSelection() {
     document.getElementById('planner-selection-view').style.display = 'grid';
     document.getElementById('study-plan-results').style.display = 'none';
     fetchSavedPlansList();
+    checkActivePlanStatus();
+}
+
+async function checkActivePlanStatus() {
+    try {
+        const res = await fetch('/api/v1/study-plans/active');
+        const resData = await res.json();
+        const switcher = document.getElementById('plan-mode-switcher');
+        const wizard = document.getElementById('plan-creation-wizard');
+        if (resData.success && resData.data) {
+            window.currentActivePlan = resData.data;
+            if (wizard) wizard.style.display = 'none';
+            if (switcher) {
+                switcher.style.display = 'block';
+                // Check current mode radio
+                const modeRadios = document.getElementsByName('change_mode');
+                for (let r of modeRadios) {
+                    if (r.value === resData.data.mode) {
+                        r.checked = true;
+                    }
+                }
+            }
+        } else {
+            if (wizard) wizard.style.display = 'block';
+            if (switcher) switcher.style.display = 'none';
+        }
+    } catch(e) {
+        console.error('Error checkActivePlanStatus', e);
+    }
+}
+
+async function changeActivePlanMode() {
+    if (!window.currentActivePlan) return;
+    let selectedMode = 'normal';
+    const radios = document.getElementsByName('change_mode');
+    for (let r of radios) {
+        if (r.checked) {
+            selectedMode = r.value;
+            break;
+        }
+    }
+    
+    if (selectedMode === window.currentActivePlan.mode) {
+        showToast('Chế độ này đang được kích hoạt', 'info');
+        return;
+    }
+    
+    const loader = document.getElementById('planner-loader');
+    loader.style.display = 'block';
+    
+    try {
+        const res = await fetch(`/api/v1/study-plans/${window.currentActivePlan.id}/change-mode`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ mode: selectedMode })
+        });
+        const resData = await res.json();
+        if (resData.success && resData.data) {
+            showToast('Đã cập nhật chế độ học thành công!', 'success');
+            renderStudyPlan(resData.data);
+            fetchSavedPlansList();
+            // Xóa badge gợi ý vì user đã chủ động đổi mode
+            window._pendingModeEvaluation = null;
+            const badgeEl = document.getElementById('grad-mode-suggestion');
+            if (badgeEl) badgeEl.style.display = 'none';
+        } else {
+            showToast('Lỗi khi đổi chế độ', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi mạng', 'error');
+    } finally {
+        loader.style.display = 'none';
+    }
 }
 
 async function deleteSavedPlan(planId, event) {
@@ -1926,14 +2163,13 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
         showSaveIndicator('saved', grade === null ? 'Đã xóa điểm' : 'Đã lưu điểm');
 
         if (grade === null) {
-            // Khi xóa điểm, cấu trúc kế hoạch bị thay đổi (môn chưa học ở quá khứ), 
-            // nên ta tự động tạo lại kế hoạch với mode hiện tại.
-            if (window.currentActivePlan && window.currentActivePlan.mode) {
-                showToast('Đang cập nhật lại lộ trình...', 'info');
-                adjustStudyPlan(planId, { suggested_mode: window.currentActivePlan.mode, message: 'Người dùng xóa điểm', gpa: 0 });
-            } else {
-                fetchStudyPlans();
-            }
+            // Khi xóa điểm: CHỈ reload lại plan để cập nhật trạng thái pass/fail
+            // KHÔNG gọi adjustStudyPlan() — tránh tái tạo toàn bộ lộ trình vì lý do vô lý
+            fetchStudyPlans().then(() => {
+                fetchSuggestions();
+                updateEarnedCredits();
+                updateCreditStats();
+            });
         } else {
             // Check if all grades in this semester card are filled to trigger suggestion modal automatically
             let allFilled = false;
@@ -1967,30 +2203,82 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                     snapshot.forEach(c => {
                         const subData = semData.subjects.find(s => s.subject_id === c.id);
                         c.credits = subData && subData.subject ? subData.subject.credits : 0;
-                        c.name = subData && subData.subject ? subData.subject.name : '';
+                        c.name   = subData && subData.subject ? subData.subject.name   : '';
                     });
                 }
-                
-                // Show modal immediately
-                fetchStudyPlans().then(() => {
-                    saveSemesterHistory(semIndex, snapshot);
-                    showSemResultModal(semIndex, snapshot);
-                });
-            } else if (resData.success && resData.evaluation) {
-                const evaluation = resData.evaluation;
-                if (evaluation.is_dynamic && evaluation.status !== 'KEEP') {
-                    showDynamicModeModal(planId, evaluation);
-                } else if (evaluation.status !== 'KEEP') {
-                    if (confirm(`Hệ thống nhận thấy tiến độ thay đổi:\n"${evaluation.message}"\n\nBạn có muốn hệ thống tự động điều chỉnh kế hoạch học tập sang chế độ "${evaluation.suggested_mode}" không?`)) {
-                        adjustStudyPlan(planId, evaluation);
-                    } else {
-                        fetchStudyPlans(); // Reload to show passed/failed state
+
+                // ── Kiểm tra học kỳ này đã lưu vào lịch sử chưa ──
+                // Nếu rồi → chỉ cập nhật im lặng, tránh modal bắn ra khi sửa điểm cũ
+                let alreadySaved = false;
+                try {
+                    const histRes = await fetch('/semester-history', { headers: { 'Accept': 'application/json' } });
+                    if (histRes.ok) {
+                        const histData = await histRes.json();
+                        alreadySaved = histData.some(h => h.semester_number === semIndex);
                     }
-                } else {
-                    fetchStudyPlans();
+                } catch (e) { /* bỏ qua lỗi network phụ */ }
+
+                // ── Gọi API lưu/cập nhật lịch sử học kỳ ──
+                try {
+                    const completeRes = await fetch('/semester-history/complete', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': CSRF_TOKEN,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            semester_number: semIndex,
+                            courses: snapshot.map(c => ({ subject_id: c.id, grade: c.grade }))
+                        })
+                    });
+                    const completeData = await completeRes.json();
+                    _semEvaluation = completeData.evaluation || null;
+
+                    // Cập nhật badge mode nếu có gợi ý
+                    if (_semEvaluation && _semEvaluation.status !== 'KEEP') {
+                        window._pendingModeEvaluation = _semEvaluation;
+                        window._pendingModeEvaluation.plan_id = planId;
+                        updateModeSuggestionBadge(_semEvaluation);
+                    }
+                } catch (e) {
+                    console.warn('Lỗi lưu lịch sử học kỳ', e);
                 }
+
+                // ── Cập nhật đồng bộ toàn bộ giao diện ──
+                await fetchStudyPlans();
+                fetchGraduationForecast();
+                fetchSuggestions();
+                updateEarnedCredits();
+                updateCreditStats();
+                loadSemesterHistory(); // Refresh lịch sử bên drawer
+
+                // ── Hiển thị modal kết quả (chỉ lần đầu, không hiện lại khi sửa) ──
+                if (!alreadySaved) {
+                    showSemResultModal(semIndex, snapshot);
+                } else {
+                    showToast(`✅ Đã cập nhật điểm học kỳ ${semIndex}`, 'success');
+                }
+            } else if (resData.success && resData.evaluation) {
+                // Chỉ lưu evaluation vào bộ nhớ, KHÔNG hiện popup
+                // Popup sẽ chỉ hiện khi người dùng chủ động hoàn tất học kỳ
+                if (resData.evaluation.status !== 'KEEP') {
+                    window._pendingModeEvaluation = resData.evaluation;
+                    window._pendingModeEvaluation.plan_id = planId;
+                    updateModeSuggestionBadge(resData.evaluation);
+                }
+                // Cập nhật gợi ý môn học sau khi lưu điểm
+                fetchStudyPlans().then(() => {
+                    fetchSuggestions();
+                    updateEarnedCredits();
+                    updateCreditStats();
+                });
             } else {
-                fetchStudyPlans();
+                fetchStudyPlans().then(() => {
+                    fetchSuggestions();
+                    updateEarnedCredits();
+                    updateCreditStats();
+                });
             }
         }
     } catch (e) {

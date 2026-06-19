@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            //
-        });
+        if (!Schema::hasColumn('users', 'pref_graduation_semester')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->integer('pref_graduation_semester')->nullable()->after('pref_target_years')
+                      ->comment('Học kỳ mục tiêu tốt nghiệp (vd: 7, 8, 9)');
+            });
+        }
     }
 
     /**
@@ -22,7 +25,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            //
+            $table->dropColumn('pref_graduation_semester');
         });
     }
 };

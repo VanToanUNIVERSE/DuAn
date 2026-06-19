@@ -2,259 +2,161 @@
 
 namespace App\Services;
 
-/**
- * GraduationAdvisorService — Tư Vấn Toàn Diện Lộ Trình Tốt Nghiệp
- *
- * Service này kết hợp thông tin từ nhiều nguồn để đưa ra tư vấn môn học
- * và lộ trình học tập cá nhân hóa, dựa trên 8 tiêu chí:
- *
- *  1. Môn đã fail → ưu tiên học lại cao nhất
- *  2. Môn nằm đúng trong học kỳ chuẩn hiện tại
- *  3. Số môn khác phụ thuộc vào môn này (mở khóa nhiều môn)
- *  4. GPA thấp → ưu tiên môn sinh viên có thế mạnh (tránh rớt thêm)
- *  5. Môn bắt buộc (requirement_type != none)
- *  6. Học vượt quá xa kỳ chuẩn → giảm điểm ưu tiên
- *  7. Tín chỉ phù hợp với target tín chỉ còn lại
- *  8. Khả năng học theo tiến độ kế hoạch hiện tại
- */
+use App\Models\Subject;
+
 class GraduationAdvisorService
 {
-    protected ProgressService $progressService;
-    protected AcademicEvaluationService $evaluationService;
+    protected $progressService;
+    protected $evaluationService;
+    protected $recommendationService;
 
     public function __construct(
         ProgressService $progressService,
-        AcademicEvaluationService $evaluationService
+        AcademicEvaluationService $evaluationService,
+        RecommendationService $recommendationService
     ) {
-        $this->progressService   = $progressService;
+        $this->progressService = $progressService;
         $this->evaluationService = $evaluationService;
+        $this->recommendationService = $recommendationService;
     }
 
     /**
-     * Tư vấn tốt nghiệp đầy đủ: progress + evaluation + credit target + lời khuyên.
-     *
-     * @param int $userId
-     * @return array
+     * Tư vấn môn học cho học kỳ tiếp theo dựa trên đầy đủ tiêu chí:
+     * - GPA hiện tại & Tiến độ
+     * - Môn tiên quyết / Song hành
+     * - Số tín chỉ mục tiêu (để tốt nghiệp đúng hạn / đúng mode)
      */
-    public function advise(int $userId): array
+    public function adviseCourses(int $userId, int $nextSemester, string $currentMode = 'normal'): array
     {
-        $progress   = $this->progressService->evaluateProgress($userId);
-        $activePlan = \App\Models\StudyPlan::where('user_id', $userId)
-            ->where('is_active', true)
-            ->first();
+        $progress = $this->progressService->evaluateProgress($userId);
+        
+        $evaluation = $this->evaluationService->evaluate(
+            $userId,
+            $currentMode,
+            $progress['remaining_semesters'] + $progress['completed_semesters'],
+            $nextSemester
+        );
 
-        $evaluation = null;
-        if ($activePlan) {
-            $evaluation = $this->evaluationService->evaluate(
-                $userId,
-                $activePlan->mode ?? 'normal',
-                $activePlan->target_semester_count ?? 8,
-                $progress['current_semester']
-            );
+        $recommendations = $this->recommendationService->getRecommendations($userId);
+
+        // Tính số tín chỉ mục tiêu dựa trên mode và tiến độ
+        $creditTarget = $this->calcCreditTarget(
+            $progress['remaining_credits'],
+            $progress['remaining_semesters'],
+            $evaluation['suggested_mode']
+        );
+
+        // Xếp hạng ưu tiên dựa trên 8 tiêu chí
+        $advised = [];
+        foreach ($recommendations as $rec) {
+            // Bỏ qua các môn không đủ điều kiện (thiếu tiên quyết)
+            if (isset($rec['can_study']) && $rec['can_study'] === false) {
+                continue;
+            }
+
+            $priority = $this->calcPriority($rec, $progress, $evaluation, $nextSemester);
+            $advised[] = [
+                'subject'  => $rec['subject'],
+                'reasons'  => $rec['reasons'],
+                'priority' => $priority,
+                'score'    => $rec['score'] ?? 0,
+            ];
         }
 
-        // Tính mục tiêu tín chỉ cho kỳ tiếp theo
-        $creditTarget = $this->calcCreditTarget($progress, $activePlan);
+        // Sắp xếp theo mức độ ưu tiên giảm dần
+        usort($advised, function ($a, $b) {
+            return $b['priority'] <=> $a['priority'];
+        });
 
-        // Xây dựng lời khuyên tổng hợp
-        $advice = $this->buildAdvice($progress, $evaluation, $creditTarget);
-
-        return [
-            'progress'      => $progress,
-            'evaluation'    => $evaluation,
-            'credit_target' => $creditTarget,
-            'advice'        => $advice,
-        ];
+        return $this->fitCreditsTarget($advised, $creditTarget);
     }
 
     /**
-     * Tính số tín chỉ mục tiêu cho học kỳ tiếp theo.
-     *
-     * Cân bằng giữa: tín chỉ còn lại, số kỳ còn lại, mode kế hoạch,
-     * và rủi ro tốt nghiệp.
+     * Tính số tín chỉ mục tiêu cho kỳ tới
      */
-    public function calcCreditTarget(array $progress, ?\App\Models\StudyPlan $activePlan): array
+    private function calcCreditTarget(int $remainingCredits, int $remainingSems, string $mode): int
     {
-        $remaining   = $progress['remaining_credits'];
-        $remSems     = max(1, $progress['remaining_semesters']);
-        $gpa         = floatval($progress['current_gpa']);
-        $planMode    = $activePlan?->mode ?? 'normal';
+        if ($remainingSems <= 0) return $remainingCredits;
 
-        // Giới hạn TC tối đa theo mode
-        $maxByMode = match($planMode) {
-            'fast'  => 22,
-            'slow'  => 14,
-            default => 20,
+        $base = (int) ceil($remainingCredits / $remainingSems);
+
+        return match ($mode) {
+            'fast'   => max(20, $base + 2), // Tăng tốc: Ít nhất 20 TC, có thể cao hơn
+            'slow'   => min(14, max(12, $base - 2)), // Học nhẹ: Giới hạn 12-14 TC
+            default  => min(22, max(14, $base)),     // Cân bằng: 14-22 TC
         };
-
-        // TC tối thiểu để đủ về đích đúng hạn
-        $minNeeded = (int) ceil($remaining / $remSems);
-
-        // Điều chỉnh theo GPA
-        $recommended = match(true) {
-            $gpa >= 7.5 => min($maxByMode, max($minNeeded, 18)),   // GPA tốt: thoải mái
-            $gpa >= 6.0 => min($maxByMode, max($minNeeded, 16)),   // GPA TB: vừa phải
-            $gpa >= 5.0 => min(16, max($minNeeded, 14)),           // GPA yếu: nhẹ
-            $gpa > 0    => min(14, max($minNeeded, 12)),           // GPA nguy hiểm: rất nhẹ
-            default     => min($maxByMode, $minNeeded),            // Chưa có điểm
-        };
-
-        // Không vượt quá giới hạn tuyệt đối 24 TC/kỳ
-        $recommended = min(24, $recommended);
-
-        return [
-            'recommended_credits' => $recommended,
-            'min_needed_credits'  => $minNeeded,
-            'max_allowed_credits' => $maxByMode,
-            'plan_mode'           => $planMode,
-        ];
     }
 
     /**
-     * Sắp xếp danh sách môn học được gợi ý theo thứ tự ưu tiên tư vấn.
-     *
-     * Điểm ưu tiên dựa trên 8 tiêu chí.
-     *
-     * @param array $recommendations  Danh sách từ RecommendationService (đã tính score)
-     * @param array $progress         Kết quả từ ProgressService
-     * @param int   $currentSem       Học kỳ hiện tại
-     * @param array $failedSubjectIds Danh sách ID môn đã rớt
-     * @return array  Danh sách môn đã sắp xếp với advisor_score
+     * Tính toán mức độ ưu tiên cho từng môn học
      */
-    public function prioritizeSubjects(
-        array $recommendations,
-        array $progress,
-        int $currentSem,
-        array $failedSubjectIds = []
-    ): array {
-        $gpa           = floatval($progress['current_gpa']);
-        $gradRisk      = $progress['graduation_risk'] ?? 'low';
+    private function calcPriority(array $rec, array $progress, array $eval, int $sem): int
+    {
+        $score = 0;
+        $subject = $rec['subject'];
 
-        foreach ($recommendations as &$rec) {
-            $rec['advisor_score'] = $this->calcAdvisorScore(
-                $rec, $gpa, $gradRisk, $currentSem, $failedSubjectIds
-            );
-        }
-        unset($rec);
-
-        // Sắp xếp giảm dần theo advisor_score
-        usort($recommendations, fn($a, $b) => $b['advisor_score'] <=> $a['advisor_score']);
-
-        return $recommendations;
-    }
-
-    /**
-     * Tính điểm ưu tiên cho một môn học theo 8 tiêu chí.
-     */
-    private function calcAdvisorScore(
-        array $rec,
-        float $gpa,
-        string $gradRisk,
-        int $currentSem,
-        array $failedSubjectIds
-    ): int {
-        $score   = $rec['score'] ?? 0;     // Điểm base từ RecommendationService
-        $subject = $rec['subject'] ?? [];
-        $subId   = $subject['id'] ?? null;
-        $assignedSem = $subject['assigned_semester_index'] ?? $currentSem;
-
-        // ── Tiêu chí 1: Môn fail → ưu tiên cao nhất (+100) ─────────────
-        if (in_array($subId, $failedSubjectIds)) {
+        // Ưu tiên 1: Môn fail → Bắt buộc học lại
+        if (isset($rec['is_failed']) && $rec['is_failed']) {
             $score += 100;
         }
 
-        // ── Tiêu chí 2: Môn đúng kỳ chuẩn hiện tại (+80) ───────────────
-        if ($assignedSem === $currentSem) {
+        // Ưu tiên 2: Môn bắt buộc trong kỳ chuẩn
+        if (isset($subject['assigned_semester_index']) && $subject['assigned_semester_index'] == $sem) {
             $score += 80;
-        } elseif ($assignedSem === $currentSem - 1) {
-            $score += 40; // Môn kỳ trước chưa học
         }
 
-        // ── Tiêu chí 3: Số môn phụ thuộc (mở khóa nhiều môn) ───────────
-        // Mỗi môn phụ thuộc = +15 điểm (tối đa +60)
-        $dependentCount = min(4, (int)($rec['dependent_count'] ?? 0));
-        $score += $dependentCount * 15;
+        // Ưu tiên 3: Môn mở khóa nhiều môn khác (Prerequisites)
+        $dependentCount = $rec['dependent_count'] ?? 0;
+        $score += $dependentCount * 20;
 
-        // ── Tiêu chí 4: GPA thấp → ưu tiên môn sinh viên giỏi ──────────
-        // Nếu GPA thấp, ưu tiên môn thuộc skill group sinh viên có thế mạnh
-        if ($gpa < 6.0) {
-            $skillGroupAvg = floatval($rec['skill_group_avg'] ?? 0);
-            if ($skillGroupAvg >= 6.5) {
-                $score += 40; // Sinh viên có thể làm tốt môn này
-            }
+        // Ưu tiên 4: Phù hợp năng lực khi GPA thấp (chọn môn dễ pass)
+        $gpa = floatval($progress['current_gpa']);
+        if ($gpa < 6.0 && isset($subject['skill_group_avg']) && $subject['skill_group_avg'] >= 7.0) {
+            $score += 40; // Môn thuộc nhóm kỹ năng sinh viên có thế mạnh
         }
 
-        // ── Tiêu chí 5: Môn bắt buộc (+30) ─────────────────────────────
-        $reqType = $subject['requirement_type'] ?? 'none';
-        if ($reqType !== 'none' && $reqType !== null) {
+        // Ưu tiên 5: Môn bắt buộc để tốt nghiệp (Yêu cầu loại)
+        if (isset($subject['requirement_type']) && $subject['requirement_type'] !== 'none') {
             $score += 30;
         }
 
-        // ── Tiêu chí 6: Học vượt quá xa kỳ chuẩn → giảm điểm ──────────
-        $distanceToStandard = $assignedSem - $currentSem;
-        if ($distanceToStandard > 2) {
-            $score -= ($distanceToStandard - 2) * 20; // -20 mỗi kỳ vượt quá 2
+        // Giảm điểm: Môn học vượt quá xa học kỳ chuẩn
+        if (isset($subject['assigned_semester_index'])) {
+            $distanceToStandard = $subject['assigned_semester_index'] - $sem;
+            if ($distanceToStandard > 2) {
+                $score -= 30;
+            }
         }
 
-        // ── Tiêu chí 7: Rủi ro tốt nghiệp cao → ưu tiên TC nhiều hơn ───
-        if (in_array($gradRisk, ['high', 'critical'])) {
-            $credits = (int)($subject['credits'] ?? 0);
-            $score += $credits * 3; // Mỗi TC = +3 điểm khi đang trong tình trạng nguy hiểm
-        }
-
-        // ── Tiêu chí 8: GPA trend đang giảm → ưu tiên môn nhẹ nhàng ────
-        // (Tích hợp trong tiêu chí 4 - không tăng thêm điểm cho môn khó)
-
-        return max(0, $score);
+        return $score;
     }
 
     /**
-     * Xây dựng lời khuyên tổng hợp dựa trên progress và evaluation.
+     * Chọn danh sách môn sao cho tổng tín chỉ vừa đủ với mục tiêu
      */
-    private function buildAdvice(array $progress, ?array $evaluation, array $creditTarget): array
+    private function fitCreditsTarget(array $advised, int $target): array
     {
-        $gpa         = floatval($progress['current_gpa']);
-        $gradRisk    = $progress['graduation_risk'] ?? 'low';
-        $gpaTrend    = $progress['gpa_trend'] ?? 'stable';
-        $extraSems   = $progress['estimated_extra_sems'] ?? 0;
-        $recommended = $creditTarget['recommended_credits'];
+        $result = [];
+        $currentCredits = 0;
 
-        // Tiêu đề và icon theo trạng thái
-        [$title, $icon, $colorClass] = match(true) {
-            $gpa >= 7.5 && $gradRisk === 'low'       => ['Xuất sắc! Đang trên đà tốt nghiệp đúng hạn', '🎉', 'success'],
-            $gpa >= 6.0 && $gradRisk !== 'critical'  => ['Tiến độ tốt, cần duy trì nhịp học', '📈', 'info'],
-            $gpa >= 5.0 || $gradRisk === 'moderate'  => ['Cần chú ý — điều chỉnh kế hoạch', '⚠️', 'warning'],
-            default                                   => ['Nguy cơ cao — Hãy hành động ngay!', '🚨', 'danger'],
-        };
+        foreach ($advised as $item) {
+            $credits = intval($item['subject']['credits'] ?? 0);
+            
+            // Nếu thêm môn này mà không vượt quá target + 2 (sai số cho phép)
+            if ($currentCredits + $credits <= $target + 2) {
+                $result[] = $item;
+                $currentCredits += $credits;
+            }
 
-        // Nội dung chi tiết
-        $details = [];
-
-        if ($gpa > 0) {
-            $trendMsg = match($gpaTrend) {
-                'improving' => '📈 GPA đang tăng — dấu hiệu tích cực!',
-                'declining' => '📉 GPA đang giảm — cần điều chỉnh phương pháp học.',
-                default     => '➡️ GPA ổn định qua các kỳ.',
-            };
-            $details[] = $trendMsg;
-        }
-
-        if ($extraSems > 0) {
-            $details[] = "⏰ Dựa trên pace hiện tại, bạn có thể trễ ~{$extraSems} học kỳ nếu không tăng tốc.";
-        }
-
-        $details[] = "📚 Khuyến nghị đăng ký {$recommended} TC cho học kỳ tiếp theo.";
-
-        if ($evaluation && $evaluation['status'] !== 'KEEP') {
-            $details[] = "💡 " . $evaluation['message'];
+            if ($currentCredits >= $target) {
+                break; // Đã đủ tín chỉ
+            }
         }
 
         return [
-            'title'       => $title,
-            'icon'        => $icon,
-            'color_class' => $colorClass,
-            'details'     => $details,
-            'gpa_level'   => $evaluation['gpa_level'] ?? 'unknown',
+            'subjects' => $result,
+            'total_credits' => $currentCredits,
+            'target_credits' => $target
         ];
     }
 }

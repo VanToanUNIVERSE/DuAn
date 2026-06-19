@@ -26,6 +26,7 @@ Route::get('/suggestions', [SuggestionController::class, 'index']);
 // ─── LuanVan New API Routes ───────────────────────────────────────────────
 Route::prefix('v1')->middleware('web')->group(function () {
     Route::get('/recommendations', [\App\Http\Controllers\Api\RecommendationController::class, 'index']);
+    Route::get('/graduation-forecast', [\App\Http\Controllers\Api\GraduationForecastController::class, 'index']);
 
     Route::prefix('study-plans')->group(function () {
         Route::get('/',              [\App\Http\Controllers\Api\StudyPlanController::class, 'index']);
@@ -36,11 +37,11 @@ Route::prefix('v1')->middleware('web')->group(function () {
         Route::post('/move-subject', [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
         Route::post('/apply-suggestions', [\App\Http\Controllers\Api\StudyPlanController::class, 'applySuggestions']);
 
-        Route::get('/saved',              [\App\Http\Controllers\Api\StudyPlanController::class, 'getSavedPlans']);
-        Route::post('/{id}/save',         [\App\Http\Controllers\Api\StudyPlanController::class, 'savePlan']);
-        Route::get('/{id}/load',          [\App\Http\Controllers\Api\StudyPlanController::class, 'loadPlan']);
-        Route::post('/{id}/change-mode',  [\App\Http\Controllers\Api\StudyPlanController::class, 'changeMode']); // ← Đổi chế độ
-        Route::delete('/{id}',            [\App\Http\Controllers\Api\StudyPlanController::class, 'destroy']);
+        Route::get('/saved',         [\App\Http\Controllers\Api\StudyPlanController::class, 'getSavedPlans']);
+        Route::post('/{id}/change-mode', [\App\Http\Controllers\Api\StudyPlanController::class, 'changeMode']);
+        Route::post('/{id}/save',    [\App\Http\Controllers\Api\StudyPlanController::class, 'savePlan']);
+        Route::get('/{id}/load',     [\App\Http\Controllers\Api\StudyPlanController::class, 'loadPlan']);
+        Route::delete('/{id}',       [\App\Http\Controllers\Api\StudyPlanController::class, 'destroy']);
     });
 
 
