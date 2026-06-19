@@ -1,0 +1,213 @@
+
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>Từ điển dữ liệu (Data Dictionary)</title>
+<style>
+    body { font-family: "Times New Roman", Times, serif; font-size: 12pt; }
+    h3 { font-family: "Times New Roman", Times, serif; font-size: 14pt; font-weight: bold; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid black; padding: 5px; text-align: left; vertical-align: top; }
+    th { font-weight: bold; background-color: #f2f2f2; }
+</style>
+</head>
+<body>
+<h1>Từ Điển Dữ Liệu</h1>
+<h3>Bảng: curriculum_frameworks</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>training_program_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng training_program</td></tr>
+<tr><td>3</td><td>number_of_semesters</td><td>int(11)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>4</td><td>total_credits</td><td>int(11)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>6</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: curriculum_subject</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>curriculum_framework_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng curriculum_framework</td></tr>
+<tr><td>3</td><td>semester_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng học kỳ</td></tr>
+<tr><td>4</td><td>subject_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng môn học</td></tr>
+<tr><td>5</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>6</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: program_groups</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>name</td><td>varchar(255)</td><td>Not null</td><td></td></tr>
+<tr><td>3</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>4</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: semesters</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>curriculum_framework_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng curriculum_framework</td></tr>
+<tr><td>3</td><td>name</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>4</td><td>total_credits</td><td>int(11)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>6</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: semester_histories</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>user_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng người dùng</td></tr>
+<tr><td>3</td><td>semester_number</td><td>tinyint(3) unsigned</td><td>Not null</td><td></td></tr>
+<tr><td>4</td><td>academic_year</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>program_type</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>6</td><td>total_credits</td><td>smallint(5) unsigned</td><td>Not null, Default 0</td><td></td></tr>
+<tr><td>7</td><td>passed_credits</td><td>smallint(5) unsigned</td><td>Not null, Default 0</td><td></td></tr>
+<tr><td>8</td><td>gpa</td><td>decimal(4,2)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>9</td><td>completed_at</td><td>timestamp</td><td>Not null, Default current_timestamp()</td><td></td></tr>
+<tr><td>10</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>11</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: semester_history_items</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>semester_history_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng semester_history</td></tr>
+<tr><td>3</td><td>subject_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng môn học</td></tr>
+<tr><td>4</td><td>grade</td><td>double(8,2)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>status</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>6</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>7</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: skill_groups</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>name</td><td>varchar(255)</td><td>Not null</td><td></td></tr>
+<tr><td>3</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>4</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: study_plans</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>user_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng người dùng</td></tr>
+<tr><td>3</td><td>name</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>4</td><td>mode</td><td>varchar(255)</td><td>Not null, Default 'normal'</td><td></td></tr>
+<tr><td>5</td><td>target_semester_count</td><td>int(11)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>6</td><td>is_saved</td><td>tinyint(1)</td><td>Not null, Default 0</td><td>Trạng thái saved</td></tr>
+<tr><td>7</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>8</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+<tr><td>9</td><td>deleted_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian xóa (Soft delete)</td></tr>
+</table>
+<h3>Bảng: study_plan_revisions</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>user_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng người dùng</td></tr>
+<tr><td>3</td><td>study_plan_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng kế hoạch học tập</td></tr>
+<tr><td>4</td><td>gpa_at_revision</td><td>double(8,2)</td><td>Not null</td><td></td></tr>
+<tr><td>5</td><td>reason</td><td>varchar(255)</td><td>Not null</td><td></td></tr>
+<tr><td>6</td><td>old_plan_data</td><td>longtext</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>7</td><td>new_plan_data</td><td>longtext</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>8</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>9</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: study_plan_semesters</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>study_plan_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng kế hoạch học tập</td></tr>
+<tr><td>3</td><td>semester_index</td><td>int(11)</td><td>Not null</td><td></td></tr>
+<tr><td>4</td><td>expected_credits</td><td>int(11)</td><td>Not null, Default 0</td><td></td></tr>
+<tr><td>5</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>6</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: study_plan_subjects</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>study_plan_semester_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng study_plan_semester</td></tr>
+<tr><td>3</td><td>subject_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng môn học</td></tr>
+<tr><td>4</td><td>is_completed</td><td>tinyint(1)</td><td>Not null, Default 0</td><td>Trạng thái completed</td></tr>
+<tr><td>5</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>6</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: subjects</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>subject_code</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>3</td><td>name</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>4</td><td>credits</td><td>int(11)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>skill_group_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng skill_group</td></tr>
+<tr><td>6</td><td>note</td><td>text</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>7</td><td>requirement_type</td><td>enum('none','completed_basic','completed_major','completed_specialized','completed_all','min_credits')</td><td>Nullable, Default 'none'</td><td></td></tr>
+<tr><td>8</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>9</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+<tr><td>10</td><td>program_group_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng program_group</td></tr>
+<tr><td>11</td><td>offered_in</td><td>enum('1','2','both')</td><td>Not null, Default 'both'</td><td></td></tr>
+</table>
+<h3>Bảng: subject_relations</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>subject_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng môn học</td></tr>
+<tr><td>3</td><td>related_subject_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng related_subject</td></tr>
+<tr><td>4</td><td>type</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>6</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: training_programs</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>program_name</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>3</td><td>education_level</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>4</td><td>program_code</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>program_type</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>6</td><td>program_duration</td><td>int(11)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>7</td><td>academic_year</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>8</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>9</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: users</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>username</td><td>varchar(255)</td><td>Unique, Not null</td><td>Tên đăng nhập</td></tr>
+<tr><td>3</td><td>email</td><td>varchar(255)</td><td>Unique, Not null</td><td>Email</td></tr>
+<tr><td>4</td><td>password</td><td>varchar(255)</td><td>Not null</td><td>Mật khẩu đã mã hóa</td></tr>
+<tr><td>5</td><td>is_admin</td><td>tinyint(1)</td><td>Not null, Default 0</td><td>Xác định tài khoản admin</td></tr>
+<tr><td>6</td><td>fullName</td><td>varchar(255)</td><td>Not null</td><td>Họ tên người dùng</td></tr>
+<tr><td>7</td><td>student_code</td><td>varchar(255)</td><td>Unique, Not null</td><td>Mã số sinh viên</td></tr>
+<tr><td>8</td><td>pref_academic_year</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td>Niên khóa</td></tr>
+<tr><td>9</td><td>pref_program_type</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td>Hệ đào tạo</td></tr>
+<tr><td>10</td><td>pref_current_semester</td><td>tinyint(3) unsigned</td><td>Nullable, Default NULL</td><td>Học kỳ hiện tại</td></tr>
+<tr><td>11</td><td>pref_target_years</td><td>tinyint(3) unsigned</td><td>Nullable, Default NULL</td><td>Mục tiêu tốt nghiệp</td></tr>
+<tr><td>12</td><td>pref_current_courses</td><td>longtext</td><td>Nullable, Default NULL</td><td>Danh sách môn đang học</td></tr>
+<tr><td>13</td><td>remember_token</td><td>varchar(100)</td><td>Nullable, Default NULL</td><td>Token ghi nhớ đăng nhập</td></tr>
+<tr><td>14</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>15</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: user_grades</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>user_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng người dùng</td></tr>
+<tr><td>3</td><td>subject_id</td><td>bigint(20) unsigned</td><td>Nullable, Default NULL</td><td>Khóa ngoại tham chiếu bảng môn học</td></tr>
+<tr><td>4</td><td>grade</td><td>double(8,2)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>5</td><td>status</td><td>varchar(255)</td><td>Nullable, Default NULL</td><td></td></tr>
+<tr><td>6</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>7</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+<h3>Bảng: warnings</h3>
+<table>
+<tr><th>STT</th><th>Thuộc tính</th><th>Kiểu dữ liệu</th><th>Ràng buộc</th><th>Diễn giải</th></tr>
+<tr><td>1</td><td>id</td><td>bigint(20) unsigned</td><td>PK</td><td>Khóa chính</td></tr>
+<tr><td>2</td><td>user_id</td><td>bigint(20) unsigned</td><td>Not null</td><td>Khóa ngoại tham chiếu bảng người dùng</td></tr>
+<tr><td>3</td><td>type</td><td>varchar(255)</td><td>Not null</td><td></td></tr>
+<tr><td>4</td><td>message</td><td>text</td><td>Not null</td><td></td></tr>
+<tr><td>5</td><td>is_read</td><td>tinyint(1)</td><td>Not null, Default 0</td><td>Trạng thái read</td></tr>
+<tr><td>6</td><td>created_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian tạo</td></tr>
+<tr><td>7</td><td>updated_at</td><td>timestamp</td><td>Nullable, Default NULL</td><td>Thời gian cập nhật</td></tr>
+</table>
+</body></html>

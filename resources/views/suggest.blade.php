@@ -199,134 +199,330 @@
         ════════════════════════════════════════════════════════ --}}
         <div class="page-content tab-panel active" id="tab-dashboard">
 
-            {{-- Welcome band --}}
-            <div style="margin-bottom:var(--sp-xl);">
-                <h1
-                    style="font-family:'Sora',sans-serif;font-size:1.75rem;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-bottom:4px;">
-                    Chào mừng, {{ Auth::user()->fullName ?? Auth::user()->username }} 👋
-                </h1>
-                <p style="color:var(--muted);font-size:0.9rem;">Theo dõi tiến độ học tập và nhận gợi ý thông minh.</p>
-            </div>
+            {{-- Glassmorphism Hero Section --}}
+            <style>
+                /* New Dashboard Styles */
+                .hero-glass {
+                    background: rgba(255, 255, 255, 0.7);
+                    backdrop-filter: blur(16px);
+                    -webkit-backdrop-filter: blur(16px);
+                    border: 1px solid rgba(255, 255, 255, 0.5);
+                    border-radius: 20px;
+                    padding: 32px;
+                    margin-bottom: 24px;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 24px;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .hero-glass::before {
+                    content: '';
+                    position: absolute;
+                    top: -50%; left: -50%;
+                    width: 200%; height: 200%;
+                    background: radial-gradient(circle, rgba(16,185,129,0.05) 0%, rgba(255,255,255,0) 70%);
+                    z-index: 0;
+                    pointer-events: none;
+                }
+                .hero-content {
+                    position: relative;
+                    z-index: 1;
+                    flex: 1;
+                }
+                .hero-title {
+                    font-family: 'Sora', sans-serif;
+                    font-size: 2rem;
+                    font-weight: 800;
+                    color: var(--ink);
+                    letter-spacing: -0.5px;
+                    margin-bottom: 8px;
+                }
+                .hero-subtitle {
+                    color: var(--muted);
+                    font-size: 1rem;
+                    margin-bottom: 24px;
+                }
+                .hero-stats {
+                    display: flex;
+                    gap: 32px;
+                }
+                .hero-stat-item {
+                    display: flex;
+                    flex-direction: column;
+                }
+                .hero-stat-value {
+                    font-size: 2rem;
+                    font-weight: 800;
+                    font-family: 'Sora', sans-serif;
+                    color: var(--ink);
+                    display: flex;
+                    align-items: baseline;
+                    gap: 4px;
+                }
+                .hero-stat-value span {
+                    font-size: 0.9rem;
+                    color: var(--muted);
+                    font-weight: 500;
+                }
+                .hero-stat-label {
+                    font-size: 0.85rem;
+                    color: var(--muted);
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    font-weight: 600;
+                }
+                .hero-progress-circle {
+                    position: relative;
+                    z-index: 1;
+                    width: 140px;
+                    height: 140px;
+                    flex-shrink: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    background: conic-gradient(var(--brand-mint) var(--prog-deg, 0deg), var(--surface-soft) 0deg);
+                    box-shadow: inset 0 0 0 12px rgba(255,255,255,0.8);
+                }
+                .hero-progress-inner {
+                    width: 116px;
+                    height: 116px;
+                    background: #fff;
+                    border-radius: 50%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+                }
+                .hero-progress-inner .pct {
+                    font-family: 'Sora', sans-serif;
+                    font-size: 1.5rem;
+                    font-weight: 800;
+                    color: var(--ink);
+                }
+                .hero-progress-inner .lbl {
+                    font-size: 0.75rem;
+                    color: var(--muted);
+                    font-weight: 600;
+                }
 
-            {{-- 4 KPI feature cards --}}
-            @include('components.dashboard-stat')
-            {{-- Dashboard 3-col mini cards --}}
+                /* BENTO GRID */
+                .bento-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    grid-template-rows: auto auto;
+                    gap: 20px;
+                    margin-bottom: 32px;
+                }
+                .bento-item {
+                    background: #fff;
+                    border: 1px solid var(--hairline);
+                    border-radius: 20px;
+                    padding: 24px;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    position: relative;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    cursor: pointer;
+                }
+                .bento-item:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+                    border-color: rgba(0,0,0,0.1);
+                }
+                .bento-main {
+                    grid-column: span 2;
+                    background: linear-gradient(135deg, var(--ink) 0%, #374151 100%);
+                    color: #fff;
+                    border: none;
+                }
+                .bento-main:hover {
+                    box-shadow: 0 16px 32px rgba(17, 24, 39, 0.2);
+                }
+                .bento-main .bento-icon {
+                    background: rgba(255,255,255,0.1);
+                    color: #fff;
+                }
+                .bento-icon {
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 1.5rem;
+                    margin-bottom: 16px;
+                    background: var(--surface-soft);
+                    color: var(--ink);
+                }
+                .bento-title {
+                    font-family: 'Sora', sans-serif;
+                    font-size: 1.25rem;
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                }
+                .bento-main .bento-title {
+                    font-size: 1.75rem;
+                }
+                .bento-desc {
+                    font-size: 0.9rem;
+                    color: var(--muted);
+                    line-height: 1.5;
+                    flex: 1;
+                }
+                .bento-main .bento-desc {
+                    color: rgba(255,255,255,0.8);
+                    font-size: 1rem;
+                }
+                .bento-action {
+                    margin-top: 20px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 600;
+                    font-size: 0.9rem;
+                }
+                .bento-main .bento-action {
+                    color: var(--brand-mint);
+                }
+                .bento-arrow {
+                    transition: transform 0.2s;
+                }
+                .bento-item:hover .bento-arrow {
+                    transform: translateX(4px);
+                }
+
+                /* Suggestion card specific */
+                .bento-suggestion {
+                    grid-column: span 1;
+                    grid-row: span 2;
+                    background: linear-gradient(to bottom, #fff, var(--surface-soft));
+                }
+                .bento-suggestion .advice-wrap {
+                    margin-top: auto;
+                    background: #fff;
+                    border-radius: 12px;
+                    padding: 16px;
+                    border: 1px solid var(--hairline);
+                    text-align: center;
+                }
+                .bento-suggestion .advice-num {
+                    font-family: 'Sora', sans-serif;
+                    font-size: 2.5rem;
+                    font-weight: 800;
+                    color: var(--brand-ochre);
+                    line-height: 1;
+                    margin: 8px 0 4px;
+                }
+                
+                .bento-small {
+                    grid-column: span 1;
+                }
+            </style>
+
             <div id="dash-global-warning"></div>
-            <div class="dash-panel" id="dash-panel">
 
-                {{-- Card 1: Tiến độ tín chỉ --}}
-                <div class="dash-card">
-                    <div class="dash-credit-header">
-                        <div class="dash-credit-label">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none"
-                                viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.627 48.627 0 0 1 12 20.904a48.627 48.627 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.57 50.57 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.902 59.902 0 0 1 10.399 5.84 50.53 50.53 0 0 0-2.658.814m-15.482 0A50.699 50.699 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
-                            </svg>
-                            Tiến độ tín chỉ
+            <div class="hero-glass">
+                <div class="hero-content">
+                    <h1 class="hero-title">Chào mừng, {{ Auth::user()->fullName ?? Auth::user()->username }} 👋</h1>
+                    <p class="hero-subtitle">Hôm nay là một ngày tuyệt vời để tiếp tục hành trình học tập của bạn.</p>
+                    
+                    <div class="hero-stats">
+                        <div class="hero-stat-item">
+                            <div class="hero-stat-value">
+                                <span id="stat-earned-credits" style="font-size: 2rem; color: var(--ink); font-weight: 800; font-family: 'Sora', sans-serif;">0</span>
+                                <span>/ <span id="dash-credit-total">{{ $totalCredits }}</span> TC</span>
+                            </div>
+                            <div class="hero-stat-label">Đã Tích Lũy</div>
                         </div>
-                        <span class="dash-prog-pct" id="dash-prog-pct">0%</span>
-                    </div>
-                    <div class="dash-credit-numbers">
-                        <span class="dash-credit-earned" id="dash-credit-earned">0</span>
-                        <span class="dash-credit-sep">/</span>
-                        <span class="dash-credit-total" id="dash-credit-total">{{ $totalCredits }}</span>
-                        <span class="dash-credit-sep" style="font-size:.68rem;margin-left:2px;">TC</span>
-                    </div>
-                    <div class="dash-prog-track" style="margin-bottom:6px;">
-                        <div class="dash-prog-fill" id="dash-prog-fill" style="width:0%;background:var(--ink);"></div>
-                    </div>
-                    <div class="dash-prog-foot">
-                        <span id="dash-prog-left">Còn lại: --</span>
-                        <span id="dash-prog-rem-sem">-- kỳ còn</span>
-                    </div>
-                    <div class="dash-credit-sub">
-                        <div class="dash-sub-item">
-                            <div class="dash-sub-val green" id="dash-pass-credits">0</div>
-                            <div class="dash-sub-label">TC pass</div>
+                        <div class="hero-stat-item">
+                            <div class="hero-stat-value">
+                                <span id="kpi-gpa">--</span>
+                            </div>
+                            <div class="hero-stat-label">GPA Hiện Tại</div>
                         </div>
-                        <div class="dash-sub-item">
-                            <div class="dash-sub-val amber" id="dash-needed-per-sem">--</div>
-                            <div class="dash-sub-label">TC/kỳ cần</div>
-                        </div>
-                        <div class="dash-sub-item">
-                            <div class="dash-sub-val blue" id="dash-current-sem">--</div>
-                            <div class="dash-sub-label">HK này</div>
+                        <div class="hero-stat-item">
+                            <div class="hero-stat-value" id="stat-credits-per-sem" style="font-size: 1.5rem; margin-top: 6px;">--</div>
+                            <div class="hero-stat-label">TC / Kỳ Còn Lại</div>
                         </div>
                     </div>
                 </div>
-
-                {{-- Card 2: Thế mạnh --}}
-                <div class="dash-card">
-                    <div class="dash-strength-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24"
-                            stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-                        </svg>
-                        Thế Mạnh & Điểm Yếu
+                
+                <div class="hero-progress-circle" id="hero-progress-circle" style="--prog-deg: 0deg;">
+                    <div class="hero-progress-inner">
+                        <div class="pct" id="kpi-progress">0%</div>
+                        <div class="lbl">Hoàn thành</div>
                     </div>
-                    <div id="dash-strength-content">
-                        <div class="dash-no-data">
-                            <div class="dash-no-data-icon">⭐</div>
-                            <div>Nhập điểm để xem</div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Card 3: Gợi ý tín chỉ --}}
-                <div class="dash-card">
-                    <div class="dash-advice-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24"
-                            stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-                        </svg>
-                        Gợi Ý Kỳ Tiếp Theo
-                    </div>
-                    <div id="dash-advice-badge-wrap">
-                        <span class="dash-advice-badge maintain" id="dash-advice-badge">• Phân tích...</span>
-                    </div>
-                    <div class="dash-advice-num same" id="dash-advice-num">--</div>
-                    <div class="dash-advice-unit">tín chỉ / học kỳ</div>
-                    <div class="dash-advice-reason" id="dash-advice-reason">Nhập điểm các môn để nhận gợi ý.</div>
                 </div>
             </div>
 
-            {{-- Score Comparison Chart trên Dashboard --}}
-            <div class="clay-card" style="margin-bottom:var(--sp-xl);">
-                <div class="card-title-row">
-                    <div class="card-heading">
-                        📊 Biểu Đồ So Sánh Điểm
-                        <span class="chart-peer-info" id="chart-peer-label"></span>
-                    </div>
-                    <button class="btn-primary" onclick="switchTab('analysis', document.getElementById('nav-analysis'))"
-                        style="height:36px;font-size:0.78rem;padding:0 14px;">Xem đầy đủ →</button>
-                </div>
-                <div class="chart-sem-filter" id="chart-sem-filter-dash">
-                    <button class="chart-sem-btn active" data-sem="all" onclick="filterChartSem('all', this)">Tất cả
-                        HK</button>
-                </div>
-                <div class="chart-wrapper" style="min-height:240px;">
-                    <div class="chart-empty" id="chart-empty-dash">
-                        <span class="chart-empty-icon">📊</span>
-                        <p>Nhập điểm môn học để xem biểu đồ so sánh với sinh viên cùng khóa</p>
-                    </div>
-                    <canvas id="gradeChart" style="display:none;"></canvas>
-                </div>
-                <div class="chart-legend" id="chart-legend" style="display:none;">
-                    <div class="chart-legend-item">
-                        <div class="chart-legend-dot" style="background:var(--ink);"></div>Điểm của bạn
-                    </div>
-                    <div class="chart-legend-item">
-                        <div class="chart-legend-dot" style="background:var(--brand-ochre);border-radius:50%;"></div>
-                        Điểm TB cùng khóa
-                    </div>
-                    <div class="chart-legend-item">
-                        <div class="chart-legend-dot" style="background:var(--brand-coral);border-radius:50%;"></div>
-                        Ngưỡng Pass (5.0)
+            {{-- Bento Grid --}}
+            <div class="bento-grid">
+                
+                {{-- Card Chính: Lập Kế Hoạch --}}
+                <div class="bento-item bento-main" onclick="switchTab('study-plan', document.getElementById('nav-study-plan'))">
+                    <div class="bento-icon" style="background: rgba(255,255,255,0.2);">🚀</div>
+                    <div class="bento-title">Lập Kế Hoạch Đa Học Kỳ</div>
+                    <div class="bento-desc">Trái tim của hệ thống. Xây dựng lộ trình học tập cá nhân hóa, dự báo điểm số và tự động rải môn thông minh để tốt nghiệp đúng hạn.</div>
+                    <div class="bento-action">
+                        Bắt đầu lập kế hoạch <span class="bento-arrow">→</span>
                     </div>
                 </div>
+
+                {{-- Card Gợi Ý (Chính phụ) --}}
+                <div class="bento-item bento-suggestion" onclick="switchTab('study-plan', document.getElementById('nav-study-plan'))">
+                    <div class="bento-icon">💡</div>
+                    <div class="bento-title">Gợi Ý Môn Học</div>
+                    <div class="bento-desc">Dựa trên thành tích và năng lực hiện tại của bạn.</div>
+                    
+                    <div class="advice-wrap">
+                        <div id="dash-advice-badge-wrap">
+                            <span class="dash-advice-badge maintain" id="dash-advice-badge" style="font-size: 0.75rem;">• Đang phân tích...</span>
+                        </div>
+                        <div class="advice-num" id="dash-advice-num">--</div>
+                        <div style="font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase;">tín chỉ / học kỳ</div>
+                        <div style="font-size: 0.85rem; color: var(--ink); margin-top: 8px; line-height: 1.4;" id="dash-advice-reason">Nhập điểm các môn để nhận gợi ý.</div>
+                    </div>
+                </div>
+
+                {{-- Card Phụ: Phân Tích --}}
+                <div class="bento-item bento-small" onclick="switchTab('analysis', document.getElementById('nav-analysis'))">
+                    <div class="bento-icon">📊</div>
+                    <div class="bento-title">Phân Tích & Biểu Đồ</div>
+                    <div class="bento-desc">Xem đánh giá chuyên sâu theo kỹ năng và biểu đồ điểm.</div>
+                    <div class="bento-action" style="color: var(--ink);">Xem chi tiết <span class="bento-arrow">→</span></div>
+                </div>
+
+                {{-- Card Phụ: Lịch Sử --}}
+                <div class="bento-item bento-small" onclick="toggleHistoryDrawer()">
+                    <div class="bento-icon">📚</div>
+                    <div class="bento-title">Lịch Sử Học Tập</div>
+                    <div class="bento-desc">Quản lý và xem lại các học kỳ đã hoàn tất.</div>
+                    <div class="bento-action" style="color: var(--ink);">Mở lịch sử <span class="bento-arrow">→</span></div>
+                </div>
+
+            </div>
+            
+            <div style="display:none;">
+                {{-- Elements needed for student-planner.js that are hidden but JS expects them to exist to read/write values --}}
+                <span id="kpi-progress-sub"></span>
+                <span id="kpi-semester"></span>
+                <span id="kpi-credits"></span>
+                <span id="dash-prog-pct"></span>
+                <span id="dash-credit-earned"></span>
+                <span id="dash-prog-fill"></span>
+                <span id="dash-prog-left"></span>
+                <span id="dash-prog-rem-sem"></span>
+                <span id="dash-pass-credits"></span>
+                <span id="dash-needed-per-sem"></span>
+                <span id="dash-current-sem"></span>
+                <span id="dash-strength-content"></span>
+                <canvas id="gradeChart"></canvas>
             </div>
         </div>
 

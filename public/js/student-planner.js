@@ -327,6 +327,12 @@ function updateEarnedCredits() {
     const progPct = Math.min(100, Math.round((earned / TOTAL_CREDITS) * 100));
     document.getElementById('kpi-progress').textContent = progPct + '%';
     document.getElementById('kpi-progress-sub').textContent = `${earned} / ${TOTAL_CREDITS} TC hoàn thành`;
+    
+    // Cập nhật biểu đồ tròn trên Hero Section
+    const heroCircle = document.getElementById('hero-progress-circle');
+    if (heroCircle) {
+        heroCircle.style.setProperty('--prog-deg', `${progPct * 3.6}deg`);
+    }
 
     // Update GPA KPI
     let allGrades = [];
