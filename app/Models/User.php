@@ -24,7 +24,11 @@ class User extends Authenticatable
         'pref_program_type',
         'pref_current_semester',
         'pref_target_years',
+        // Mục tiêu tốt nghiệp và cường độ học tập
+        'pref_graduation_semester',  // Số học kỳ mục tiêu (8 = 4 năm, 10 = 5 năm)
+        'pref_study_intensity',      // light | balanced | intensive
     ];
+
 
     protected $hidden = [
         'password',

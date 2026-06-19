@@ -754,4 +754,69 @@ class StudyPlanService
             return $plan->load('semesters.subjects.subject');
         });
     }
+
+    /**
+     * Đổi chế độ học của kế hoạch hiện tại và phân bổ lại môn học.
+     *
+     * Không tạo kế hoạch mới — chỉ cập nhật mode + target_semester_count
+     * và tái tính phân bổ môn từ học kỳ hiện tại trở đi.
+     *
+     * Các mode:
+     *  - slow    : Học nhẹ  (~14 TC/kỳ), kéo dài lộ trình
+     *  - normal  : Cân bằng (~18 TC/kỳ), 4 năm tiêu chuẩn
+     *  - fast    : Tăng tốc (~22 TC/kỳ), rút ngắn lộ trình
+     *
+     * @param int    $planId     ID kế hoạch cần đổi mode
+     * @param string $newMode    Mode mới: slow | normal | fast
+     * @param int    $userId     User ID để verify ownership
+     * @return StudyPlan
+     */
+    public function changeMode(int $planId, string $newMode, int $userId): StudyPlan
+    {
+        $plan = StudyPlan::where('id', $planId)
+            ->where('user_id', $userId)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        // Credits giới hạn theo mode mới
+        $newMaxCredits = match($newMode) {
+            'fast'  => 22,
+            'slow'  => 14,
+            default => 18,
+        };
+
+        // Tính số kỳ cần thiết dựa trên mode mới
+        $progressService  = new \App\Services\ProgressService();
+        $progress         = $progressService->evaluateProgress($userId);
+        $remainingCredits = $progress['remaining_credits'];
+
+        // Số học kỳ tối thiểu để hoàn thành với mode mới
+        $newTargetSems = (int) ceil($remainingCredits / $newMaxCredits);
+        $completedSems = $progress['completed_semesters'];
+        $totalSems     = $completedSems + max(1, $newTargetSems);
+
+        return DB::transaction(function () use ($plan, $newMode, $newMaxCredits, $totalSems, $userId) {
+            // Cập nhật mode và số kỳ mục tiêu
+            $plan->update([
+                'mode'                  => $newMode,
+                'target_semester_count' => $totalSems,
+            ]);
+
+            // Xóa các học kỳ chưa hoàn thành trong kế hoạch (giữ lại kỳ đã pass)
+            foreach ($plan->semesters as $sem) {
+                $allCompleted = $sem->subjects->every(fn($s) => $s->is_completed);
+                if (!$allCompleted) {
+                    $sem->subjects()->delete();
+                    $sem->delete();
+                }
+            }
+
+            // Tái tạo kế hoạch với mode mới — sử dụng lại engine generatePlan
+            // bằng cách gọi generatePlan với cùng tên nhưng mode mới
+            $newPlan = $this->generatePlan($userId, $plan->name, $newMode, $totalSems);
+
+            return $newPlan;
+        });
+    }
 }
+
