@@ -33,8 +33,8 @@ function switchTab(tabId, navEl) {
     }
 
     // Trigger chart reload when switching to chart tab
-    if (tabId === 'chart' && chartRawData) {
-        renderGradeChartDetail(chartRawData, 'all');
+    if (tabId === 'analysis' && chartRawData) {
+        try { renderGradeChartDetail(chartRawData, 'all'); } catch (e) {}
     }
     if (tabId === 'planner') {
         clearTimeout(fetchTimer);
@@ -288,11 +288,24 @@ async function saveMultipleGrades(grades) {
     } catch (err) { showSaveIndicator('error', 'Lưu điểm thất bại'); }
 }
 
+let globalUserGrades = {};
+
 async function loadGradesFromDB() {
     try {
         const res = await fetch('/grades', { headers: { 'Accept': 'application/json' } }); if (!res.ok) return;
         const grades = await res.json();
-        grades.forEach(({ subject_id, grade }) => { const input = document.getElementById(`grade-${subject_id}`); if (!input) return; if (grade !== null && grade !== undefined) { input.value = grade; onGradeChange(subject_id, input, true); } });
+        globalUserGrades = {};
+        grades.forEach(({ subject_id, grade }) => { 
+            if (grade !== null && grade !== undefined) {
+                globalUserGrades[subject_id] = grade;
+            }
+            const input = document.getElementById(`grade-${subject_id}`); 
+            if (!input) return; 
+            if (grade !== null && grade !== undefined) { 
+                input.value = grade; 
+                onGradeChange(subject_id, input, true); 
+            } 
+        });
         updateEarnedCredits(); updateDrawerStats();
     } catch (err) { console.warn('[Grade load error]', err); }
 }
@@ -994,8 +1007,8 @@ async function fetchChartData() {
         if (!res.ok) return;
         chartRawData = await res.json();
         buildChartSemFilter(chartRawData.semesters);
-        renderGradeChart(chartRawData, 'all');
-        renderGradeChartDetail(chartRawData, 'all');
+        try { renderGradeChart(chartRawData, 'all'); } catch(e) { console.warn(e); }
+        try { renderGradeChartDetail(chartRawData, 'all'); } catch(e) { console.warn(e); }
     } catch (err) { console.warn('[Chart error]', err); }
 }
 
@@ -1185,8 +1198,7 @@ function gradeLevelLabel(avg) {
 function buildGroupAnalysis() {
     const allSubjects = [];
     for (const [semName, subs] of Object.entries(SUBJECTS_BY_SEM)) { subs.forEach(sub => allSubjects.push(sub)); }
-    const grades = {};
-    document.querySelectorAll('.grade-input').forEach(input => { const sid = parseInt(input.dataset.subjectId); const val = parseFloat(input.value); if (!isNaN(val) && input.value !== '') grades[sid] = val; });
+    const grades = globalUserGrades || {};
     const groups = {};
     allSubjects.forEach(sub => {
         const gName = currentAnalysisType === 'skill' ? (sub.skillGroupName || 'Khác') : (sub.programGroupName || 'Khác');
