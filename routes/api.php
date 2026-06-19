@@ -28,18 +28,20 @@ Route::prefix('v1')->middleware('web')->group(function () {
     Route::get('/recommendations', [\App\Http\Controllers\Api\RecommendationController::class, 'index']);
 
     Route::prefix('study-plans')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Api\StudyPlanController::class, 'index']);
-        Route::post('/generate', [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
+        Route::get('/',              [\App\Http\Controllers\Api\StudyPlanController::class, 'index']);
+        Route::get('/active',        [\App\Http\Controllers\Api\StudyPlanController::class, 'getActivePlan']);  // ← PHẢI trước /{id}
+        Route::post('/generate',     [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
         Route::post('/update-grade', [\App\Http\Controllers\Api\StudyPlanController::class, 'updateGrade']);
-        Route::post('/adjust', [\App\Http\Controllers\Api\StudyPlanController::class, 'adjust']);
+        Route::post('/adjust',       [\App\Http\Controllers\Api\StudyPlanController::class, 'adjust']);
         Route::post('/move-subject', [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
         Route::post('/apply-suggestions', [\App\Http\Controllers\Api\StudyPlanController::class, 'applySuggestions']);
-        
-        Route::get('/saved', [\App\Http\Controllers\Api\StudyPlanController::class, 'getSavedPlans']);
-        Route::post('/{id}/save', [\App\Http\Controllers\Api\StudyPlanController::class, 'savePlan']);
-        Route::get('/{id}/load', [\App\Http\Controllers\Api\StudyPlanController::class, 'loadPlan']);
-        Route::delete('/{id}', [\App\Http\Controllers\Api\StudyPlanController::class, 'destroy']);
+
+        Route::get('/saved',         [\App\Http\Controllers\Api\StudyPlanController::class, 'getSavedPlans']);
+        Route::post('/{id}/save',    [\App\Http\Controllers\Api\StudyPlanController::class, 'savePlan']);
+        Route::get('/{id}/load',     [\App\Http\Controllers\Api\StudyPlanController::class, 'loadPlan']);
+        Route::delete('/{id}',       [\App\Http\Controllers\Api\StudyPlanController::class, 'destroy']);
     });
+
 
     Route::get('/progress', [\App\Http\Controllers\Api\ProgressController::class, 'index']);
 });

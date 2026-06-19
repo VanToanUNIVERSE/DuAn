@@ -24,8 +24,11 @@ class StudyPlanService
     public function generatePlan(int $userId, string $name, string $mode = 'normal', ?int $dynamicTargetSems = null): StudyPlan
     {
         return DB::transaction(function () use ($userId, $name, $mode, $dynamicTargetSems) {
-            // Delete old plan of the same mode (optional, or just create new)
-            // StudyPlan::where('user_id', $userId)->where('mode', $mode)->delete();
+            // ═══ QUAN TRỌNG: Deactivate tất cả kế hoạch cũ của user ═══
+            // Đảm bảo mỗi sinh viên chỉ có DUY NHẤT 1 kế hoạch is_active = true
+            StudyPlan::where('user_id', $userId)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
 
             // Evaluate progress to check GPA
             $progressService = new \App\Services\ProgressService();
@@ -104,11 +107,14 @@ class StudyPlanService
             };
 
             $plan = StudyPlan::create([
-                'user_id' => $userId,
-                'name' => $name,
-                'mode' => $mode,
-                'target_semester_count' => $targetSemsToSave
+                'user_id'               => $userId,
+                'name'                  => $name,
+                'mode'                  => $mode,
+                'target_semester_count' => $targetSemsToSave,
+                'is_active'             => true,   // Kế hoạch mới luôn là active
+                'is_saved'              => true,   // Tự động lưu ngay khi tạo
             ]);
+
 
             $semesterIndex = 1;
 

@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\SemesterHistory;
 use App\Models\SemesterHistoryItem;
+use App\Models\StudyPlan;
 use App\Models\Subject;
+use App\Services\AcademicEvaluationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -100,7 +102,47 @@ class SemesterHistoryController extends Controller
             }
         });
 
-        return response()->json(['message' => 'Đã lưu lịch sử học kỳ thành công']);
+        // ═══════════════════════════════════════════════════════════════════
+        // TRIGGER: Đánh giá kế hoạch học tập sau khi hoàn tất học kỳ
+        // Trả về evaluation để FE hiển thị modal tư vấn điều chỉnh
+        // ═══════════════════════════════════════════════════════════════════
+        $evaluation    = null;
+        $needsAdjust   = false;
+        $activePlanId  = null;
+
+        try {
+            // Lấy kế hoạch học tập đang active của sinh viên
+            $activePlan = StudyPlan::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($activePlan) {
+                $activePlanId = $activePlan->id;
+                $evalService  = app(AcademicEvaluationService::class);
+
+                $evaluation = $evalService->evaluate(
+                    $user->id,
+                    $activePlan->mode ?? 'normal',
+                    $activePlan->target_semester_count ?? 8,
+                    $validated['semester_number'] + 1  // Học kỳ tiếp theo
+                );
+
+                // Xác định xem có cần điều chỉnh kế hoạch không
+                $needsAdjust = in_array($evaluation['status'], ['REPLAN', 'SPEED_UP', 'REDUCE']);
+            }
+        } catch (\Exception $e) {
+            // Không làm gián đoạn luồng chính nếu đánh giá lỗi
+            \Illuminate\Support\Facades\Log::warning(
+                'AcademicEvaluationService error after semester complete: ' . $e->getMessage()
+            );
+        }
+
+        return response()->json([
+            'message'         => 'Đã lưu lịch sử học kỳ thành công',
+            'evaluation'      => $evaluation,     // null nếu chưa có kế hoạch
+            'needs_adjustment'=> $needsAdjust,    // true → FE hiển thị modal điều chỉnh
+            'active_plan_id'  => $activePlanId,   // để FE biết ID kế hoạch cần điều chỉnh
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

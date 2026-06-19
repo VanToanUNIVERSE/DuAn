@@ -69,9 +69,15 @@ class RecommendationService
             // 2. Implicit prerequisites (from requirement_type)
             $reqType = $subject->requirement_type;
             if ($reqType && $reqType !== 'none') {
-                $basicGroupIds = [1, 2, 3]; // Kiến thức giáo dục đại cương
-                $majorGroupIds = [4, 5];    // Kiến thức cơ sở ngành
-                $specializedGroupIds = [6, 7]; // Kiến thức chuyên ngành
+                // ── Dùng DB query động thay vì hardcode IDs ──────────────────
+                // Đảm bảo hoạt động đúng khi DB thay đổi thứ tự hoặc tên nhóm
+                $basicGroupIds       = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
+                    ->orWhere('name', 'like', '%Anh văn%')
+                    ->pluck('id')->toArray();
+                $majorGroupIds       = \App\Models\ProgramGroup::where('name', 'like', '%Cơ sở ngành%')
+                    ->pluck('id')->toArray();
+                $specializedGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Chuyên ngành%')
+                    ->pluck('id')->toArray();
 
                 $implicitPrereqSubjects = collect();
                 

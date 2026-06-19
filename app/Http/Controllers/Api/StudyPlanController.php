@@ -43,31 +43,44 @@ class StudyPlanController extends Controller
         $mode = $request->input('mode', 'normal');
         $name = $request->input('name');
 
+        // generatePlan() đã tự động: deactivate kế hoạch cũ + set is_active=true + is_saved=true
         $plan = $this->studyPlanService->generatePlan($userId, $name, $mode);
-        // Tự động lưu ngay khi tạo
-        $plan->update(['is_saved' => true]);
-        
+
         $plan = $this->attachGrades($plan, $userId);
 
         return response()->json([
             'success' => true,
             'message' => 'Study plan generated successfully',
-            'data' => $plan
+            'data'    => $plan
         ]);
     }
 
     public function index(Request $request)
     {
         $userId = $request->input('user_id') ?? Auth::id();
-        // Lấy kế hoạch vừa được chỉnh sửa gần nhất
-        $plans = StudyPlan::where('user_id', $userId)->where('is_saved', true)->orderBy('updated_at', 'desc')->take(1)->get();
-        foreach ($plans as $plan) {
-            $this->attachGrades($plan, $userId);
+
+        // Ư u tiên lấy kế hoạch is_active=true trước, fallback sang mới nhất
+        $plan = StudyPlan::where('user_id', $userId)
+            ->where('is_saved', true)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$plan) {
+            $plan = StudyPlan::where('user_id', $userId)
+                ->where('is_saved', true)
+                ->orderBy('updated_at', 'desc')
+                ->first();
+        }
+
+        $plans = $plan ? collect([$plan]) : collect();
+
+        foreach ($plans as $p) {
+            $this->attachGrades($p, $userId);
         }
 
         return response()->json([
             'success' => true,
-            'data' => $plans
+            'data'    => $plans
         ]);
     }
 
@@ -437,4 +450,32 @@ class StudyPlanController extends Controller
             'data' => $plan
         ]);
     }
+
+    /**
+     * Lấy kế hoạch học tập đang hoạt động (is_active = true) của sinh viên.
+     * Đảm bảo mỗi sinh viên chỉ có 1 kế hoạch active tại mọi thời điểm.
+     *
+     * GET /api/v1/study-plans/active
+     */
+    public function getActivePlan(Request $request)
+    {
+        $userId = $request->input('user_id') ?? Auth::id();
+        if (!$userId) {
+            return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
+        }
+
+        $plan = StudyPlan::where('user_id', $userId)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$plan) {
+            // Fallback: không có active plan → trả về null (FE sẽ hiển thị wizard tạo mới)
+            return response()->json(['success' => true, 'data' => null]);
+        }
+
+        $this->attachGrades($plan, $userId);
+
+        return response()->json(['success' => true, 'data' => $plan]);
+    }
 }
+

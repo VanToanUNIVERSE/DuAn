@@ -18,7 +18,9 @@ class StudyPlan extends Model
         'mode',
         'target_semester_count',
         'is_saved',
+        'is_active',  // true = kế hoạch đang hoạt động, mỗi user chỉ có 1
     ];
+
 
     public function user(): BelongsTo
     {
