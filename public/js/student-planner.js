@@ -33,8 +33,10 @@ function switchTab(tabId, navEl) {
     }
 
     // Trigger chart reload when switching to chart tab
-    if (tabId === 'analysis' && chartRawData) {
-        try { renderGradeChartDetail(chartRawData, 'all'); } catch (e) {}
+    if (tabId === 'analysis') {
+        if (chartRawData) { try { renderGradeChartDetail(chartRawData, 'all'); } catch (e) {} }
+        fetchGpaTrend();
+        fetchSkillFocusProgress();
     }
     if (tabId === 'planner') {
         clearTimeout(fetchTimer);
@@ -238,7 +240,8 @@ function savePreferences() {
     clearTimeout(prefTimer);
     prefTimer = setTimeout(async () => {
         try {
-            const payload = { academic_year: document.getElementById('academic_year').value, program_type: document.getElementById('program_type').value, current_courses: currentCourses };
+            const skillFocusEl = document.getElementById('skill_focus');
+            const payload = { academic_year: document.getElementById('academic_year').value, program_type: document.getElementById('program_type').value, current_courses: currentCourses, skill_focus: skillFocusEl ? skillFocusEl.value : null };
             const res = await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify(payload) });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             showSaveIndicator('saved', 'Đã lưu cấu hình ✓');
@@ -274,6 +277,16 @@ function autoSaveGrade(subjectId, grade) {
             const res = await fetch('/grades/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify([{ subject_id: subjectId, grade }]) });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             showSaveIndicator('saved'); scheduleChartRefresh();
+            fetchWarnings(); // Cập nhật cảnh báo sau khi lưu điểm
+
+            // Nếu rớt môn → phân tích hiệu ứng dây chuyền
+            if (grade !== null && grade <= 5.0) {
+                const card = document.getElementById(`lbl-sub-${subjectId}`);
+                const nameEl = card?.querySelector('.drawer-subject-name');
+                const subjectName = nameEl?.textContent?.trim() || `Môn #${subjectId}`;
+                // Hiển thị sau 0.5s để không chồng lên toast
+                setTimeout(() => openCascadeModal(subjectId, subjectName), 500);
+            }
         } catch (err) { showSaveIndicator('error'); }
     }, 800);
 }
@@ -703,19 +716,50 @@ async function fetchGraduationForecast() {
             const data = resData.data;
             const widget = document.getElementById('grad-forecast-widget');
             if (!widget) return;
-            
+
+            // Header badge
             const badge = document.getElementById('grad-status-badge');
-            badge.textContent = data.status === 'ON_TRACK' ? 'Đúng tiến độ' : (data.status === 'AHEAD' ? 'Vượt tiến độ' : 'Chậm tiến độ');
+            const statusLabels = { 'ON_TRACK': 'Đúng tiến độ', 'AHEAD': 'Vượt tiến độ', 'BEHIND': 'Chậm tiến độ', 'GRADUATED': 'Đã tốt nghiệp' };
+            badge.textContent = statusLabels[data.status] || data.status;
             badge.style.color = data.status_color;
             badge.style.backgroundColor = data.status_color + '20';
-            
-            document.getElementById('grad-message').textContent = data.message;
-            document.getElementById('grad-target-sems').textContent = data.target_semesters + ' kỳ';
-            document.getElementById('grad-remaining-credits').textContent = data.remaining_credits + ' TC';
-            
-            widget.style.display = 'flex';
 
-            // Nếu có pending evaluation từ lần nhập điểm, hiện badge gợi ý mode
+            document.getElementById('grad-message').textContent = data.message;
+            document.getElementById('grad-remaining-credits').textContent = (data.remaining_credits ?? '--') + ' TC';
+            const gpaEl = document.getElementById('grad-current-gpa');
+            if (gpaEl) gpaEl.textContent = data.current_gpa > 0 ? data.current_gpa : '--';
+
+            // 3 kịch bản
+            if (data.scenarios) {
+                const s = data.scenarios;
+                const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+                setText('grad-opt-label',  s.optimistic?.grad_label  ?? '--');
+                setText('grad-opt-desc',   s.optimistic?.description ?? '--');
+                setText('grad-opt-gpa',    s.optimistic?.projected_gpa ?? '--');
+                setText('grad-avg-label',  s.average?.grad_label     ?? '--');
+                setText('grad-avg-desc',   s.average?.description    ?? '--');
+                setText('grad-avg-gpa',    s.average?.projected_gpa  ?? '--');
+                setText('grad-pess-label', s.pessimistic?.grad_label  ?? '--');
+                setText('grad-pess-desc',  s.pessimistic?.description ?? '--');
+                setText('grad-pess-gpa',   s.pessimistic?.projected_gpa ?? '--');
+            }
+
+            // Cảnh báo rủi ro
+            const risksContainer = document.getElementById('grad-risks-container');
+            const risksList = document.getElementById('grad-risks-list');
+            if (risksContainer && risksList && data.risks && data.risks.length > 0) {
+                risksList.innerHTML = data.risks.map(r => {
+                    const color = r.level === 'danger' ? '#ef4444' : '#f59e0b';
+                    const bg    = r.level === 'danger' ? '#fef2f2' : '#fffbeb';
+                    return `<div style="font-size:0.8rem; padding:8px 12px; border-radius:8px; background:${bg}; border-left:3px solid ${color}; color:#374151;">${r.message}</div>`;
+                }).join('');
+                risksContainer.style.display = 'block';
+            } else if (risksContainer) {
+                risksContainer.style.display = 'none';
+            }
+
+            widget.style.display = 'block';
+
             if (window._pendingModeEvaluation) {
                 updateModeSuggestionBadge(window._pendingModeEvaluation);
             }
@@ -1160,6 +1204,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     else {
         if (prefs.academic_year) document.getElementById('academic_year').value = prefs.academic_year;
         if (prefs.program_type) document.getElementById('program_type').value = prefs.program_type;
+        const sfEl = document.getElementById('skill_focus');
+        if (sfEl && prefs.skill_focus) sfEl.value = prefs.skill_focus;
 
         if (prefs.current_courses && prefs.current_courses.length > 0) {
             currentCourses = prefs.current_courses;
@@ -1171,6 +1217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderCurrentCourses();
         fetchSuggestions();
         fetchChartData();
+        fetchWarnings();
     }
     
     // Khởi tạo và lắng nghe thay đổi chế độ học (Mode) để tính toán số tín chỉ mục tiêu
@@ -2547,4 +2594,267 @@ async function applySuggestionsToPlan() {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPRINT 3: GPA TREND LINE CHART
+// ═══════════════════════════════════════════════════════════════
+let gpaTrendChartInstance = null;
+
+async function fetchGpaTrend() {
+    try {
+        const res = await fetch('/api/v1/gpa-trend', { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;
+        const data = await res.json();
+        renderGpaTrendChart(data);
+    } catch (e) { console.warn('[GPA trend error]', e); }
+}
+
+function renderGpaTrendChart(data) {
+    const empty = document.getElementById('gpa-trend-empty');
+    const wrap  = document.getElementById('gpa-trend-chart-wrap');
+    const badge = document.getElementById('gpa-trend-badge');
+    const msg   = document.getElementById('gpa-trend-message');
+
+    if (!data || !data.gpas || data.gpas.length === 0) {
+        if (empty) empty.style.display = 'block';
+        if (wrap)  wrap.style.display  = 'none';
+        if (badge) { badge.textContent = 'Chưa có dữ liệu'; badge.style.background = 'var(--surface-soft)'; badge.style.color = 'var(--muted)'; }
+        return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    if (wrap)  wrap.style.display  = 'block';
+    if (msg && data.message) msg.textContent = data.message;
+
+    const trendConfig = {
+        improving: { label: 'Đang cải thiện ↑', bg: '#d1fae5', color: '#065f46' },
+        declining:  { label: 'Đang giảm ↓',     bg: '#fee2e2', color: '#991b1b' },
+        stable:     { label: 'Ổn định →',        bg: '#dbeafe', color: '#1e40af' },
+        no_data:    { label: 'Chưa đủ dữ liệu',  bg: 'var(--surface-soft)', color: 'var(--muted)' },
+    };
+    const tCfg = trendConfig[data.trend] || trendConfig.no_data;
+    if (badge) { badge.textContent = tCfg.label; badge.style.background = tCfg.bg; badge.style.color = tCfg.color; }
+
+    const canvas = document.getElementById('gpaTrendChart');
+    if (!canvas) return;
+
+    if (gpaTrendChartInstance) { gpaTrendChartInstance.destroy(); gpaTrendChartInstance = null; }
+
+    const ctx = canvas.getContext('2d');
+    const lineColor = data.trend === 'improving' ? '#10b981' : data.trend === 'declining' ? '#ef4444' : '#3b82f6';
+
+    gpaTrendChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.semesters,
+            datasets: [
+                {
+                    label: 'GPA học kỳ',
+                    data: data.gpas,
+                    borderColor: lineColor,
+                    backgroundColor: lineColor + '22',
+                    borderWidth: 2.5,
+                    pointBackgroundColor: lineColor,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    fill: true,
+                    tension: 0.35,
+                },
+                {
+                    label: 'Ngưỡng yếu (5.0)',
+                    data: data.semesters.map(() => 5.0),
+                    borderColor: '#ef4444',
+                    borderDash: [6, 3],
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false,
+                },
+                {
+                    label: 'Ngưỡng khá (7.5)',
+                    data: data.semesters.map(() => 7.5),
+                    borderColor: '#10b981',
+                    borderDash: [6, 3],
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { font: { size: 12 }, usePointStyle: true } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            if (ctx.datasetIndex === 0) return `GPA: ${ctx.parsed.y.toFixed(2)}`;
+                            return null;
+                        },
+                        afterBody: (items) => {
+                            const idx = items[0]?.dataIndex;
+                            if (idx !== undefined && data.credits && data.credits[idx] !== undefined)
+                                return [`TC tích lũy: ${data.credits[idx]}`];
+                            return [];
+                        }
+                    }
+                },
+            },
+            scales: {
+                y: { min: 0, max: 10, ticks: { stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                x: { grid: { display: false } },
+            },
+        },
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPRINT 3: WARNINGS PANEL
+// ═══════════════════════════════════════════════════════════════
+async function fetchWarnings() {
+    try {
+        const res = await fetch('/api/v1/warnings', { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;
+        const data = await res.json();
+        renderWarningsPanel(data.live_warnings || []);
+    } catch (e) { console.warn('[Warnings error]', e); }
+}
+
+function renderWarningsPanel(warnings) {
+    const panel = document.getElementById('warnings-panel');
+    const list  = document.getElementById('warnings-list');
+    const badge = document.getElementById('warnings-count-badge');
+    if (!panel || !list) return;
+
+    if (!warnings || warnings.length === 0) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    panel.style.display = 'block';
+    if (badge) badge.textContent = warnings.length;
+
+    const severityConfig = {
+        critical: { bg: '#fef2f2', border: '#fca5a5', color: '#991b1b', icon: '🚨' },
+        warning:  { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠️' },
+        info:     { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af', icon: 'ℹ️' },
+    };
+
+    list.innerHTML = warnings.map(w => {
+        const cfg = severityConfig[w.severity] || severityConfig.info;
+        return `<div style="background:${cfg.bg}; border:1px solid ${cfg.border}; border-radius:8px; padding:10px 14px; display:flex; align-items:flex-start; gap:10px;">
+            <span style="font-size:1.1rem; flex-shrink:0;">${cfg.icon}</span>
+            <div>
+                <div style="font-size:0.85rem; font-weight:700; color:${cfg.color}; margin-bottom:2px;">${w.title || 'Cảnh báo'}</div>
+                <div style="font-size:0.82rem; color:#374151; line-height:1.5;">${w.message}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPRINT 3: CASCADE ANALYSIS MODAL
+// ═══════════════════════════════════════════════════════════════
+function closeCascadeModal() {
+    const overlay = document.getElementById('cascade-modal-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+async function openCascadeModal(subjectId, subjectName) {
+    const overlay = document.getElementById('cascade-modal-overlay');
+    if (!overlay) return;
+
+    // Reset state
+    document.getElementById('cascade-modal-subject').textContent = subjectName || 'Đang tải...';
+    document.getElementById('cascade-summary-box').textContent = 'Đang phân tích hiệu ứng dây chuyền...';
+    document.getElementById('cascade-kpi-total').textContent = '...';
+    document.getElementById('cascade-kpi-credits').textContent = '...';
+    document.getElementById('cascade-kpi-delay').textContent = '...';
+    document.getElementById('cascade-direct-section').style.display = 'none';
+    document.getElementById('cascade-indirect-section').style.display = 'none';
+    document.getElementById('cascade-no-impact').style.display = 'none';
+    overlay.style.display = 'flex';
+
+    try {
+        const res = await fetch(`/api/v1/cascade-impact/${subjectId}`, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) throw new Error('Lỗi hệ thống');
+        const json = await res.json();
+        const d = json.data;
+
+        document.getElementById('cascade-summary-box').textContent = d.summary;
+        document.getElementById('cascade-kpi-total').textContent   = d.total_blocked;
+        document.getElementById('cascade-kpi-credits').textContent = d.total_blocked_credits;
+        document.getElementById('cascade-kpi-delay').textContent   = d.estimated_delay_sems;
+        document.getElementById('cascade-modal-title').textContent = d.total_blocked > 0 ? 'Cảnh Báo Dây Chuyền' : 'Không Có Ảnh Hưởng';
+
+        if (d.total_blocked === 0) {
+            document.getElementById('cascade-no-impact').style.display = 'block';
+            return;
+        }
+
+        const renderSubjectChips = (subjects, containerId) => {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            el.innerHTML = subjects.map(s =>
+                `<span style="display:inline-block; background:var(--surface-soft); border:1px solid var(--hairline); border-radius:6px; padding:4px 10px; font-size:0.78rem; font-weight:600; color:var(--ink);" title="${s.credits} TC — ${s.program_group || ''}">${s.code ? s.code + ' · ' : ''}${s.name} <span style="color:var(--muted); font-weight:400;">(${s.credits}TC)</span></span>`
+            ).join('');
+        };
+
+        if (d.direct_blocked.length > 0) {
+            document.getElementById('cascade-direct-section').style.display = 'block';
+            document.getElementById('cascade-direct-count').textContent = d.direct_blocked.length + ' môn';
+            renderSubjectChips(d.direct_blocked, 'cascade-direct-list');
+        }
+        if (d.indirect_blocked.length > 0) {
+            document.getElementById('cascade-indirect-section').style.display = 'block';
+            document.getElementById('cascade-indirect-count').textContent = d.indirect_blocked.length + ' môn';
+            renderSubjectChips(d.indirect_blocked, 'cascade-indirect-list');
+        }
+    } catch (e) {
+        document.getElementById('cascade-summary-box').textContent = 'Không thể phân tích hiệu ứng dây chuyền. Vui lòng thử lại.';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPRINT 3: SKILL FOCUS CARD (in Analysis tab)
+// ═══════════════════════════════════════════════════════════════
+async function fetchSkillFocusProgress() {
+    try {
+        const res = await fetch('/api/v1/progress', { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const evaluation = data?.data?.progress?.evaluation;
+        if (!evaluation || !evaluation.skill_analysis) {
+            document.getElementById('skill-focus-card')?.setAttribute('style', 'display:none');
+            return;
+        }
+        const skill = evaluation.skill_analysis;
+        const card  = document.getElementById('skill-focus-card');
+        if (!card) return;
+        card.style.display = 'block';
+
+        const focusLabel = evaluation.skill_focus
+            ? ({ backend:'Backend Development', frontend:'Frontend Development', ai:'AI / Machine Learning', data:'Data Science', mobile:'Mobile Development', devops:'DevOps / Cloud', testing:'Testing / QA', security:'Cybersecurity', core:'Core' }[evaluation.skill_focus] || evaluation.skill_focus)
+            : 'Chưa chọn';
+
+        const badge = document.getElementById('skill-focus-label-badge');
+        if (badge) badge.textContent = focusLabel;
+
+        const pct = skill.completion_pct || 0;
+        const bar = document.getElementById('skill-focus-bar');
+        if (bar) bar.style.width = pct + '%';
+
+        const passedEl = document.getElementById('skill-focus-passed');
+        if (passedEl) passedEl.textContent = `${skill.passed_subjects || 0} / ${skill.total_subjects || 0} môn`;
+
+        const pctEl = document.getElementById('skill-focus-pct');
+        if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
+
+        const gpaEl = document.getElementById('skill-focus-gpa');
+        if (gpaEl) gpaEl.textContent = skill.avg_grade ? skill.avg_grade.toFixed(2) : '--';
+
+        const msgEl = document.getElementById('skill-focus-message');
+        if (msgEl) msgEl.textContent = evaluation.skill_message || 'Chưa có dữ liệu đủ để phân tích.';
+    } catch (e) { console.warn('[Skill focus error]', e); }
 }

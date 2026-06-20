@@ -167,6 +167,66 @@
     </div>
 
     {{-- ══════════════════════════════════════════════════════════════════
+    CASCADE ANALYSIS MODAL
+    ══════════════════════════════════════════════════════════════════ --}}
+    <div class="sem-result-overlay" id="cascade-modal-overlay" style="z-index: 100001; display:none;" onclick="if(event.target===this) closeCascadeModal()">
+        <div class="sem-result-modal" style="max-width:600px; max-height:85vh; display:flex; flex-direction:column;">
+            <div class="srm-header" style="background:linear-gradient(135deg,#7c3aed,#4f46e5); flex-shrink:0;">
+                <button class="srm-close" style="color:white; opacity:0.8;" onclick="closeCascadeModal()">✕</button>
+                <div class="srm-semester-label" style="color:rgba(255,255,255,0.8);">Phân tích hiệu ứng dây chuyền</div>
+                <div class="srm-title" id="cascade-modal-title">Ảnh Hưởng Khi Rớt Môn</div>
+                <div class="srm-subtitle" style="color:rgba(255,255,255,0.85);" id="cascade-modal-subject">--</div>
+            </div>
+
+            <div style="padding:20px 24px; overflow-y:auto; flex:1;">
+                {{-- Summary --}}
+                <div id="cascade-summary-box" style="background:#fef3c7; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; margin-bottom:16px; font-size:0.9rem; color:#78350f; line-height:1.6;"></div>
+
+                {{-- KPI row --}}
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;">
+                    <div style="text-align:center; background:var(--surface-soft); border-radius:10px; padding:14px 8px;">
+                        <div style="font-family:'Sora',sans-serif; font-size:1.6rem; font-weight:800; color:#7c3aed;" id="cascade-kpi-total">0</div>
+                        <div style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Môn bị ảnh hưởng</div>
+                    </div>
+                    <div style="text-align:center; background:var(--surface-soft); border-radius:10px; padding:14px 8px;">
+                        <div style="font-family:'Sora',sans-serif; font-size:1.6rem; font-weight:800; color:#ef4444;" id="cascade-kpi-credits">0</div>
+                        <div style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">TC bị khoá</div>
+                    </div>
+                    <div style="text-align:center; background:var(--surface-soft); border-radius:10px; padding:14px 8px;">
+                        <div style="font-family:'Sora',sans-serif; font-size:1.6rem; font-weight:800; color:#f59e0b;" id="cascade-kpi-delay">0</div>
+                        <div style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase;">Kỳ có thể trễ</div>
+                    </div>
+                </div>
+
+                {{-- Direct blocked --}}
+                <div id="cascade-direct-section" style="display:none; margin-bottom:16px;">
+                    <div style="font-size:0.85rem; font-weight:700; color:#dc2626; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                        🔒 Môn bị khoá trực tiếp <span id="cascade-direct-count" style="background:#fee2e2; color:#dc2626; border-radius:20px; padding:1px 8px; font-size:0.72rem;"></span>
+                    </div>
+                    <div id="cascade-direct-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+                </div>
+
+                {{-- Indirect blocked --}}
+                <div id="cascade-indirect-section" style="display:none;">
+                    <div style="font-size:0.85rem; font-weight:700; color:#d97706; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                        🔗 Môn bị ảnh hưởng gián tiếp <span id="cascade-indirect-count" style="background:#fef3c7; color:#92400e; border-radius:20px; padding:1px 8px; font-size:0.72rem;"></span>
+                    </div>
+                    <div id="cascade-indirect-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+                </div>
+
+                <div id="cascade-no-impact" style="display:none; text-align:center; padding:24px; color:var(--muted);">
+                    <div style="font-size:2rem; margin-bottom:8px;">✅</div>
+                    <p>Môn này không là tiên quyết của môn nào khác.<br>Không có ảnh hưởng dây chuyền.</p>
+                </div>
+            </div>
+
+            <div style="padding:14px 24px; border-top:1px solid var(--hairline); display:flex; justify-content:flex-end; flex-shrink:0;">
+                <button class="btn-secondary" onclick="closeCascadeModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    {{-- ══════════════════════════════════════════════════════════════════
     ONBOARDING WIZARD
     ══════════════════════════════════════════════════════════════════ --}}
     @include('components.onboarding-modal')
@@ -204,6 +264,25 @@
                     @endforeach
                 </select>
             </div>
+        </div>
+
+        {{-- Định hướng kỹ năng --}}
+        <div class="input-group" style="margin-top: 16px;">
+            <label class="input-label" for="skill_focus" style="display:flex; align-items:center; gap:6px;">
+                🎯 Định hướng kỹ năng
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:400;">(ảnh hưởng đến thứ tự gợi ý môn)</span>
+            </label>
+            <select id="skill_focus" class="clay-select" onchange="savePreferences()">
+                <option value="">— Chưa chọn —</option>
+                <option value="backend"  {{ Auth::user()->pref_skill_focus === 'backend'  ? 'selected' : '' }}>🖥️ Backend Development</option>
+                <option value="frontend" {{ Auth::user()->pref_skill_focus === 'frontend' ? 'selected' : '' }}>🎨 Frontend Development</option>
+                <option value="ai"       {{ Auth::user()->pref_skill_focus === 'ai'       ? 'selected' : '' }}>🤖 AI / Machine Learning</option>
+                <option value="data"     {{ Auth::user()->pref_skill_focus === 'data'     ? 'selected' : '' }}>📊 Data Science / Analytics</option>
+                <option value="mobile"   {{ Auth::user()->pref_skill_focus === 'mobile'   ? 'selected' : '' }}>📱 Mobile Development</option>
+                <option value="devops"   {{ Auth::user()->pref_skill_focus === 'devops'   ? 'selected' : '' }}>⚙️ DevOps / Cloud</option>
+                <option value="testing"  {{ Auth::user()->pref_skill_focus === 'testing'  ? 'selected' : '' }}>🧪 Testing / QA</option>
+                <option value="security" {{ Auth::user()->pref_skill_focus === 'security' ? 'selected' : '' }}>🔒 Cybersecurity</option>
+            </select>
         </div>
         <div class="config-stats">
             <div class="config-stat">
@@ -512,32 +591,76 @@
                 </div>
             </div>
 
-            {{-- Widget Dự Báo Tốt Nghiệp --}}
-            <div class="graduation-forecast-card" id="grad-forecast-widget" style="display: none; background: #fff; border-radius: 16px; border: 1px solid var(--hairline); padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); flex-direction: column; gap: 12px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            {{-- Widget Dự Báo Tốt Nghiệp — 3 Kịch Bản --}}
+            <div id="grad-forecast-widget" style="display:none; background:#fff; border-radius:16px; border:1px solid var(--hairline); padding:20px 24px; margin-bottom:24px; box-shadow:0 4px 12px rgba(0,0,0,0.03);">
+
+                {{-- Header --}}
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
                     <div>
-                        <h3 style="font-family: 'Sora', sans-serif; font-size: 1.05rem; margin: 0 0 6px 0; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <h3 style="font-family:'Sora',sans-serif; font-size:1.05rem; margin:0 0 4px 0; color:var(--ink); display:flex; align-items:center; gap:8px;">
                             🎓 Dự Báo Tốt Nghiệp
-                            <span id="grad-status-badge" style="font-size: 0.75rem; padding: 4px 8px; border-radius: 20px; font-weight: 600; background: var(--surface-soft); color: var(--muted);">Đang tải...</span>
+                            <span id="grad-status-badge" style="font-size:0.72rem; padding:3px 8px; border-radius:20px; font-weight:600; background:var(--surface-soft); color:var(--muted);">Đang tải...</span>
                         </h3>
-                        <p id="grad-message" style="color: var(--muted); font-size: 0.88rem; margin: 0; line-height: 1.5; max-width: 560px;">...</p>
+                        <p id="grad-message" style="color:var(--muted); font-size:0.85rem; margin:0; line-height:1.5; max-width:560px;">...</p>
                     </div>
-                    <div style="display: flex; gap: 24px; text-align: right; flex-shrink: 0;">
+                    <div style="display:flex; gap:20px; text-align:right; flex-shrink:0;">
                         <div>
-                            <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.04em;">Kỳ vọng</div>
-                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--ink); font-family: 'Sora', sans-serif;" id="grad-target-sems">-</div>
+                            <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; font-weight:600; letter-spacing:0.04em;">TC còn lại</div>
+                            <div style="font-size:1.2rem; font-weight:700; color:var(--ink); font-family:'Sora',sans-serif;" id="grad-remaining-credits">-</div>
                         </div>
                         <div>
-                            <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.04em;">TC còn lại</div>
-                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--ink); font-family: 'Sora', sans-serif;" id="grad-remaining-credits">-</div>
+                            <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; font-weight:600; letter-spacing:0.04em;">GPA hiện tại</div>
+                            <div style="font-size:1.2rem; font-weight:700; color:var(--ink); font-family:'Sora',sans-serif;" id="grad-current-gpa">-</div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Badge gợi ý đổi mode — chỉ hiện khi có gợi ý từ hệ thống --}}
-                <div id="grad-mode-suggestion" style="display:none; padding-top: 10px; border-top: 1px solid var(--hairline);">
-                    {{-- Nội dung được JS inject vào đây --}}
+                {{-- 3 Kịch bản --}}
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px;" id="grad-scenarios-grid">
+                    {{-- Lạc quan --}}
+                    <div style="border-radius:12px; border:2px solid #10b981; padding:14px; background:#f0fdf4;">
+                        <div style="font-size:0.72rem; font-weight:700; color:#10b981; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">✅ Lạc quan</div>
+                        <div style="font-family:'Sora',sans-serif; font-size:1.1rem; font-weight:800; color:var(--ink);" id="grad-opt-label">--</div>
+                        <div style="font-size:0.78rem; color:var(--muted); margin-top:4px;" id="grad-opt-desc">--</div>
+                        <div style="font-size:0.75rem; margin-top:8px; color:#059669;">GPA dự kiến: <strong id="grad-opt-gpa">--</strong></div>
+                    </div>
+                    {{-- Trung bình --}}
+                    <div style="border-radius:12px; border:2px solid #3b82f6; padding:14px; background:#eff6ff;">
+                        <div style="font-size:0.72rem; font-weight:700; color:#3b82f6; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">📊 Trung bình</div>
+                        <div style="font-family:'Sora',sans-serif; font-size:1.1rem; font-weight:800; color:var(--ink);" id="grad-avg-label">--</div>
+                        <div style="font-size:0.78rem; color:var(--muted); margin-top:4px;" id="grad-avg-desc">--</div>
+                        <div style="font-size:0.75rem; margin-top:8px; color:#2563eb;">GPA dự kiến: <strong id="grad-avg-gpa">--</strong></div>
+                    </div>
+                    {{-- Rủi ro --}}
+                    <div style="border-radius:12px; border:2px solid #ef4444; padding:14px; background:#fef2f2;">
+                        <div style="font-size:0.72rem; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">⚠️ Rủi ro</div>
+                        <div style="font-family:'Sora',sans-serif; font-size:1.1rem; font-weight:800; color:var(--ink);" id="grad-pess-label">--</div>
+                        <div style="font-size:0.78rem; color:var(--muted); margin-top:4px;" id="grad-pess-desc">--</div>
+                        <div style="font-size:0.75rem; margin-top:8px; color:#dc2626;">GPA dự kiến: <strong id="grad-pess-gpa">--</strong></div>
+                    </div>
                 </div>
+
+                {{-- Cảnh báo rủi ro --}}
+                <div id="grad-risks-container" style="display:none; padding-top:12px; border-top:1px solid var(--hairline);">
+                    <div style="font-size:0.78rem; font-weight:700; color:var(--ink); margin-bottom:8px;">⚠️ Cảnh báo học vụ</div>
+                    <div id="grad-risks-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                </div>
+
+                {{-- Badge gợi ý đổi mode --}}
+                <div id="grad-mode-suggestion" style="display:none; padding-top:10px; border-top:1px solid var(--hairline);"></div>
+            </div>
+
+            {{-- Warnings Panel --}}
+            <div id="warnings-panel" style="display:none; margin-bottom:20px; background:#fff; border-radius:16px; border:1px solid #fde68a; padding:20px 24px; box-shadow:0 4px 12px rgba(234,179,8,0.08);">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:1.25rem;">⚠️</span>
+                        <h3 style="font-family:'Sora',sans-serif; font-size:1rem; margin:0; color:var(--ink);">Cảnh Báo Học Vụ</h3>
+                        <span id="warnings-count-badge" style="background:#fef3c7; color:#92400e; font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:20px;">0</span>
+                    </div>
+                    <button onclick="document.getElementById('warnings-panel').style.display='none'" style="background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem; line-height:1;">✕</button>
+                </div>
+                <div id="warnings-list" style="display:flex; flex-direction:column; gap:8px;"></div>
             </div>
 
             {{-- Bento Grid --}}
@@ -686,6 +809,53 @@
                     <div class="group-analysis-empty">
                         <div class="group-analysis-empty-icon">📊</div>
                         <p>Nhập điểm các môn học để xem phân tích điểm theo nhóm</p>
+                    </div>
+                </div>
+            </div>
+
+            {{-- GPA Trend Line Chart --}}
+            <div class="clay-card" style="margin-top:var(--sp-xl);">
+                <div class="card-title-row">
+                    <div class="card-heading">📈 Xu Hướng GPA Qua Các Học Kỳ</div>
+                    <span id="gpa-trend-badge" style="font-size:0.75rem; padding:3px 10px; border-radius:20px; font-weight:600; background:var(--surface-soft); color:var(--muted);">Đang tải...</span>
+                </div>
+                <p id="gpa-trend-message" style="color:var(--muted); font-size:0.85rem; margin:0 0 16px 0;"></p>
+                <div id="gpa-trend-empty" style="text-align:center; padding:40px; color:var(--muted);">
+                    <div style="font-size:2rem; margin-bottom:8px;">📉</div>
+                    <p>Chưa có lịch sử học kỳ nào. Hoàn thành một học kỳ để xem biểu đồ xu hướng GPA.</p>
+                </div>
+                <div style="position:relative; height:260px; display:none;" id="gpa-trend-chart-wrap">
+                    <canvas id="gpaTrendChart"></canvas>
+                </div>
+            </div>
+
+            {{-- Skill Focus Progress Card --}}
+            <div id="skill-focus-card" style="display:none; margin-top:var(--sp-xl);">
+                <div class="clay-card">
+                    <div class="card-title-row">
+                        <div class="card-heading">🎯 Tiến Độ Định Hướng Kỹ Năng</div>
+                        <span id="skill-focus-label-badge" style="font-size:0.75rem; padding:3px 10px; border-radius:20px; font-weight:600; background:#dbeafe; color:#1d4ed8;"></span>
+                    </div>
+                    <div id="skill-focus-content" style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:center;">
+                        <div>
+                            <div style="margin-bottom:12px;">
+                                <div style="font-size:0.8rem; color:var(--muted); margin-bottom:4px;">Tiến độ hoàn thành</div>
+                                <div style="height:8px; background:var(--surface-soft); border-radius:4px; overflow:hidden;">
+                                    <div id="skill-focus-bar" style="height:100%; background:var(--brand-mint); border-radius:4px; width:0%; transition:width 0.6s ease;"></div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; margin-top:4px;">
+                                    <span style="font-size:0.78rem; color:var(--muted);" id="skill-focus-passed">0 / 0 môn</span>
+                                    <span style="font-size:0.78rem; font-weight:700; color:var(--ink);" id="skill-focus-pct">0%</span>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.8rem; color:var(--muted); margin-bottom:4px;">GPA trung bình nhóm định hướng</div>
+                                <div style="font-family:'Sora',sans-serif; font-size:2rem; font-weight:800; color:var(--ink);" id="skill-focus-gpa">--</div>
+                            </div>
+                        </div>
+                        <div id="skill-focus-message" style="font-size:0.88rem; color:var(--muted); line-height:1.7; background:var(--surface-soft); border-radius:12px; padding:16px;">
+                            Đang phân tích...
+                        </div>
                     </div>
                 </div>
             </div>

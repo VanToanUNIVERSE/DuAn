@@ -25,6 +25,7 @@ class User extends Authenticatable
         'pref_current_semester',
         'pref_target_years',
         'pref_graduation_semester',
+        'pref_skill_focus',
     ];
 
     protected $hidden = [

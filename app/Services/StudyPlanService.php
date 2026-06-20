@@ -34,8 +34,8 @@ class StudyPlanService
             $progressService = new \App\Services\ProgressService();
             $progress = $progressService->evaluateProgress($userId);
             
-            // Check for low GPA and force slow mode if not already dynamic
-            if ($mode !== 'dynamic' && $progress['current_gpa'] > 0 && $progress['current_gpa'] < 2.0) {
+            // GPA thang 10: dưới 5.0 thì giảm tải, dưới 4.0 thì bắt buộc slow
+            if ($mode !== 'dynamic' && $progress['current_gpa'] > 0 && $progress['current_gpa'] < 5.0) {
                 $mode = 'slow';
             }
 
@@ -68,7 +68,7 @@ class StudyPlanService
 
             if ($frameworkId) {
                 $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
-                    ->with(['subject.prerequisites', 'subject.relatedRelations', 'semester'])
+                    ->with(['subject.prerequisites', 'subject.relatedRelations', 'subject.skillGroup', 'semester'])
                     ->get();
                 $allSubjects = collect();
                 foreach ($curriculumSubjects as $cs) {
@@ -79,7 +79,7 @@ class StudyPlanService
                     }
                 }
             } else {
-                $allSubjects = Subject::with(['prerequisites', 'relatedRelations'])->get();
+                $allSubjects = Subject::with(['prerequisites', 'relatedRelations', 'skillGroup'])->get();
                 foreach ($allSubjects as $sub) {
                     $sub->assigned_semester_index = (int) $sub->semester_id;
                 }
@@ -316,30 +316,35 @@ class StudyPlanService
                 }
 
                 // Sort available subjects by priority
-                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode, $basicGroupIds, $majorGroupIds) {
+                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode, $basicGroupIds, $majorGroupIds, $user) {
                     $score = 0;
                     if (in_array($subject->program_group_id, $basicGroupIds)) {
-                        $score += 200; // Ưu tiên Đại cương hoàn thành sớm nhất
+                        $score += 200;
                     } elseif (in_array($subject->program_group_id, $majorGroupIds)) {
-                        $score += 150; // Ưu tiên Cơ sở ngành hoàn thành sớm để mở khóa Đồ án
+                        $score += 150;
                     }
-                    if (in_array($subject->id, $failedSubjectIds)) $score += 100; // Failed subjects first
-                    if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30; // Core subjects
-                    $score += (50 * $subject->relatedRelations->where('type', 'prerequisite')->count()); // Unlocks more subjects
-                    
+                    if (in_array($subject->id, $failedSubjectIds)) $score += 100;
+                    if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30;
+                    $score += (50 * $subject->relatedRelations->where('type', 'prerequisite')->count());
+
+                    // Ưu tiên môn thuộc định hướng kỹ năng của sinh viên
+                    if ($user && $user->pref_skill_focus && $subject->skillGroup && $subject->skillGroup->focus_area === $user->pref_skill_focus) {
+                        $score += 80;
+                    }
+
                     if (stripos($subject->name, 'Đồ án') !== false || stripos($subject->name, 'Thực tập') !== false) {
-                        $score += 300; // Ưu tiên xếp các môn Đồ án, Thực tập sớm nhất có thể nếu đủ điều kiện
+                        $score += 300;
                     }
-                    
+
                     if ($mode === 'normal' || $mode === 'slow') {
                         $assignedSem = $subject->assigned_semester_index;
                         if ($assignedSem) {
                             if ($assignedSem > $semesterIndex) {
-                                $score -= (($assignedSem - $semesterIndex) * 100); // Phạt nặng nếu học vượt
+                                $score -= (($assignedSem - $semesterIndex) * 100);
                             } elseif ($assignedSem == $semesterIndex) {
-                                $score += 200; // Ưu tiên cực cao nếu đúng học kỳ khung
+                                $score += 200;
                             } else {
-                                $score += 150; // Ưu tiên rất cao để trả nợ môn cũ
+                                $score += 150;
                             }
                         }
                     }
@@ -514,6 +519,7 @@ class StudyPlanService
             $plan = StudyPlan::with(['semesters.subjects.subject'])->findOrFail($planId);
             $userId = $plan->user_id;
             $mode = $plan->mode;
+            $dynamicTargetSems = $plan->target_semester_count; // FIX BUG-02: lấy từ plan thay vì undefined variable
             $maxCredits = $this->getMaxCreditsByMode($mode);
 
             // Fetch passed/failed subjects

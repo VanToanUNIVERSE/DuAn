@@ -30,8 +30,9 @@ class ProgressService
             return $grades->sortByDesc('grade')->first();
         })->values();
         
-        $passedGrades = $userGrades->where('status', 'passed');
-        $failedGrades = $userGrades->where('status', 'failed');
+        // Hỗ trợ cả 'pass'/'passed' và 'fail'/'failed' để nhất quán với phần còn lại của hệ thống
+        $passedGrades = $userGrades->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade > 5.0));
+        $failedGrades = $userGrades->filter(fn($g) => in_array($g->status, ['fail', 'failed']) || ($g->grade !== null && $g->grade <= 5.0 && !in_array($g->status, ['pass', 'passed'])));
         
         $earnedCredits = $passedGrades->sum(function ($grade) {
             return $grade->subject->credits ?? 0;
@@ -129,12 +130,16 @@ class ProgressService
     {
         $progress = $this->evaluateProgress($userId);
 
-        // ── 1. GPA Warning ────────────────────────────────────────────
-        if ($progress['current_gpa'] > 0 && $progress['current_gpa'] < 2.0) {
+        // ── 1. GPA Warning ─────────────────────────────────────────────
+        // Thang điểm 10: GPA < 5.0 = yếu, < 4.0 = nguy hiểm, < 3.5 = nguy cơ bị đình chỉ
+        if ($progress['current_gpa'] > 0 && $progress['current_gpa'] < 5.0) {
+            $isExpelled = $progress['current_gpa'] < 3.5;
             Warning::updateOrCreate(
                 ['user_id' => $userId, 'type' => 'low_gpa'],
                 [
-                    'message'  => 'Cảnh báo: Điểm trung bình tích lũy (GPA) của bạn đang dưới mức 2.0. Bạn có nguy cơ bị buộc thôi học. Hãy liên hệ cố vấn học tập ngay.',
+                    'message'  => $isExpelled
+                        ? 'NGUY HIỂM: GPA tích lũy của bạn dưới 3.5/10. Nguy cơ bị buộc thôi học. Hãy liên hệ cố vấn học tập ngay.'
+                        : 'Cảnh báo: GPA tích lũy của bạn đang dưới 5.0/10. Cần cải thiện kết quả học tập.',
                     'is_read'  => false,
                 ]
             );

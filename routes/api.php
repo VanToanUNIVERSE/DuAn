@@ -46,7 +46,13 @@ Route::prefix('v1')->middleware('web')->group(function () {
     });
 
 
-    Route::get('/progress', [\App\Http\Controllers\Api\ProgressController::class, 'index']);
+    Route::get('/progress',   [\App\Http\Controllers\Api\ProgressController::class, 'index']);
+    Route::get('/gpa-trend',  [\App\Http\Controllers\Api\ProgressController::class, 'gpaTrend']);
+    Route::get('/warnings',   [\App\Http\Controllers\Api\ProgressController::class, 'warnings']);
+    Route::post('/warnings/{id}/read', [\App\Http\Controllers\Api\ProgressController::class, 'markWarningRead']);
+
+    Route::get('/cascade-impact/{subjectId}',   [\App\Http\Controllers\Api\CascadeController::class, 'show']);
+    Route::post('/cascade-impact/multiple',     [\App\Http\Controllers\Api\CascadeController::class, 'multiple']);
 });
 
 // LƯU Ý: Các route lưu/tải điểm (grades) đã được chuyển sang routes/web.php

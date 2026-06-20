@@ -29,6 +29,7 @@ class UserPreferenceController extends Controller
             'current_semester' => $user->pref_current_semester,
             'target_years'     => $user->pref_target_years,
             'current_courses'  => $user->pref_current_courses ? json_decode($user->pref_current_courses, true) : [],
+            'skill_focus'      => $user->pref_skill_focus,
         ]);
     }
 
@@ -49,12 +50,14 @@ class UserPreferenceController extends Controller
         $user = Auth::user();
 
         // Validate — tất cả đều nullable để hỗ trợ lưu từng phần (partial update)
+        $validFocusAreas = implode(',', array_keys(\App\Models\SkillGroup::FOCUS_AREAS));
         $validated = $request->validate([
             'academic_year'    => 'nullable|string|max:20',
             'program_type'     => 'nullable|string|max:50',
             'current_semester' => 'nullable|integer|min:1|max:10',
             'target_years'     => 'nullable|integer|min:3|max:8',
             'current_courses'  => 'nullable|array',
+            'skill_focus'      => "nullable|string|in:,{$validFocusAreas}",
         ]);
 
         // Chỉ cập nhật các trường được gửi lên (bỏ qua null từ key không tồn tại)
@@ -74,6 +77,9 @@ class UserPreferenceController extends Controller
         }
         if (array_key_exists('current_courses', $validated)) {
             $toUpdate['pref_current_courses'] = $validated['current_courses'] === null ? null : json_encode($validated['current_courses']);
+        }
+        if (array_key_exists('skill_focus', $validated)) {
+            $toUpdate['pref_skill_focus'] = $validated['skill_focus'] ?: null;
         }
 
         if (!empty($toUpdate)) {

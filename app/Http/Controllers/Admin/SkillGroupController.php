@@ -16,15 +16,21 @@ class SkillGroupController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required|string|max:255|unique:skill_groups,name']);
-        SkillGroup::create(['name' => $request->name]);
+        $request->validate([
+            'name'       => 'required|string|max:255|unique:skill_groups,name',
+            'focus_area' => 'nullable|string|in:' . implode(',', array_keys(SkillGroup::FOCUS_AREAS)),
+        ]);
+        SkillGroup::create($request->only('name', 'focus_area'));
         return back()->with('success', 'Thêm Skill Group thành công!');
     }
 
     public function update(Request $request, SkillGroup $skillGroup)
     {
-        $request->validate(['name' => 'required|string|max:255|unique:skill_groups,name,' . $skillGroup->id]);
-        $skillGroup->update(['name' => $request->name]);
+        $request->validate([
+            'name'       => 'required|string|max:255|unique:skill_groups,name,' . $skillGroup->id,
+            'focus_area' => 'nullable|string|in:' . implode(',', array_keys(SkillGroup::FOCUS_AREAS)),
+        ]);
+        $skillGroup->update($request->only('name', 'focus_area'));
         return back()->with('success', 'Cập nhật thành công!');
     }
 

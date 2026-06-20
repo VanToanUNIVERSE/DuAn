@@ -31,6 +31,7 @@ class RecommendationService
         })->pluck('subject_id')->toArray();
 
         $user = \App\Models\User::find($userId);
+        $skillFocus = $user?->pref_skill_focus;
         $allSubjects = $this->getSubjectsForUserCurriculum($user);
 
         if (!$currentSemester) {
@@ -169,14 +170,23 @@ class RecommendationService
                 $score -= ($distance * 10);
 
                 if ($distance === 0) {
-                    $reasons[] = 'Dung hoc ky chuan';
+                    $reasons[] = 'Đúng học kỳ chuẩn';
                 }
             }
 
+            // Ưu tiên môn thuộc định hướng kỹ năng cá nhân
+            if ($skillFocus && $subject->skillGroup && $subject->skillGroup->focus_area === $skillFocus) {
+                $score += 40;
+                $focusLabel = \App\Models\SkillGroup::FOCUS_AREAS[$skillFocus] ?? $skillFocus;
+                $reasons[] = "Phù hợp định hướng {$focusLabel} của bạn";
+            }
+
             $recommendations[] = [
-                'subject' => $subject,
-                'score' => $score,
-                'reasons' => $reasons,
+                'subject'        => $subject,
+                'score'          => $score,
+                'reasons'        => $reasons,
+                'dependent_count'=> $subject->relatedRelations->where('type', 'prerequisite')->count(),
+                'is_failed'      => in_array($subject->id, $failedSubjectIds),
             ];
         }
 
@@ -203,11 +213,11 @@ class RecommendationService
         }
 
         if (!$frameworkId) {
-            return Subject::with(['prerequisites', 'relatedRelations'])->get();
+            return Subject::with(['prerequisites', 'relatedRelations', 'skillGroup'])->get();
         }
 
         $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
-            ->with(['subject.prerequisites', 'subject.relatedRelations', 'semester'])
+            ->with(['subject.prerequisites', 'subject.relatedRelations', 'subject.skillGroup', 'semester'])
             ->get();
 
         $subjects = collect();
