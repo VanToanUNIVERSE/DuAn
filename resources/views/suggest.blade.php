@@ -561,11 +561,17 @@
                     
                     <div class="advice-wrap">
                         <div id="dash-advice-badge-wrap">
-                            <span class="dash-advice-badge maintain" id="dash-advice-badge" style="font-size: 0.75rem;">• Đang phân tích...</span>
+                            <span class="dash-advice-badge maintain" id="dash-advice-badge"
+                                  style="font-size: 0.75rem; display: flex; align-items: center; gap: 5px;">
+                                <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6;animation:pulse 1.5s infinite;"></span>
+                                Đang phân tích học lực...
+                            </span>
                         </div>
-                        <div class="advice-num" id="dash-advice-num">--</div>
+                        <div class="advice-num" id="dash-advice-num" style="min-height: 2.5rem; display:flex; align-items:center;">--</div>
                         <div style="font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase;">tín chỉ / học kỳ</div>
-                        <div style="font-size: 0.85rem; color: var(--ink); margin-top: 8px; line-height: 1.4;" id="dash-advice-reason">Nhập điểm các môn để nhận gợi ý.</div>
+                        <div style="font-size: 0.85rem; color: var(--ink); margin-top: 8px; line-height: 1.4;" id="dash-advice-reason">
+                            Đang tải dữ liệu từ hệ thống...
+                        </div>
                     </div>
                 </div>
 

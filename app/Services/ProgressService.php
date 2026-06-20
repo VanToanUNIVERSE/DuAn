@@ -113,6 +113,7 @@ class ProgressService
             'remaining_credits'   => $remainingCredits,
             'remaining_semesters' => $remainingSems,
             'can_graduate_ontime' => $canGraduateOntime,
+            'needed_credits_per_sem' => $remainingSems > 0 ? (int) ceil($remainingCredits / $remainingSems) : 0,
         ];
     }
 

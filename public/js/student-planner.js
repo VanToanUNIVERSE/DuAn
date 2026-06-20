@@ -602,22 +602,84 @@ async function fetchProgress() {
             const prog = resData.data.progress;
             const warnings = resData.data.warnings;
 
-            // Update UI KPI
-            document.getElementById('kpi-progress').textContent = prog.completion_percentage + '%';
-            document.getElementById('kpi-progress-sub').textContent = `${prog.earned_credits} / ${prog.total_required_credits} TC hoàn thành`;
+            const earned   = prog.earned_credits   || 0;
+            const total    = prog.total_required_credits || TOTAL_CREDITS;
+            const gpa      = prog.current_gpa      || null;
+            const pct      = prog.completion_percentage || Math.round((earned / total) * 100);
+            const neededPS = prog.needed_credits_per_sem || 0;
 
+            // ── KPI Hero / Dashboard ──────────────────────────────────────
+            document.getElementById('kpi-progress').textContent     = pct + '%';
+            document.getElementById('kpi-progress-sub').textContent = `${earned} / ${total} TC hoàn thành`;
+
+            // TC tích lũy (stat-earned-credits tồn tại ở 2 nơi)
+            document.querySelectorAll('#stat-earned-credits').forEach(el => el.textContent = earned);
+
+            // KPI credits (hero circle)
+            const kpiCreditsEl = document.getElementById('kpi-credits');
+            if (kpiCreditsEl) kpiCreditsEl.textContent = earned;
+
+            // Hero progress circle animation
+            const heroCircle = document.getElementById('hero-progress-circle');
+            if (heroCircle) heroCircle.style.setProperty('--prog-deg', `${pct * 3.6}deg`);
+
+            // GPA
             const gpaEl = document.getElementById('kpi-gpa');
-            if (gpaEl) gpaEl.textContent = prog.current_gpa || '—';
+            if (gpaEl) gpaEl.textContent = gpa !== null ? gpa : '—';
 
-            // Update Warnings
+            // TC/kỳ còn lại
+            const perSemEl = document.getElementById('stat-credits-per-sem');
+            if (perSemEl && neededPS > 0) perSemEl.textContent = neededPS;
+
+            // ── Card "Gợi Ý Môn Học" trên Dashboard ────────────────────────
+            // Cập nhật badge tư vấn dựa trên GPA + tiến độ từ backend
+            const adviceBadge = document.getElementById('dash-advice-badge');
+            const adviceNum   = document.getElementById('dash-advice-num');
+            const adviceReason = document.getElementById('dash-advice-reason');
+
+            if (adviceBadge && gpa !== null) {
+                let badgeText, badgeClass, creditTarget, adviceText;
+
+                if (gpa >= 7.5 && pct >= 20) {
+                    badgeText    = '🚀 Học lực tốt — Tăng tốc';
+                    badgeClass   = 'increase';
+                    creditTarget = 20;
+                    adviceText   = `GPA ${gpa} xuất sắc! Hãy đăng ký thêm môn để ra trường sớm hơn.`;
+                } else if (gpa >= 6.0) {
+                    badgeText    = '⚖️ Đang đúng tiến độ';
+                    badgeClass   = 'maintain';
+                    creditTarget = 18;
+                    adviceText   = `GPA ${gpa} ổn định. Tiếp tục duy trì nhịp học hiện tại.`;
+                } else if (gpa >= 5.0) {
+                    badgeText    = '⚠️ Cần cải thiện GPA';
+                    badgeClass   = 'warn';
+                    creditTarget = 15;
+                    adviceText   = `GPA ${gpa} cần cải thiện. Hãy ưu tiên chất lượng hơn số lượng môn.`;
+                } else {
+                    badgeText    = '🆘 Cảnh báo học vụ';
+                    badgeClass   = 'danger';
+                    creditTarget = 12;
+                    adviceText   = `GPA ${gpa} ở ngưỡng nguy hiểm. Hãy tham khảo cố vấn học tập ngay.`;
+                }
+
+                adviceBadge.textContent  = badgeText;
+                adviceBadge.className    = `dash-advice-badge ${badgeClass}`;
+                if (adviceNum)    adviceNum.textContent    = creditTarget;
+                if (adviceReason) adviceReason.textContent = adviceText;
+            } else if (adviceBadge && gpa === null) {
+                adviceBadge.textContent = '• Nhập điểm để nhận gợi ý';
+                adviceBadge.className   = 'dash-advice-badge maintain';
+            }
+
+            // ── Cảnh báo học vụ ─────────────────────────────────────────
             const warnContainer = document.getElementById('dash-global-warning');
             if (warnContainer) {
                 if (warnings && warnings.length > 0) {
                     warnContainer.innerHTML = warnings.map(w => `
-                            <div style="background:#fee2e2;color:#b91c1c;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
-                                ⚠️ <strong>Cảnh báo học vụ:</strong> ${w.message}
-                            </div>
-                        `).join('');
+                        <div style="background:#fee2e2;color:#b91c1c;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+                            ⚠️ <strong>Cảnh báo học vụ:</strong> ${w.message}
+                        </div>
+                    `).join('');
                 } else {
                     warnContainer.innerHTML = '';
                 }
@@ -626,10 +688,11 @@ async function fetchProgress() {
     } catch (e) {
         console.error('Lỗi khi fetch progress', e);
     }
-    
+
     // Gọi thêm API dự báo tốt nghiệp
     fetchGraduationForecast();
 }
+
 
 async function fetchGraduationForecast() {
     try {
@@ -1636,7 +1699,12 @@ window.onGradeChange = function (id, input, skipSave = false) { __origGradeChang
 const __origLoadGradesDash = window.loadGradesFromDB;
 window.loadGradesFromDB = async function () { await __origLoadGradesDash(); setTimeout(renderDashboard, 300); };
 ['academic_year'].forEach(id => { document.getElementById(id)?.addEventListener('change', () => { clearTimeout(window._dashTimer); window._dashTimer = setTimeout(renderDashboard, 300); }); });
-document.addEventListener('DOMContentLoaded', () => { renderDashboard(); });
+document.addEventListener('DOMContentLoaded', () => {
+    renderDashboard();
+    // Luôn load dữ liệu thực từ API cho dashboard (không chỉ dựa vào DOM inputs)
+    fetchProgress();
+    fetchSuggestions();
+});
 
 function openPrereqModal(subjectData) {
     let subject;
