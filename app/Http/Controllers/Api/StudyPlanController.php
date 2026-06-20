@@ -238,7 +238,7 @@ class StudyPlanController extends Controller
         }
 
         $bestGrade  = max(array_filter([$origGrade, $retakeGrade], fn($v) => $v !== null));
-        $bestStatus = $bestGrade >= 5.0 ? 'passed' : 'failed';
+        $bestStatus = $bestGrade >= 5.0 ? 'pass' : 'fail';  // khớp với SuggestionService
 
         UserGrade::updateOrCreate(
             ['user_id' => $userId, 'subject_id' => $subjectId],
@@ -371,7 +371,6 @@ class StudyPlanController extends Controller
                 $studyPlan->load('semesters.subjects');
             }
         }
-
         // ── Sync UserGrade = max(orig.subject_grade, retake.subject_grade) ───────
         $this->syncUserGrade($userId, $subjectId, $studyPlan);
 

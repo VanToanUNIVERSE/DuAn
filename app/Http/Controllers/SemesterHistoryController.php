@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\SemesterHistory;
 use App\Models\SemesterHistoryItem;
 use App\Models\StudyPlan;
+use App\Models\StudyPlanSubject;
 use App\Models\Subject;
+use App\Models\UserGrade;
 use App\Services\AcademicEvaluationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -101,6 +103,47 @@ class SemesterHistoryController extends Controller
                 ]);
             }
         });
+
+        // ── Đồng bộ UserGrade từ study_plan_subjects.subject_grade ──────────────────
+        // Đảm bảo suggestion engine và prerequisite check luôn đọc điểm chính xác
+        // sau khi lưu lịch sử (dù grades được gửi từ DOM input).
+        $activePlanForSync = StudyPlan::with('semesters.subjects')
+            ->where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        if ($activePlanForSync) {
+            // Thu thập tất cả subject_id trong học kỳ này
+            $semSubjectIds = collect($validated['courses'])->pluck('subject_id')->toArray();
+
+            foreach ($semSubjectIds as $subjectId) {
+                $origGrade   = null;
+                $retakeGrade = null;
+
+                foreach ($activePlanForSync->semesters as $sem) {
+                    foreach ($sem->subjects as $ss) {
+                        if ($ss->subject_id == $subjectId && $ss->subject_grade !== null) {
+                            if (!$ss->is_retake) {
+                                $origGrade = (float) $ss->subject_grade;
+                            } else {
+                                $retakeGrade = (float) $ss->subject_grade;
+                            }
+                        }
+                    }
+                }
+
+                // GPA = max(orig, retake)
+                $allGrades = array_filter([$origGrade, $retakeGrade], fn($v) => $v !== null);
+                if (count($allGrades) > 0) {
+                    $bestGrade  = max($allGrades);
+                    $bestStatus = $bestGrade >= 5.0 ? 'pass' : 'fail';
+                    UserGrade::updateOrCreate(
+                        ['user_id' => $user->id, 'subject_id' => $subjectId],
+                        ['grade' => $bestGrade, 'status' => $bestStatus]
+                    );
+                }
+            }
+        }
 
         // ═══════════════════════════════════════════════════════════════════
         // TRIGGER: Đánh giá kế hoạch học tập sau khi hoàn tất học kỳ

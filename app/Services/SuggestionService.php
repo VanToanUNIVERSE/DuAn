@@ -22,37 +22,22 @@ class SuggestionService
 
     public function suggestSubjects($userId = null, $currentSemester = 1, $academicYear = null, $programType = null, array $passedSubjectIds = null)
     {
-        // 1. Nếu có đăng nhập và có truyền danh sách môn đã đỗ từ client, lưu thông tin vào database
-        if ($userId && is_array($passedSubjectIds)) {
-            // Xóa danh sách môn đã đỗ cũ
-            UserGrade::where('user_id', $userId)
-                ->where('status', 'pass')
-                ->delete();
-
-            // Lưu danh sách môn đã đỗ mới
-            foreach ($passedSubjectIds as $subId) {
-                UserGrade::updateOrCreate(
-                    ['user_id' => $userId, 'subject_id' => $subId],
-                    ['status' => 'pass']
-                );
-            }
-        }
-
         $skillAverages = [];
 
         if ($userId) {
-            // Nếu có đăng nhập, ưu tiên lấy từ database (đã được cập nhật ở bước 1)
+            // \u0110\u1ecdc t\u1eeb UserGrade \u2014 single source of truth
+            // \u0110\u01b0\u1ee3c c\u1eadp nh\u1eadt b\u1edfi: syncUserGrade() khi nh\u1eadp \u0111i\u1ec3m, SemesterHistoryController khi ho\u00e0n t\u1ea5t k\u1ef3
             $passedSubjects = UserGrade::where('user_id', $userId)
                 ->where('status', 'pass')
                 ->pluck('subject_id')
                 ->toArray();
-                
+
             $failedSubjects = UserGrade::where('user_id', $userId)
                 ->where('status', 'fail')
                 ->pluck('subject_id')
                 ->toArray();
-                
-            // Truy vấn trung bình điểm (GPA) theo từng nhóm kỹ năng
+
+            // Truy v\u1ea5n trung b\u00ecnh \u0111i\u1ec3m (GPA) theo t\u1eebng nh\u00f3m k\u1ef9 n\u0103ng
             $skillAverages = DB::table('user_grades')
                 ->join('subjects', 'user_grades.subject_id', '=', 'subjects.id')
                 ->where('user_grades.user_id', $userId)
@@ -63,10 +48,11 @@ class SuggestionService
                 ->pluck('avg_grade', 'skill_group_id')
                 ->toArray();
         } else {
-            // Nếu không đăng nhập, sử dụng danh sách truyền từ client lên
+            // Kh\u00f4ng \u0111\u0103ng nh\u1eadp: d\u00f9ng danh s\u00e1ch t\u1eeb client (ch\u1ebf \u0111\u1ed9 kh\u00e1ch)
             $passedSubjects = $passedSubjectIds ?? [];
             $failedSubjects = [];
         }
+
 
         // 3. Xác định phạm vi môn học theo Chương trình đào tạo (nếu có)
         $frameworkId = null;
