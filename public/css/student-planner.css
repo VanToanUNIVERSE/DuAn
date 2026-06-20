@@ -1783,6 +1783,35 @@
             0%   { box-shadow: 0 0 4px rgba(234, 179, 8, 0.3); }
             50%  { box-shadow: 0 0 12px rgba(234, 179, 8, 0.6); }
             100% { box-shadow: 0 0 4px rgba(234, 179, 8, 0.3); }
-        }        .prereq-btn-ok:hover { background: #003db3; }
+        }
+
+        /* ── Retake Priority Card ── */
+        .retake-priority {
+            position: relative;
+            border-color: #f97316 !important; /* cam */
+            box-shadow: 0 0 8px rgba(249, 115, 22, 0.25);
+            animation: pulse-retake 2.5s infinite ease-in-out;
+        }
+        .retake-priority::before {
+            content: "🔄 Ưu tiên học lại";
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            background: #f97316;
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            white-space: nowrap;
+        }
+        @keyframes pulse-retake {
+            0%   { box-shadow: 0 0 4px rgba(249, 115, 22, 0.25); }
+            50%  { box-shadow: 0 0 14px rgba(249, 115, 22, 0.55); }
+            100% { box-shadow: 0 0 4px rgba(249, 115, 22, 0.25); }
+        }
+
+        .prereq-btn-ok:hover { background: #003db3; }
 .hidden { display: none !important; }
 

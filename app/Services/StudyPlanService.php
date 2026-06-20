@@ -2,763 +2,614 @@
 
 namespace App\Services;
 
+use App\Models\CurriculumSubject;
+use App\Models\ProgramGroup;
+use App\Models\SemesterHistory;
 use App\Models\StudyPlan;
 use App\Models\StudyPlanSemester;
 use App\Models\StudyPlanSubject;
 use App\Models\Subject;
+use App\Models\TrainingProgram;
+use App\Models\User;
 use App\Models\UserGrade;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class StudyPlanService
 {
+    // ══════════════════════════════════════════════════════════════════════
+    // PUBLIC API
+    // ══════════════════════════════════════════════════════════════════════
+
     /**
-     * Generate a multi-semester study plan for a user.
+     * Tạo kế hoạch học tập mới hoàn toàn.
      *
-     * @param int $userId
-     * @param string $name
-     * @param string $mode (normal, fast, slow)
-     * @param int|null $dynamicTargetSems Target semesters for dynamic mode
-     * @return StudyPlan
+     * @return array{plan: StudyPlan, forced_slow: bool, applied_mode: string}
      */
-    public function generatePlan(int $userId, string $name, string $mode = 'normal', ?int $dynamicTargetSems = null): StudyPlan
+    public function generatePlan(int $userId, string $name, string $mode): array
     {
-        return DB::transaction(function () use ($userId, $name, $mode, $dynamicTargetSems) {
-            // ═══ QUAN TRỌNG: Deactivate tất cả kế hoạch cũ của user ═══
-            // Đảm bảo mỗi sinh viên chỉ có DUY NHẤT 1 kế hoạch is_active = true
-            StudyPlan::where('user_id', $userId)
-                ->where('is_active', true)
-                ->update(['is_active' => false]);
+        return DB::transaction(function () use ($userId, $name, $mode) {
+            $user      = User::findOrFail($userId);
+            $forcedSlow = false;
 
-            // Evaluate progress to check GPA
-            $progressService = new \App\Services\ProgressService();
-            $progress = $progressService->evaluateProgress($userId);
-            
-            // GPA thang 10: dưới 5.0 thì giảm tải, dưới 4.0 thì bắt buộc slow
-            if ($mode !== 'dynamic' && $progress['current_gpa'] > 0 && $progress['current_gpa'] < 5.0) {
-                $mode = 'slow';
-            }
-
-            $maxCredits = $this->getMaxCreditsByMode($mode);
-            
-            // Fetch all grades and keep only the highest grade per subject
-            $allUserGrades = UserGrade::where('user_id', $userId)->get();
-            $userGrades = $allUserGrades->groupBy('subject_id')->map(function ($grades) {
-                return $grades->sortByDesc('grade')->first();
-            })->values();
-
-            $passedSubjectIds = $userGrades->filter(function($g) { return $g->grade > 5.0 || in_array($g->status, ['passed', 'pass']); })->pluck('subject_id')->toArray();
-            $failedSubjectIds = $userGrades->filter(function($g) { return ($g->grade <= 5.0 && $g->grade !== null) || in_array($g->status, ['failed', 'fail']); })->pluck('subject_id')->toArray();
-            $gradedSubjectIds = $userGrades->filter(function($g) { return $g->grade !== null || $g->status !== null; })->pluck('subject_id')->toArray();
-
-            // Lấy chương trình khung của sinh viên
-            $user = \App\Models\User::find($userId);
-            $academicYear = $user->pref_academic_year;
-            $programType = $user->pref_program_type;
-            
-            $frameworkId = null;
-            if ($academicYear && $programType) {
-                $program = \App\Models\TrainingProgram::where('academic_year', $academicYear)
-                    ->where('program_type', $programType)
-                    ->first();
-                if ($program && $framework = $program->curriculumFrameworks()->first()) {
-                    $frameworkId = $framework->id;
+            // Kiểm tra GPA — buộc chuyển slow nếu đang yếu
+            if ($mode !== 'slow') {
+                $progress = (new ProgressService())->evaluateProgress($userId);
+                if ($progress['current_gpa'] > 0 && $progress['current_gpa'] < 5.0) {
+                    $mode       = 'slow';
+                    $forcedSlow = true;
                 }
             }
 
-            if ($frameworkId) {
-                $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
-                    ->with(['subject.prerequisites', 'subject.relatedRelations', 'subject.skillGroup', 'semester'])
-                    ->get();
-                $allSubjects = collect();
-                foreach ($curriculumSubjects as $cs) {
-                    if ($cs->subject) {
-                        $sub = $cs->subject;
-                        $sub->assigned_semester_index = (int) ($cs->semester->name ?? $sub->semester_id ?? 1);
-                        $allSubjects->push($sub);
-                    }
-                }
-            } else {
-                $allSubjects = Subject::with(['prerequisites', 'relatedRelations', 'skillGroup'])->get();
-                foreach ($allSubjects as $sub) {
-                    $sub->assigned_semester_index = (int) $sub->semester_id;
-                }
-            }
-            
-            $currentSem = 1;
-            foreach ($gradedSubjectIds as $pid) {
-                $sub = $allSubjects->firstWhere('id', $pid);
-                if ($sub && isset($sub->assigned_semester_index)) {
-                    if ($sub->assigned_semester_index >= $currentSem) {
-                        $currentSem = $sub->assigned_semester_index + 1;
-                    }
-                }
-            }
-
-            // Không lọc bỏ các môn đã học, để bản kế hoạch hiển thị toàn bộ lộ trình 4 năm
-            $remainingSubjects = clone $allSubjects;
-
-            $plannedSubjectIds = []; // Bắt đầu rỗng để mô phỏng lại toàn bộ lộ trình từ đầu
-            
-            $targetSemsToSave = $dynamicTargetSems ?? match($mode) {
-                'fast' => 6,
-                'slow' => 10,
-                default => 8
-            };
+            // Mỗi sinh viên chỉ có 1 active plan
+            StudyPlan::where('user_id', $userId)->where('is_active', true)->update(['is_active' => false]);
 
             $plan = StudyPlan::create([
                 'user_id'               => $userId,
                 'name'                  => $name,
                 'mode'                  => $mode,
-                'target_semester_count' => $targetSemsToSave,
-                'is_active'             => true,   // Kế hoạch mới luôn là active
-                'is_saved'              => true,   // Tự động lưu ngay khi tạo
+                'target_semester_count' => $this->defaultTargetSems($mode),
+                'is_active'             => true,
+                'is_saved'              => true,
             ]);
 
+            // Load dữ liệu
+            [$allSubjects, $passedIds, $failedIds, $historySubjectIds] = $this->loadPlanningData($userId);
+            $groupIds = $this->resolveGroupIds();
 
-            $semesterIndex = 1;
+            // Tái tạo các kỳ lịch sử (đã học qua)
+            $lastHistorySem = $this->buildHistorySemesters($plan, $userId);
 
-            // Xây dựng lại các học kỳ đã qua từ SemesterHistory
-            $histories = \App\Models\SemesterHistory::where('user_id', $userId)
-                ->with('items.subject')
-                ->orderBy('semester_number')
-                ->get();
+            // Sinh viên mới, chưa có điểm, mode normal → clone thẳng chương trình khung
+            if (empty($passedIds) && $lastHistorySem === 0 && $mode === 'normal') {
+                $this->cloneCurriculumFramework($plan, $allSubjects);
+                return [
+                    'plan'        => $plan->load('semesters.subjects.subject'),
+                    'forced_slow' => false,
+                    'applied_mode'=> 'normal',
+                ];
+            }
 
-            $historySubjectIds = []; // Danh sách tất cả các môn đã có trong lịch sử (bao gồm cả pass và fail để tránh lặp nếu không cần thiết)
-            $lastHistorySemNumber = 0;
+            // Subjects cần schedule = tất cả chương trình TRỪ những cái đã PASS và có trong lịch sử.
+            // Môn FAIL trong lịch sử vẫn cần học lại nên giữ lại trong toSchedule.
+            $toSchedule = $allSubjects->reject(fn($s) =>
+                in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds)
+            );
 
-            foreach ($histories as $history) {
-                $semNumber = $history->semester_number;
-                $lastHistorySemNumber = max($lastHistorySemNumber, $semNumber);
-                
-                $semester = StudyPlanSemester::create([
-                    'study_plan_id' => $plan->id,
-                    'semester_index' => $semNumber,
-                    'expected_credits' => $history->total_credits,
-                ]);
+            // alreadyPlanned = môn đã pass + môn lịch sử không thất bại.
+            // Môn fail KHÔNG được đưa vào plannedSet ban đầu → môn phụ thuộc vào chúng
+            // sẽ không được xếp trước kỳ học lại của chúng.
+            $passedHistoryIds = array_diff($historySubjectIds, $failedIds);
+            $alreadyPlanned   = array_unique(array_merge($passedIds, $passedHistoryIds));
+            $startSem         = max(1, $lastHistorySem + 1);
 
-                foreach ($history->items as $item) {
-                    if ($item->subject) {
-                        StudyPlanSubject::create([
-                            'study_plan_semester_id' => $semester->id,
-                            'subject_id' => $item->subject_id,
-                            'is_completed' => $item->status === 'pass',
-                            'subject_grade' => $item->grade,
-                        ]);
-                        $plannedSubjectIds[] = $item->subject_id;
-                        $historySubjectIds[] = $item->subject_id;
+            $schedule     = $this->buildSchedule($toSchedule, $alreadyPlanned, $startSem, $mode, $user, $groupIds);
+            $totalSems    = $this->persistSchedule($plan, $schedule, $passedIds);
+            $plan->update(['target_semester_count' => max($totalSems, $plan->target_semester_count)]);
+
+            // Kiểm tra overflow: kế hoạch có vượt số kỳ mục tiêu của mode không?
+            $defaultTarget  = $this->defaultTargetSems($mode);
+            $maxSemInPlan   = empty($schedule) ? 0 : max(array_keys($schedule));
+            $overSems       = $maxSemInPlan > $defaultTarget;
+            $overSemCount   = max(0, $maxSemInPlan - $defaultTarget);
+            $overNotice     = null;
+
+            if ($overSems) {
+                $overCredits = 0;
+                $overSubjectCount = 0;
+                $modeLimit = $this->modeMaxCredits($mode);
+                for ($s = $defaultTarget + 1; $s <= $maxSemInPlan; $s++) {
+                    foreach ($schedule[$s] ?? [] as $subId) {
+                        $sub = $toSchedule->firstWhere('id', $subId);
+                        $overCredits += (int)(($sub->credits ?? null) ?? 3);
+                        $overSubjectCount++;
+                    }
+                }
+                $overNotice = "Kế hoạch cần thêm {$overSemCount} học kỳ ({$overSubjectCount} môn, {$overCredits} TC) "
+                    . "vượt ngoài {$defaultTarget} kỳ mục tiêu. "
+                    . "Nguyên nhân: tổng tín chỉ chưa học vượt quá giới hạn {$modeLimit} TC/kỳ, "
+                    . "hoặc ràng buộc tiên quyết buộc một số môn phải dời sang kỳ sau.";
+            }
+
+            return [
+                'plan'               => $plan->load('semesters.subjects.subject'),
+                'forced_slow'        => $forcedSlow,
+                'applied_mode'       => $mode,
+                'over_semesters'     => $overSems,
+                'over_semesters_count'  => $overSemCount,
+                'over_semesters_notice' => $overNotice,
+            ];
+        });
+    }
+
+    /**
+     * Tái phân bổ môn học từ học kỳ $fromSem trở đi.
+     * Dùng cho: đổi chế độ (changeMode) và áp dụng gợi ý (applySuggestions).
+     *
+     * @param  int[]   $pinnedSubjectIds  Danh sách môn cần ghim vào đúng $fromSem (cho applySuggestions)
+     */
+    public function redistributeFrom(StudyPlan $plan, int $fromSem, array $pinnedSubjectIds = []): StudyPlan
+    {
+        return DB::transaction(function () use ($plan, $fromSem, $pinnedSubjectIds) {
+            $userId   = $plan->user_id;
+            $mode     = $plan->mode;
+            $user     = User::findOrFail($userId);
+            $groupIds = $this->resolveGroupIds();
+
+            [$allSubjects, $passedIds, $failedIds, $historySubjectIds] = $this->loadPlanningData($userId);
+
+            $plan->load('semesters.subjects');
+
+            // Gom subject_id đã có trong các kỳ TRƯỚC fromSem (từ plan)
+            $planPriorIds = [];
+            foreach ($plan->semesters as $sem) {
+                if ($sem->semester_index < $fromSem) {
+                    foreach ($sem->subjects as $ss) {
+                        $planPriorIds[] = $ss->subject_id;
                     }
                 }
             }
 
-            if ($lastHistorySemNumber > 0) {
-                $semesterIndex = $lastHistorySemNumber + 1;
+            // alreadyPlanned = passed (history + UserGrade) + plan prior — giống generatePlan
+            // Thiếu phần này khiến plannedSet rỗng → môn có tiên quyết HK1 không xếp được vào HK2
+            $passedHistoryIds = array_diff($historySubjectIds, $failedIds);
+            $alreadyPlanned   = array_unique(array_merge(
+                array_diff($passedIds, $failedIds),
+                $passedHistoryIds,
+                $planPriorIds
+            ));
+
+            // Xóa tất cả kỳ >= fromSem để rebuild
+            $semIds = $plan->semesters->where('semester_index', '>=', $fromSem)->pluck('id');
+            StudyPlanSubject::whereIn('study_plan_semester_id', $semIds)->delete();
+            StudyPlanSemester::whereIn('id', $semIds)->delete();
+
+            // toSchedule = tất cả chương trình trừ những đã pass và có trong quá khứ
+            // (môn fail vẫn cần học lại nên giữ lại)
+            $toSchedule = $allSubjects->reject(fn($s) =>
+                in_array($s->id, $alreadyPlanned) && !in_array($s->id, $failedIds)
+            );
+
+            $schedule = [];
+            $startSem = $fromSem;
+
+            // Ghim môn được chỉ định vào đầu kỳ (applySuggestions)
+            if (!empty($pinnedSubjectIds)) {
+                $pinnedSubs          = $toSchedule->whereIn('id', $pinnedSubjectIds)->values();
+                $schedule[$startSem] = $pinnedSubs->pluck('id')->toArray();
+                $alreadyPlanned      = array_merge($alreadyPlanned, $schedule[$startSem]);
+                $toSchedule          = $toSchedule->whereNotIn('id', $pinnedSubjectIds)->values();
+                $startSem++;
             }
 
-            // Xóa các môn đã pass hoặc đã có trong lịch sử khỏi remainingSubjects
-            // Ngoại trừ các môn fail trong lịch sử (để được học lại)
-            $remainingSubjects = clone $allSubjects;
-            $remainingSubjects = $remainingSubjects->reject(function ($s) use ($passedSubjectIds, $historySubjectIds, $failedSubjectIds) {
-                if (in_array($s->id, $passedSubjectIds)) {
-                    // Nếu môn đã pass và ĐÃ nằm trong lịch sử rồi, thì bỏ qua không rải lại nữa
-                    if (in_array($s->id, $historySubjectIds)) {
-                        return true;
-                    }
-                    // Nếu môn đã pass nhưng chưa có trong lịch sử (nhập lẻ), vẫn giữ lại để rải
-                    return false;
-                }
-                
-                // Môn chưa pass
-                if (in_array($s->id, $historySubjectIds)) {
-                    // Nếu môn nằm trong lịch sử mà chưa pass (tức là fail), ta phải rải lại để học lại!
-                    return false;
-                }
-                
-                return false;
-            });
+            $rest     = $this->buildSchedule($toSchedule, $alreadyPlanned, $startSem, $mode, $user, $groupIds);
+            $schedule = $schedule + $rest;
 
-            // Nếu mode là normal VÀ sinh viên chưa có điểm nào (người dùng mới),
-            // copy 100% từ chương trình khung gốc để giữ đúng lộ trình chuẩn mực của trường.
-            if ($mode === 'normal' && empty($gradedSubjectIds) && $histories->isEmpty()) {
-                $groupedSubjects = $remainingSubjects->groupBy('assigned_semester_index')->sortKeys();
-                $maxSemesterIndex = 0;
-                
-                foreach ($groupedSubjects as $semIndex => $subjectsForThisSemester) {
-                    $currentSemesterCredits = $subjectsForThisSemester->sum('credits');
-                    $maxSemesterIndex = max($maxSemesterIndex, $semIndex);
-                    
-                    $semester = StudyPlanSemester::create([
-                        'study_plan_id' => $plan->id,
-                        'semester_index' => $semIndex,
-                        'expected_credits' => $currentSemesterCredits,
-                    ]);
-
-                    foreach ($subjectsForThisSemester as $subject) {
-                        StudyPlanSubject::create([
-                            'study_plan_semester_id' => $semester->id,
-                            'subject_id' => $subject->id,
-                            'is_completed' => false,
-                        ]);
-                    }
-                }
-                
-                $plan->update(['target_semester_count' => $maxSemesterIndex]);
-                return $plan->load('semesters.subjects.subject');
-            }
-
-            // Sử dụng Greedy Algorithm cho:
-
-            $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
-                ->orWhere('name', 'like', '%Anh văn%')
-                ->pluck('id')->toArray();
-            $majorGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Cơ sở ngành%')
-                ->pluck('id')->toArray();
-            $specializedGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Chuyên ngành%')
-                ->pluck('id')->toArray();
-            
-            $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
-            while ($remainingSubjects->count() > 0) {
-                // Tính toán để rải đều số tín chỉ
-                $unpassedCredits = 0;
-                foreach ($remainingSubjects as $rs) {
-                    if (!in_array($rs->id, $passedSubjectIds)) {
-                        $unpassedCredits += $rs->credits;
-                    }
-                }
-                
-                if ($unpassedCredits > 0) {
-                    $targetTotalSems = $dynamicTargetSems ?? match ($mode) {
-                        'fast' => 6,
-                        'slow' => 10,
-                        default => 8,
-                    };
-                    $estimatedSems = max(1, $targetTotalSems - $semesterIndex + 1);
-                    // Số tín chỉ mục tiêu để chia đều
-                    $maxCredits = ceil($unpassedCredits / $estimatedSems);
-                    
-                    if ($maxCredits > $maxCreditsModeLimit) {
-                        $maxCredits = $maxCreditsModeLimit; // Đảm bảo không vượt quá giới hạn tuyệt đối của mode
-                    }
-                    
-                    // Thêm một chút linh hoạt (buffer) để dễ xếp môn (ví dụ môn 3 chỉ làm lố 1 chỉ)
-                    $maxCredits += 2; 
-                } else {
-                    $maxCredits = $this->getMaxCreditsByMode($mode);
-                }
-
-                // Find available subjects for this semester
-                $availableSubjects = $remainingSubjects->filter(function ($subject) use ($passedSubjectIds, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allSubjects, $user, $currentSem) {
-                    // Check semester availability (offered_in)
-                    $isOddSemester = ($semesterIndex % 2) !== 0;
-                    if ($isOddSemester && $subject->offered_in === '2') {
-                        return false; // Subject only offered in even semesters
-                    }
-                    if (!$isOddSemester && $subject->offered_in === '1') {
-                        return false; // Subject only offered in odd semesters
-                    }
-
-                    // Cố định các môn đã Pass vào đúng học kỳ chuẩn của chương trình khung (nếu môn này chưa có trong lịch sử)
-                    if (in_array($subject->id, $passedSubjectIds)) {
-                        // Nếu semesterIndex hiện tại nhỏ hơn học kỳ chuẩn, chờ đến học kỳ chuẩn mới rải
-                        $assignedSem = $subject->assigned_semester_index ?? 1;
-                        if ($assignedSem > $semesterIndex) {
-                            return false;
-                        }
-                        // Nếu đã tới hoặc qua học kỳ chuẩn, cứ xếp môn này vào học kỳ hiện tại (trả nợ/xếp bù)
-                        return true; 
-                    } else {
-                        // Các môn CHƯA HỌC (chưa pass) thì không được xếp vào học kỳ trong quá khứ
-                        if ($semesterIndex < $currentSem) {
-                            return false;
-                        }
-                    }
-
-                    // Check if all prerequisites are met in planned/passed subjects
-                    foreach ($subject->prerequisites as $prereq) {
-                        if (!in_array($prereq->id, $plannedSubjectIds)) {
-                            return false;
-                        }
-                    }
-
-                    // Check implicit prerequisites (requirement_type)
-                    $reqType = $subject->requirement_type;
-                    if ($reqType && $reqType !== 'none') {
-                        if ($reqType === 'completed_all') {
-                            $otherSubjectIds = $allSubjects->pluck('id')->reject(fn($id) => $id == $subject->id)->toArray();
-                            foreach ($otherSubjectIds as $id) {
-                                if (!in_array($id, $plannedSubjectIds)) return false;
-                            }
-                        } elseif ($reqType === 'completed_basic') {
-                            $basicSubjectIds = $allSubjects->whereIn('program_group_id', $basicGroupIds)->pluck('id')->toArray();
-                            foreach ($basicSubjectIds as $id) {
-                                if (!in_array($id, $plannedSubjectIds)) return false;
-                            }
-                        } elseif ($reqType === 'completed_major') {
-                            $majorSubjectIds = $allSubjects->whereIn('program_group_id', $majorGroupIds)->pluck('id')->toArray();
-                            foreach ($majorSubjectIds as $id) {
-                                if (!in_array($id, $plannedSubjectIds)) return false;
-                            }
-                        } elseif ($reqType === 'completed_specialized') {
-                            $specializedSubjectIds = $allSubjects->whereIn('program_group_id', $specializedGroupIds)->pluck('id')->toArray();
-                            foreach ($specializedSubjectIds as $id) {
-                                if (!in_array($id, $plannedSubjectIds)) return false;
-                            }
-                        }
-                    }
-
-                    return true;
-                });
-
-                if ($availableSubjects->count() === 0) {
-                    // Prevent infinite loop if prerequisites are unresolvable
-                    Log::warning("Cannot resolve prerequisites for remaining subjects for User {$userId}");
-                    break;
-                }
-
-                // Sort available subjects by priority
-                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode, $basicGroupIds, $majorGroupIds, $user) {
-                    $score = 0;
-                    if (in_array($subject->program_group_id, $basicGroupIds)) {
-                        $score += 200;
-                    } elseif (in_array($subject->program_group_id, $majorGroupIds)) {
-                        $score += 150;
-                    }
-                    if (in_array($subject->id, $failedSubjectIds)) $score += 100;
-                    if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30;
-                    $score += (50 * $subject->relatedRelations->where('type', 'prerequisite')->count());
-
-                    // Ưu tiên môn thuộc định hướng kỹ năng của sinh viên
-                    if ($user && $user->pref_skill_focus && $subject->skillGroup && $subject->skillGroup->focus_area === $user->pref_skill_focus) {
-                        $score += 80;
-                    }
-
-                    if (stripos($subject->name, 'Đồ án') !== false || stripos($subject->name, 'Thực tập') !== false) {
-                        $score += 300;
-                    }
-
-                    if ($mode === 'normal' || $mode === 'slow') {
-                        $assignedSem = $subject->assigned_semester_index;
-                        if ($assignedSem) {
-                            if ($assignedSem > $semesterIndex) {
-                                $score -= (($assignedSem - $semesterIndex) * 100);
-                            } elseif ($assignedSem == $semesterIndex) {
-                                $score += 200;
-                            } else {
-                                $score += 150;
-                            }
-                        }
-                    }
-
-                    return $score;
-                });
-
-                $currentSemesterCredits = 0;
-                $actualSemesterCredits = 0;
-                $subjectsForThisSemester = [];
-
-                foreach ($availableSubjects as $key => $subject) {
-                    $isPassed = in_array($subject->id, $passedSubjectIds);
-
-                    if ($isPassed) {
-                        // Môn đã pass thì LUÔN LUÔN được đưa vào học kỳ cố định của nó
-                        $subjectsForThisSemester[] = $subject;
-                        $actualSemesterCredits += $subject->credits;
-                        
-                        $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
-                            return $s->id === $subject->id;
-                        });
-                        continue;
-                    }
-
-                    // Môn chưa học: 
-                    // 1. Phải thỏa mãn số tín chỉ phân bổ đều (currentSemesterCredits)
-                    // 2. TỔNG số tín chỉ thực tế của học kỳ (bao gồm cả môn đã pass) KHÔNG được vượt quá giới hạn tuyệt đối của Mode
-                    if ($currentSemesterCredits + $subject->credits <= $maxCredits && 
-                        $actualSemesterCredits + $subject->credits <= $maxCreditsModeLimit) {
-                        
-                        $subjectsForThisSemester[] = $subject;
-                        $currentSemesterCredits += $subject->credits;
-                        $actualSemesterCredits += $subject->credits;
-                        
-                        // Remove from remaining
-                        $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
-                            return $s->id === $subject->id;
-                        });
-                    }
-                }
-
-                if (count($subjectsForThisSemester) > 0) {
-                    $semester = StudyPlanSemester::create([
-                        'study_plan_id' => $plan->id,
-                        'semester_index' => $semesterIndex,
-                        'expected_credits' => $actualSemesterCredits,
-                    ]);
-
-                    foreach ($subjectsForThisSemester as $subject) {
-                        StudyPlanSubject::create([
-                            'study_plan_semester_id' => $semester->id,
-                            'subject_id' => $subject->id,
-                            'is_completed' => in_array($subject->id, $passedSubjectIds),
-                        ]);
-                        // Add to planned for future semesters' prerequisite checks
-                        $plannedSubjectIds[] = $subject->id;
-                    }
-                    
-                    $semesterIndex++;
-                } else {
-                    // No subjects fit in the credit limit for some reason (maybe all subjects have credits > maxCredits)
-                    break; 
-                }
-            }
-
-            $plan->update(['target_semester_count' => $semesterIndex - 1]);
+            $totalSems = $this->persistSchedule($plan, $schedule, $passedIds);
+            $plan->update(['target_semester_count' => max($totalSems, $fromSem)]);
 
             return $plan->load('semesters.subjects.subject');
         });
     }
 
-    private function getMaxCreditsByMode(string $mode): int
+    // ══════════════════════════════════════════════════════════════════════
+    // CORE GREEDY SCHEDULER (dùng chung cho cả generate và redistribute)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Thuật toán Greedy xếp môn học vào từng học kỳ.
+     *
+     * Thiết kế:
+     *  - `$remaining` là PHP array keyed by subject_id → O(1) removal với unset()
+     *  - `$plannedSet` là array_flip → O(1) lookup với isset()
+     *  - Priority được tính per-semester (phụ thuộc vào $semIndex)
+     *
+     * @param  Collection $subjects       Danh sách môn cần xếp lịch
+     * @param  int[]      $alreadyPlanned Môn đã được tính là "xong" (pass hoặc trong kỳ trước)
+     * @param  int        $startSem       Học kỳ bắt đầu xếp
+     * @return array<int, int[]>          [semesterIndex => [subjectId, ...]]
+     */
+    private function buildSchedule(Collection $subjects, array $alreadyPlanned, int $startSem, string $mode, User $user, array $groupIds): array
     {
-        if ($mode === 'dynamic') {
-            return 25; // Flexible max for dynamic calculations
+        // Dùng PHP array thuần để tránh overhead của Illuminate Collection trong vòng lặp nóng
+        $remaining   = $subjects->keyBy('id')->all(); // [id => Subject object]
+        $subjectMap  = $remaining;                    // reference tĩnh — không bị unset theo vòng lặp
+        $plannedSet  = array_flip($alreadyPlanned);   // [id => 0] for O(1) lookup
+
+        // Precompute failed set cho priority
+        $failedSet = array_flip(
+            UserGrade::where('user_id', $user->id)
+                ->get()
+                ->filter(fn($g) => $g->grade !== null && $g->grade <= 5.0
+                    && !in_array($g->status, ['pass', 'passed']))
+                ->pluck('subject_id')
+                ->toArray()
+        );
+
+        $modeLimit     = $this->modeMaxCredits($mode);
+        $targetSemsCap = $this->defaultTargetSems($mode); // cố định theo mode, không adaptive
+        $semIndex      = $startSem;
+        $maxIterations = $startSem + 24; // safety guard
+        $schedule      = [];
+
+        while (!empty($remaining) && $semIndex <= $maxIterations) {
+            $isOdd = ($semIndex % 2) !== 0;
+
+            // Phân bổ đều tín chỉ qua các kỳ còn lại trong target.
+            // Nếu vượt targetSemsCap, thuật toán tự tạo thêm kỳ → caller sẽ cảnh báo.
+            $remCredits    = array_sum(array_map(fn($s) => (int)($s->credits ?? 3), $remaining));
+            $remSems       = max(1, $targetSemsCap - $semIndex + 1);
+            $targetCredits = min((int)ceil($remCredits / $remSems), $modeLimit);
+
+            // Lọc môn có thể xếp vào học kỳ này
+            $available = [];
+            foreach ($remaining as $id => $subject) {
+                if ($this->canPlace($subject, $plannedSet, $isOdd, $groupIds, $subjects)) {
+                    $available[] = $subject;
+                }
+            }
+
+            if (empty($available)) {
+                Log::warning("[Planner] Deadlock sem={$semIndex} user={$user->id}, " . count($remaining) . " môn không thể xếp lịch.");
+                break;
+            }
+
+            // Sắp xếp theo priority giảm dần
+            usort($available, fn($a, $b) =>
+                $this->computePriority($b, $failedSet, $groupIds, $semIndex, $mode, $user)
+                <=> $this->computePriority($a, $failedSet, $groupIds, $semIndex, $mode, $user)
+            );
+
+            // Greedy packing: nhét môn vào học kỳ cho đến khi đầy tín chỉ.
+            // Trước khi pick một môn, ước tính corequisite credits của nó để không
+            // gây overflow sau khi BFS corequisite chạy.
+            $semSubjectIds = [];
+            $semCredits    = 0;
+
+            foreach ($available as $subject) {
+                $credits = (int)($subject->credits ?? 3);
+
+                // Ước tính số TC corequisite sẽ bị kéo vào cùng kỳ nếu pick môn này
+                $coreqEstimate = 0;
+                foreach ($subject->corequisites ?? [] as $coreq) {
+                    if (isset($remaining[$coreq->id]) && !isset($plannedSet[$coreq->id])) {
+                        $coreqEstimate += (int)($remaining[$coreq->id]->credits ?? 3);
+                    }
+                }
+
+                // Chỉ pick nếu tổng (môn + corequisites ước tính) còn nằm trong giới hạn
+                if ($semCredits + $credits + $coreqEstimate <= $targetCredits) {
+                    $semSubjectIds[]          = $subject->id;
+                    $semCredits              += $credits;
+                    $plannedSet[$subject->id] = true; // cập nhật ngay để môn sau có thể check tiên quyết
+                    unset($remaining[$subject->id]);  // O(1) removal
+                }
+            }
+
+            // Tránh vòng lặp vô tận: nếu không môn nào vừa, nhét môn đầu tiên
+            if (empty($semSubjectIds)) {
+                $first                  = reset($available);
+                $semSubjectIds[]        = $first->id;
+                $plannedSet[$first->id] = true;
+                unset($remaining[$first->id]);
+            }
+
+            // ── Corequisite enforcement (BFS) ─────────────────────────────────────
+            // Mỗi môn đã pick → kéo tất cả môn song hành của nó vào cùng học kỳ.
+            // Lặp BFS để xử lý chain: A↔B, B↔C → A, B, C cùng vào một kỳ.
+            $coQueue  = $semSubjectIds;             // hàng đợi để duyệt
+            $coPulled = array_flip($semSubjectIds); // tránh xử lý 2 lần
+
+            while (!empty($coQueue)) {
+                $checkId = array_shift($coQueue);
+                $subObj  = $subjectMap[$checkId] ?? null;
+                if (!$subObj) continue;
+
+                foreach ($subObj->corequisites ?? [] as $coreq) {
+                    if (isset($coPulled[$coreq->id])) continue;   // đã xử lý
+                    $coPulled[$coreq->id] = true;
+
+                    if (isset($plannedSet[$coreq->id])) continue;  // đã ở kỳ trước
+                    if (!isset($remaining[$coreq->id])) continue;  // không còn chờ lịch
+
+                    $coreqObj  = $remaining[$coreq->id];
+                    $coOffered = $coreqObj->offered_in ?? null;
+
+                    // Kiểm tra ràng buộc chẵn/lẻ — nếu vi phạm thì log và bỏ qua
+                    if ($isOdd && $coOffered === '2') {
+                        Log::warning("[Planner][Corequisite] {$coreqObj->name} yêu cầu kỳ chẵn nhưng {$subObj->name} đang ở kỳ lẻ {$semIndex}.");
+                        continue;
+                    }
+                    if (!$isOdd && $coOffered === '1') {
+                        Log::warning("[Planner][Corequisite] {$coreqObj->name} yêu cầu kỳ lẻ nhưng {$subObj->name} đang ở kỳ chẵn {$semIndex}.");
+                        continue;
+                    }
+
+                    // Kéo corequisite vào cùng học kỳ (ràng buộc bắt buộc)
+                    $semSubjectIds[]             = $coreqObj->id;
+                    $semCredits                 += (int)($coreqObj->credits ?? 3);
+                    $plannedSet[$coreqObj->id]   = true;
+                    unset($remaining[$coreqObj->id]);
+                    $coQueue[]                   = $coreqObj->id; // kiểm tra tiếp corequisite của nó
+                }
+            }
+
+            $schedule[$semIndex] = $semSubjectIds;
+            $semIndex++;
         }
-        return match ($mode) {
-            'fast' => 22,
-            'slow' => 14,
-            default => 18,
+
+        return $schedule;
+    }
+
+    /**
+     * Kiểm tra môn có thể xếp vào học kỳ hiện tại không.
+     * Xét: chẵn/lẻ, tiên quyết tường minh, tiên quyết nhóm (requirement_type).
+     */
+    private function canPlace(object $subject, array $plannedSet, bool $isOdd, array $groupIds, Collection $allSubjects): bool
+    {
+        // Ràng buộc học kỳ chẵn/lẻ
+        $offeredIn = $subject->offered_in ?? null;
+        if ($isOdd  && $offeredIn === '2') return false;
+        if (!$isOdd && $offeredIn === '1') return false;
+
+        // Tiên quyết tường minh (SubjectRelation type = 'prerequisite')
+        foreach ($subject->prerequisites ?? [] as $prereq) {
+            if (!isset($plannedSet[$prereq->id])) return false;
+        }
+
+        // Tiên quyết nhóm (requirement_type)
+        $req = $subject->requirement_type ?? null;
+        if (!$req || $req === 'none') return true;
+
+        $requiredIds = match ($req) {
+            'completed_basic'       => $allSubjects->whereIn('program_group_id', $groupIds['basic'])->pluck('id')->all(),
+            'completed_major'       => $allSubjects->whereIn('program_group_id', $groupIds['major'])->pluck('id')->all(),
+            'completed_specialized' => $allSubjects->whereIn('program_group_id', $groupIds['specialized'])->pluck('id')->all(),
+            'completed_all'         => $allSubjects->where('id', '!=', $subject->id)->pluck('id')->all(),
+            default                 => [],
         };
-    }
-
-    private function getSubjectsForUserCurriculum(int $userId)
-    {
-        $user = \App\Models\User::find($userId);
-        $frameworkId = null;
-
-        if ($user && $user->pref_academic_year && $user->pref_program_type) {
-            $program = \App\Models\TrainingProgram::where('academic_year', $user->pref_academic_year)
-                ->where('program_type', $user->pref_program_type)
-                ->first();
-
-            if ($program && $framework = $program->curriculumFrameworks()->first()) {
-                $frameworkId = $framework->id;
-            }
-        }
-
-        if (!$frameworkId) {
-            $subjects = Subject::with(['prerequisites', 'relatedRelations'])->get();
-            foreach ($subjects as $subject) {
-                $subject->assigned_semester_index = (int) ($subject->semester_id ?? 1);
-            }
-
-            return $subjects;
-        }
-
-        $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
-            ->with(['subject.prerequisites', 'subject.relatedRelations', 'semester'])
-            ->get();
-
-        $subjects = collect();
-        foreach ($curriculumSubjects as $curriculumSubject) {
-            if (!$curriculumSubject->subject) {
-                continue;
-            }
-
-            $subject = $curriculumSubject->subject;
-            $subject->assigned_semester_index = (int) ($curriculumSubject->semester?->name ?? $subject->semester_id ?? 1);
-            $subjects->push($subject);
-        }
-
-        return $subjects->unique('id')->values();
-    }
-
-    private function canScheduleSubject($subject, array $plannedSubjectIds, int $semesterIndex, array $basicGroupIds, array $majorGroupIds, array $specializedGroupIds, $allProgramSubjects): bool
-    {
-        $isOddSemester = ($semesterIndex % 2) !== 0;
-        if ($isOddSemester && $subject->offered_in === '2') {
-            return false;
-        }
-        if (!$isOddSemester && $subject->offered_in === '1') {
-            return false;
-        }
-
-        foreach ($subject->prerequisites as $prereq) {
-            if (!in_array($prereq->id, $plannedSubjectIds)) {
-                return false;
-            }
-        }
-
-        $reqType = $subject->requirement_type;
-        if (!$reqType || $reqType === 'none') {
-            return true;
-        }
-
-        if ($reqType === 'completed_all') {
-            $requiredIds = $allProgramSubjects->pluck('id')->reject(fn($id) => $id == $subject->id)->toArray();
-        } elseif ($reqType === 'completed_basic') {
-            $requiredIds = $allProgramSubjects->whereIn('program_group_id', $basicGroupIds)->pluck('id')->toArray();
-        } elseif ($reqType === 'completed_major') {
-            $requiredIds = $allProgramSubjects->whereIn('program_group_id', $majorGroupIds)->pluck('id')->toArray();
-        } elseif ($reqType === 'completed_specialized') {
-            $requiredIds = $allProgramSubjects->whereIn('program_group_id', $specializedGroupIds)->pluck('id')->toArray();
-        } else {
-            $requiredIds = [];
-        }
 
         foreach ($requiredIds as $id) {
-            if (!in_array($id, $plannedSubjectIds)) {
-                return false;
-            }
+            if (!isset($plannedSet[$id])) return false;
         }
 
         return true;
     }
 
-    public function applySuggestionsAndRedistribute(int $planId, array $suggestedSubjectIds, int $targetSemesterIndex): StudyPlan
+    /**
+     * Tính điểm ưu tiên cho môn học trong một học kỳ cụ thể.
+     * Điểm cao hơn → được xếp sớm hơn.
+     */
+    private function computePriority(object $subject, array $failedSet, array $groupIds, int $semIndex, string $mode, User $user): int
     {
-        return DB::transaction(function () use ($planId, $suggestedSubjectIds, $targetSemesterIndex) {
-            $plan = StudyPlan::with(['semesters.subjects.subject'])->findOrFail($planId);
-            $userId = $plan->user_id;
-            $mode = $plan->mode;
-            $dynamicTargetSems = $plan->target_semester_count; // FIX BUG-02: lấy từ plan thay vì undefined variable
-            $maxCredits = $this->getMaxCreditsByMode($mode);
+        $score = 0;
 
-            // Fetch passed/failed subjects
-            $allUserGrades = UserGrade::where('user_id', $userId)->get();
-            $userGrades = $allUserGrades->groupBy('subject_id')->map(function ($grades) {
-                return $grades->sortByDesc('grade')->first();
-            })->values();
+        // Nhóm chương trình (Đại cương > Cơ sở ngành > phần còn lại)
+        $pgId = $subject->program_group_id ?? null;
+        if (in_array($pgId, $groupIds['basic']))       $score += 200;
+        elseif (in_array($pgId, $groupIds['major']))   $score += 150;
 
-            $passedSubjectIds = $userGrades->filter(function($g) { return $g->grade > 5.0 || in_array($g->status, ['passed', 'pass']); })->pluck('subject_id')->toArray();
-            $failedSubjectIds = $userGrades->filter(function($g) { return ($g->grade <= 5.0 && $g->grade !== null) || in_array($g->status, ['failed', 'fail']); })->pluck('subject_id')->toArray();
-            $allProgramSubjects = $this->getSubjectsForUserCurriculum($userId);
-            $allowedSubjectIds = $allProgramSubjects->pluck('id')->toArray();
-            $suggestedSubjectIds = array_values(array_unique(array_intersect($suggestedSubjectIds, $allowedSubjectIds)));
+        // Môn rớt → cần học lại càng sớm càng tốt
+        if (isset($failedSet[$subject->id]))           $score += 120;
 
-            // We now trust $targetSemesterIndex from the frontend because the frontend bug was fixed.
+        // Số môn phụ thuộc vào môn này → unlock nhiều môn khác = ưu tiên cao
+        $dependents = $subject->relatedRelations?->where('type', 'prerequisite')->count() ?? 0;
+        $score += $dependents * 50;
 
-            // Lấy program_group_ids cho greedy
-            $basicGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
-                ->orWhere('name', 'like', '%Anh văn%')
-                ->pluck('id')->toArray();
-            $majorGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Cơ sở ngành%')
-                ->pluck('id')->toArray();
-            $specializedGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Chuyên ngành%')
-                ->pluck('id')->toArray();
+        // Đồ án / Thực tập → schedule sớm nhất khi đủ điều kiện
+        if (str_contains($subject->name, 'Đồ án') || str_contains($subject->name, 'Thực tập')) {
+            $score += 300;
+        }
 
-            // Gather past subjects (semesters < targetSemesterIndex)
-            $plannedSubjectIds = [];
-            foreach ($plan->semesters as $sem) {
-                if ($sem->semester_index < $targetSemesterIndex) {
-                    foreach ($sem->subjects as $ss) {
-                        $plannedSubjectIds[] = $ss->subject_id;
-                    }
-                }
+        // Môn có tiên quyết nhóm → ưu tiên
+        $reqType = $subject->requirement_type ?? null;
+        if ($reqType && $reqType !== 'none') $score += 30;
+
+        // Định hướng kỹ năng của sinh viên
+        if ($user->pref_skill_focus
+            && $subject->skillGroup
+            && $subject->skillGroup->focus_area === $user->pref_skill_focus) {
+            $score += 80;
+        }
+
+        // Bám sát học kỳ chuẩn trong chương trình khung (mode normal/slow)
+        if ($mode !== 'fast') {
+            $assigned = $subject->assigned_semester_index ?? null;
+            if ($assigned) {
+                if ($assigned === $semIndex)    $score += 200; // đúng học kỳ chuẩn
+                elseif ($assigned < $semIndex)  $score += 150; // đã trễ, ưu tiên học bù
+                else                            $score -= ($assigned - $semIndex) * 80; // còn sớm
             }
+        }
 
-            // Get remaining subjects to distribute (semesters >= targetSemesterIndex)
-            $remainingSubjectIds = [];
-            $semestersToDelete = [];
-            foreach ($plan->semesters as $sem) {
-                if ($sem->semester_index >= $targetSemesterIndex) {
-                    $semestersToDelete[] = $sem->id;
-                    foreach ($sem->subjects as $ss) {
-                        $remainingSubjectIds[] = $ss->subject_id;
-                    }
-                }
+        return $score;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // HELPERS
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Load toàn bộ dữ liệu cần thiết để lập kế hoạch.
+     * @return array{Collection, int[], int[], int[]}
+     */
+    private function loadPlanningData(int $userId): array
+    {
+        $allUserGrades = UserGrade::where('user_id', $userId)->get()
+            ->groupBy('subject_id')
+            ->map(fn($g) => $g->sortByDesc('grade')->first());
+
+        $passedIds = $allUserGrades
+            ->filter(fn($g) => $g->grade > 5.0 || in_array($g->status, ['pass', 'passed']))
+            ->pluck('subject_id')->toArray();
+
+        $failedIds = $allUserGrades
+            ->filter(fn($g) => $g->grade !== null && $g->grade <= 5.0
+                && !in_array($g->status, ['pass', 'passed']))
+            ->pluck('subject_id')->toArray();
+
+        $allSubjects = $this->loadSubjectsForUser($userId);
+
+        $historySubjectIds = SemesterHistory::where('user_id', $userId)
+            ->with('items')
+            ->get()
+            ->flatMap(fn($h) => $h->items->pluck('subject_id'))
+            ->unique()->toArray();
+
+        return [$allSubjects, $passedIds, $failedIds, $historySubjectIds];
+    }
+
+    /**
+     * Load danh sách môn học theo chương trình khung của sinh viên.
+     * Mỗi môn có thêm thuộc tính `assigned_semester_index`.
+     */
+    private function loadSubjectsForUser(int $userId): Collection
+    {
+        $user        = User::find($userId);
+        $frameworkId = null;
+
+        if ($user?->pref_academic_year && $user?->pref_program_type) {
+            $program = TrainingProgram::where('academic_year', $user->pref_academic_year)
+                ->where('program_type', $user->pref_program_type)
+                ->first();
+            if ($program) {
+                $frameworkId = $program->curriculumFrameworks()->first()?->id;
             }
-            
-            // Lọc bỏ những suggestions đã nằm trong quá khứ NHƯNG KHÔNG PHẢI MÔN RỚT
-            $validSuggestedSubjectIds = [];
-            foreach ($suggestedSubjectIds as $subId) {
-                if (in_array($subId, $plannedSubjectIds) && !in_array($subId, $failedSubjectIds)) {
-                    // Đã có trong kế hoạch cũ, và chưa rớt (tức là chưa học tới hoặc đã pass)
-                    // Không gợi ý thêm vào học kỳ mục tiêu (để tránh lặp môn)
-                    continue;
-                }
-                $validSuggestedSubjectIds[] = $subId;
-            }
-            $suggestedSubjectIds = $validSuggestedSubjectIds;
+        }
 
-            // Đảm bảo suggestions cũng nằm trong mảng cần phân bổ
-            $remainingSubjectIds = array_unique(array_merge($remainingSubjectIds, $suggestedSubjectIds));
-            
-            // Xóa các học kỳ từ targetSemesterIndex trở đi
-            StudyPlanSubject::whereIn('study_plan_semester_id', $semestersToDelete)->delete();
-            StudyPlanSemester::whereIn('id', $semestersToDelete)->delete();
+        if (!$frameworkId) {
+            $subjects = Subject::with(['prerequisites', 'corequisites', 'relatedRelations', 'skillGroup'])->get();
+            $subjects->each(fn($s) => $s->assigned_semester_index = (int)($s->semester_id ?? 1));
+            return $subjects;
+        }
 
-            // Load đầy đủ thông tin của các remaining subjects
-            $allSubjects = $allProgramSubjects->whereIn('id', $remainingSubjectIds)->values();
-            
-            // Gắn assigned_semester_index để dùng cho greedy (nếu cần, nhưng rải môn có thể bỏ qua assigned vì đã ở giai đoạn sau, cứ cho mặc định là 1)
-            foreach ($allSubjects as $sub) {
-                $sub->assigned_semester_index = (int) ($sub->assigned_semester_index ?? $sub->semester_id ?? 1);
-            }
-            
-            $remainingSubjects = clone $allSubjects;
-            $semesterIndex = $targetSemesterIndex;
+        return CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+            ->with(['subject.prerequisites', 'subject.corequisites', 'subject.relatedRelations', 'subject.skillGroup', 'semester'])
+            ->get()
+            ->filter(fn($cs) => $cs->subject !== null)
+            ->map(function ($cs) {
+                $cs->subject->assigned_semester_index = (int)($cs->semester?->name ?? $cs->subject->semester_id ?? 1);
+                return $cs->subject;
+            })
+            ->unique('id')
+            ->values();
+    }
 
-            // Xử lý riêng học kỳ targetSemesterIndex: CHỈ CHỨA CÁC MÔN ĐƯỢC GỢI Ý
-            $targetSubjects = collect();
-            $targetCredits = 0;
-            $targetCandidates = $remainingSubjects->whereIn('id', $suggestedSubjectIds)->sortByDesc(function ($subject) use ($failedSubjectIds) {
-                $score = 0;
-                if (in_array($subject->id, $failedSubjectIds)) $score += 100;
-                if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30;
-                $score += (5 * $subject->relatedRelations->where('type', 'prerequisite')->count());
-                return $score;
-            });
+    /**
+     * Tạo các StudyPlanSemester tương ứng với lịch sử học kỳ đã qua.
+     * @return int Số học kỳ lịch sử cao nhất (0 nếu chưa có)
+     */
+    private function buildHistorySemesters(StudyPlan $plan, int $userId): int
+    {
+        $histories = SemesterHistory::where('user_id', $userId)
+            ->with('items.subject')
+            ->orderBy('semester_number')
+            ->get();
 
-            foreach ($targetCandidates as $subject) {
-                // Bỏ qua các ràng buộc xếp môn thông thường vì danh sách gợi ý đã được 
-                // RecommendationService kiểm duyệt kỹ lưỡng (đã check điều kiện tiên quyết, 
-                // số tín chỉ, và học kỳ mở môn). Bắt buộc phải xếp vào học kỳ mục tiêu.
-                $targetSubjects->push($subject);
-                $targetCredits += $subject->credits;
-            }
-            if ($targetSubjects->count() > 0) {
-                $actualSemesterCredits = $targetCredits;
-                
-                $semester = StudyPlanSemester::create([
-                    'study_plan_id' => $plan->id,
-                    'semester_index' => $semesterIndex,
-                    'expected_credits' => $actualSemesterCredits,
+        $lastSem = 0;
+        foreach ($histories as $history) {
+            $semNum  = $history->semester_number;
+            $lastSem = max($lastSem, $semNum);
+
+            $sem = StudyPlanSemester::create([
+                'study_plan_id'    => $plan->id,
+                'semester_index'   => $semNum,
+                'expected_credits' => $history->total_credits ?? 0,
+            ]);
+
+            foreach ($history->items as $item) {
+                if (!$item->subject) continue;
+                StudyPlanSubject::create([
+                    'study_plan_semester_id' => $sem->id,
+                    'subject_id'             => $item->subject_id,
+                    'is_completed'           => $item->status === 'pass',
+                    'subject_grade'          => $item->grade,
                 ]);
-
-                foreach ($targetSubjects as $subject) {
-                    StudyPlanSubject::create([
-                        'study_plan_semester_id' => $semester->id,
-                        'subject_id' => $subject->id,
-                        'is_completed' => in_array($subject->id, $passedSubjectIds),
-                    ]);
-                    $plannedSubjectIds[] = $subject->id;
-                }
-                
-                // Xóa khỏi remaining
-                $targetSubjectIds = $targetSubjects->pluck('id')->toArray();
-                $remainingSubjects = $remainingSubjects->reject(function ($s) use ($targetSubjectIds) {
-                    return in_array($s->id, $targetSubjectIds);
-                });
-                $semesterIndex++;
             }
+        }
 
-            // Tiếp tục vòng lặp greedy cho các môn còn lại
-            $maxCreditsModeLimit = $this->getMaxCreditsByMode($mode);
-            while ($remainingSubjects->count() > 0) {
-                // Tính toán để rải đều số tín chỉ
-                $unpassedCredits = 0;
-                foreach ($remainingSubjects as $rs) {
-                    if (!in_array($rs->id, $passedSubjectIds)) {
-                        $unpassedCredits += $rs->credits;
-                    }
-                }
-                
-                if ($unpassedCredits > 0) {
-                    $targetTotalSems = $dynamicTargetSems ?? match ($mode) {
-                        'fast' => 6,
-                        'slow' => 10,
-                        default => 8,
-                    };
-                    $estimatedSems = max(1, $targetTotalSems - $semesterIndex + 1);
-                    $maxCredits = ceil($unpassedCredits / $estimatedSems);
-                    if ($maxCredits > 30) {
-                        $maxCredits = 30;
-                    }
-                    $maxCredits += 2; 
-                } else {
-                    $maxCredits = $this->getMaxCreditsByMode($mode);
-                }
+        return $lastSem;
+    }
 
-                $availableSubjects = $remainingSubjects->filter(function ($subject) use ($plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allProgramSubjects) {
-                    return $this->canScheduleSubject($subject, $plannedSubjectIds, $semesterIndex, $basicGroupIds, $majorGroupIds, $specializedGroupIds, $allProgramSubjects);
-                });
+    /**
+     * Clone 100% từ chương trình khung gốc (dành cho sinh viên mới, mode normal).
+     */
+    private function cloneCurriculumFramework(StudyPlan $plan, Collection $allSubjects): void
+    {
+        $grouped = $allSubjects->groupBy('assigned_semester_index')->sortKeys();
+        $maxSem  = 0;
 
-                if ($availableSubjects->count() === 0) {
-                    Log::warning("Cannot resolve prerequisites in redistribute for User {$userId}");
-                    break;
-                }
-
-                $availableSubjects = $availableSubjects->sortByDesc(function ($subject) use ($failedSubjectIds, $semesterIndex, $mode, $basicGroupIds, $majorGroupIds) {
-                    $score = 0;
-                    if (in_array($subject->program_group_id, $basicGroupIds)) {
-                        $score += 200;
-                    } elseif (in_array($subject->program_group_id, $majorGroupIds)) {
-                        $score += 150;
-                    }
-                    if (in_array($subject->id, $failedSubjectIds)) $score += 100;
-                    if ($subject->requirement_type && $subject->requirement_type !== 'none') $score += 30;
-                    $score += (50 * $subject->relatedRelations->where('type', 'prerequisite')->count());
-                    
-                    if (stripos($subject->name, 'Đồ án') !== false || stripos($subject->name, 'Thực tập') !== false) {
-                        $score += 300; // Ưu tiên xếp các môn Đồ án, Thực tập sớm nhất có thể nếu đủ điều kiện
-                    }
-                    
-                    if ($mode === 'normal' || $mode === 'slow') {
-                        $assignedSem = $subject->assigned_semester_index;
-                        if ($assignedSem) {
-                            if ($assignedSem > $semesterIndex) {
-                                $score -= (($assignedSem - $semesterIndex) * 100);
-                            } elseif ($assignedSem == $semesterIndex) {
-                                $score += 200;
-                            } else {
-                                $score += 150;
-                            }
-                        }
-                    }
-                    return $score;
-                });
-
-                $currentSemesterCredits = 0;
-                $actualSemesterCredits = 0;
-                $subjectsForThisSemester = [];
-
-                foreach ($availableSubjects as $key => $subject) {
-                    $isPassed = in_array($subject->id, $passedSubjectIds);
-
-                    if ($isPassed) {
-                        $subjectsForThisSemester[] = $subject;
-                        $actualSemesterCredits += $subject->credits;
-                        $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
-                            return $s->id === $subject->id;
-                        });
-                        continue;
-                    }
-
-                    if ($currentSemesterCredits + $subject->credits <= $maxCredits && 
-                        $actualSemesterCredits + $subject->credits <= $maxCreditsModeLimit) {
-                        
-                        $subjectsForThisSemester[] = $subject;
-                        $currentSemesterCredits += $subject->credits;
-                        $actualSemesterCredits += $subject->credits;
-                        
-                        $remainingSubjects = $remainingSubjects->reject(function ($s) use ($subject) {
-                            return $s->id === $subject->id;
-                        });
-                    }
-                }
-
-                if (count($subjectsForThisSemester) > 0) {
-                    $semester = StudyPlanSemester::create([
-                        'study_plan_id' => $plan->id,
-                        'semester_index' => $semesterIndex,
-                        'expected_credits' => $actualSemesterCredits,
-                    ]);
-
-                    foreach ($subjectsForThisSemester as $subject) {
-                        StudyPlanSubject::create([
-                            'study_plan_semester_id' => $semester->id,
-                            'subject_id' => $subject->id,
-                            'is_completed' => in_array($subject->id, $passedSubjectIds),
-                        ]);
-                        $plannedSubjectIds[] = $subject->id;
-                    }
-                    $semesterIndex++;
-                } else {
-                    break; 
-                }
+        foreach ($grouped as $semIdx => $subjectsInSem) {
+            $maxSem = max($maxSem, (int)$semIdx);
+            $sem    = StudyPlanSemester::create([
+                'study_plan_id'    => $plan->id,
+                'semester_index'   => $semIdx,
+                'expected_credits' => $subjectsInSem->sum('credits'),
+            ]);
+            foreach ($subjectsInSem as $s) {
+                StudyPlanSubject::create(['study_plan_semester_id' => $sem->id, 'subject_id' => $s->id]);
             }
+        }
 
-            $plan->update(['target_semester_count' => $semesterIndex - 1]);
-            return $plan->load('semesters.subjects.subject');
-        });
+        $plan->update(['target_semester_count' => $maxSem]);
+    }
+
+    /**
+     * Ghi kết quả schedule vào DB.
+     * @param  array<int, int[]> $schedule [semesterIndex => [subjectId, ...]]
+     * @return int Học kỳ cuối cùng được tạo
+     */
+    private function persistSchedule(StudyPlan $plan, array $schedule, array $passedIds): int
+    {
+        if (empty($schedule)) return $plan->semesters()->max('semester_index') ?? 0;
+
+        // Load credits 1 lần duy nhất (tránh N+1)
+        $allSubjectIds = array_unique(array_merge(...array_values($schedule)));
+        $creditMap     = Subject::whereIn('id', $allSubjectIds)->pluck('credits', 'id')->toArray();
+        $passedSet     = array_flip($passedIds);
+
+        $maxSem = 0;
+        foreach ($schedule as $semIndex => $subjectIds) {
+            $credits = array_sum(array_map(fn($id) => (int)($creditMap[$id] ?? 3), $subjectIds));
+            $sem     = StudyPlanSemester::create([
+                'study_plan_id'    => $plan->id,
+                'semester_index'   => (int)$semIndex,
+                'expected_credits' => $credits,
+            ]);
+            foreach ($subjectIds as $subjectId) {
+                StudyPlanSubject::create([
+                    'study_plan_semester_id' => $sem->id,
+                    'subject_id'             => $subjectId,
+                    'is_completed'           => isset($passedSet[$subjectId]),
+                ]);
+            }
+            $maxSem = max($maxSem, (int)$semIndex);
+        }
+
+        return $maxSem;
+    }
+
+    /**
+     * Lấy program_group_id cho từng loại nhóm (tra DB 1 lần).
+     */
+    private function resolveGroupIds(): array
+    {
+        return [
+            'basic'       => ProgramGroup::where('name', 'like', '%Đại cương%')
+                ->orWhere('name', 'like', '%Anh văn%')->pluck('id')->toArray(),
+            'major'       => ProgramGroup::where('name', 'like', '%Cơ sở ngành%')->pluck('id')->toArray(),
+            'specialized' => ProgramGroup::where('name', 'like', '%Chuyên ngành%')->pluck('id')->toArray(),
+        ];
+    }
+
+    private function modeMaxCredits(string $mode): int
+    {
+        return match ($mode) { 'fast' => 22, 'slow' => 14, default => 18 };
+    }
+
+    private function defaultTargetSems(string $mode): int
+    {
+        return match ($mode) { 'fast' => 6, 'slow' => 10, default => 8 };
     }
 }

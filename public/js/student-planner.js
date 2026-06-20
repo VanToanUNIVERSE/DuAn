@@ -2032,9 +2032,17 @@ async function generateStudyPlan() {
         const resData = await res.json();
         if (resData.success && resData.data) {
             renderStudyPlan(resData.data);
-            showToast('Tạo kế hoạch học tập thành công! 🎉', 'success');
-            fetchSavedPlansList(); // Cập nhật lại danh sách kế hoạch bên cạnh
-            fetchSuggestions(); // Cập nhật lại danh sách gợi ý theo mode vừa tạo
+            fetchSavedPlansList();
+            fetchSuggestions();
+
+            if (resData.forced_slow) {
+                showModeDowngradeNotice(resData.notice || 'Hệ thống đã chuyển sang chế độ Học Nhẹ do GPA thấp.');
+            } else if (resData.over_semesters) {
+                showOverSemestersNotice(resData.over_semesters_notice
+                    || `Kế hoạch cần thêm ${resData.over_semesters_count} học kỳ so với mục tiêu.`);
+            } else {
+                showToast('Tạo kế hoạch học tập thành công!', 'success');
+            }
         }
     } catch (e) {
         showToast('Lỗi khi tạo kế hoạch học tập.', 'error');
@@ -2076,17 +2084,65 @@ function renderStudyPlan(plan) {
     `;
 
 
+    // Xác định học kỳ hiện tại = kỳ đầu tiên có môn chưa hoàn thành (không phải retake)
+    let currentSemIdx = -1;
+    for (const sem of plan.semesters) {
+        const hasIncomplete = sem.subjects.some(ss => !ss.is_completed && !ss.is_retake);
+        if (hasIncomplete) { currentSemIdx = sem.semester_index; break; }
+    }
+
+    // Giới hạn tín chỉ theo mode (để tính credit bar)
+    const modeMaxCredits = { fast: 22, normal: 18, slow: 14 };
+    const maxCr = modeMaxCredits[plan.mode] || 18;
+
     plan.semesters.forEach(sem => {
+        const isPast    = currentSemIdx > 0 && sem.semester_index < currentSemIdx;
+        const isCurrent = sem.semester_index === currentSemIdx;
+
+        // Credit utilization bar
+        const usedCr  = sem.expected_credits || 0;
+        const barPct  = Math.min(100, Math.round((usedCr / maxCr) * 100));
+        // Kỳ đã qua: không tô đỏ (dữ liệu lịch sử, giới hạn mode hiện tại không áp dụng ngược)
+        const barColor = isPast
+            ? '#10b981'
+            : (usedCr > maxCr ? '#ef4444' : (usedCr >= maxCr * 0.85 ? '#f59e0b' : '#10b981'));
+
+        const lockIcon = isPast
+            ? `<span title="Kỳ đã hoàn thành — không thể kéo môn vào/ra.\nBạn vẫn có thể cập nhật điểm nếu nhập sai."
+                     style="cursor:help; font-size:0.85rem; opacity:0.6; margin-left:2px;">🔒</span>`
+            : '';
+
+        const semBadge = isPast
+            ? `<span class="pill" style="background:#f3f4f6; color:#9ca3af; font-size:0.7rem;">Đã hoàn thành</span>`
+            : isCurrent
+                ? `<span class="pill" style="background:#dbeafe; color:#2563eb; font-size:0.7rem;">Hiện tại</span>`
+                : '';
+
+        // Kỳ đã qua vẫn nhận drop nhưng qua handler riêng để hiển thị cảnh báo
+        const dropHandlers = isPast
+            ? `ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDropToPast(event, ${plan.id}, ${sem.semester_index})"`
+            : `ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${plan.id}, ${sem.semester_index})"`;
 
         html += `
-            <div class="clay-card study-plan-semester" 
+            <div class="clay-card study-plan-semester${isPast ? ' sem-past' : ''}"
                  data-semester-index="${sem.semester_index}"
-                 ondragover="handleDragOver(event)" 
-                 ondragleave="handleDragLeave(event)" 
-                 ondrop="handleDrop(event, ${plan.id}, ${sem.semester_index})">
-                <div class="card-title-row" style="border-bottom:1px solid var(--hairline); padding-bottom:12px; margin-bottom:12px; pointer-events:none;">
-                    <strong>Học kỳ ${sem.semester_index}</strong>
-                    <span class="pill" style="background:#e8f8f3; color:#10b981;">${sem.expected_credits} Tín chỉ</span>
+                 ${dropHandlers}>
+                <div class="card-title-row" style="border-bottom:1px solid var(--hairline); padding-bottom:10px; margin-bottom:12px; pointer-events:none;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <strong>Học kỳ ${sem.semester_index}</strong>
+                        ${semBadge}
+                        ${lockIcon}
+                    </div>
+                    <span class="pill" style="background:#e8f8f3; color:#10b981;">${usedCr} TC</span>
+                </div>
+                <div style="margin-bottom:10px; pointer-events:none;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--muted); margin-bottom:4px;">
+                        <span>Tải tín chỉ</span>
+                        <span>${usedCr}/${maxCr} TC</span>
+                    </div>
+                    <div style="height:5px; background:var(--hairline); border-radius:99px; overflow:hidden;">
+                        <div style="height:100%; width:${barPct}%; background:${barColor}; border-radius:99px; transition:width 0.4s;"></div>
+                    </div>
                 </div>
                 <div class="semester-subjects-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:12px; min-height: 50px;">
         `;
@@ -2104,34 +2160,12 @@ function renderStudyPlan(plan) {
                 const cardBg     = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
                 const borderColor= isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
 
-                // Retake card không drag được
-                const isRetake = ss.is_retake === true;
-                const isFrozen = ss.is_frozen === true;
-                const draggableAttr = (!isCompleted && !isRetake)
+                const draggableAttr = (!isCompleted && !isPast)
                     ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
                     : '';
 
-                // Gợi ý
                 const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
                 const highlyRecommendedClass = (!isCompleted && isSuggested) ? 'highly-recommended' : '';
-
-                // Badge retake
-                const retakeBadge = isRetake
-                    ? `<span class="pill" style="background:#fef3c7; color:#d97706; margin-left:8px; font-size:0.7rem; padding:2px 6px;">🔄 Học lại</span>`
-                    : '';
-
-                // Hint điểm cũ cho card retake
-                const origGradeHint = (isRetake && ss.original_grade !== null && ss.original_grade !== undefined)
-                    ? `<div style="font-size:0.72rem; color:#d97706; margin-top:4px; display:flex; align-items:center; gap:4px;">
-                         <span>Điểm cũ: <strong>${ss.original_grade}</strong></span>
-                         <span style="opacity:0.6;">— GPA lấy điểm cao hơn</span>
-                       </div>`
-                    : '';
-
-                // Card gốc frozen: hint nhỏ bên dưới
-                const frozenHint = isFrozen
-                    ? `<div style="font-size:0.7rem; color:#9ca3af; margin-top:4px;">📌 Đang học lại ở kỳ sau</div>`
-                    : '';
 
                 let statusHtml = '';
                 if (isCompleted) {
@@ -2140,44 +2174,79 @@ function renderStudyPlan(plan) {
                     statusHtml = '<span style="color:#ef4444; font-size:0.85rem; font-weight:600;">✗ Rớt</span>';
                 }
 
-                // Style cho frozen card (màu tối hơn một chút, không hover)
-                const frozenStyle = isFrozen
-                    ? 'opacity:0.85; pointer-events:auto;'
+                // Prereq tooltip từ prerequisites_info (enriched từ controller)
+                const prereqInfo = sub.prerequisites_info || [];
+                let prereqTooltipHtml = '';
+                if (prereqInfo.length > 0) {
+                    const typeLabel = { explicit: 'Tiên quyết', corequisite: 'Song hành', group: 'Nhóm' };
+                    const items = prereqInfo.map(p => {
+                        const icon = p.is_passed ? '✅' : (p.type === 'corequisite' ? '🔗' : '⏳');
+                        const color = p.is_passed ? '#10b981' : (p.type === 'corequisite' ? '#7c3aed' : '#f59e0b');
+                        const tag = typeLabel[p.type] || p.type;
+                        return `<div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;margin-bottom:3px;">
+                            <span>${icon}</span>
+                            <span style="color:${color};">${p.name}</span>
+                            <span style="color:#9ca3af;font-size:0.68rem;">(${tag})</span>
+                        </div>`;
+                    }).join('');
+                    prereqTooltipHtml = `
+                        <div class="prereq-tooltip-wrap" style="position:relative; display:inline-block;" onmousedown="event.stopPropagation()">
+                            <button type="button" title="Tiên quyết"
+                                    onmouseenter="this.nextElementSibling.style.display='block'"
+                                    onmouseleave="this.nextElementSibling.style.display='none'"
+                                    style="border:none; background:transparent; padding:2px 4px; cursor:pointer; color:var(--muted); font-size:0.75rem; display:flex; align-items:center; gap:3px;">
+                                🔗 <span style="text-decoration:underline dotted;">Tiên quyết (${prereqInfo.length})</span>
+                            </button>
+                            <div style="display:none; position:absolute; bottom:calc(100% + 6px); left:0; background:var(--surface); border:1px solid var(--hairline); border-radius:8px; padding:8px 10px; min-width:200px; box-shadow:0 4px 12px rgba(0,0,0,0.12); z-index:50;">
+                                <div style="font-size:0.7rem; font-weight:600; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em;">Tiên quyết</div>
+                                ${items}
+                            </div>
+                        </div>`;
+                }
+
+                // Nút cascade chỉ hiển thị khi môn bị rớt
+                const cascadeBtn = isFailed
+                    ? `<button type="button" title="Xem ảnh hưởng chuỗi"
+                               style="border:1px solid #fca5a5; background:#fef2f2; color:#ef4444; border-radius:6px; padding:3px 8px; font-size:0.72rem; cursor:pointer; margin-top:6px; display:flex; align-items:center; gap:4px;"
+                               onmousedown="event.stopPropagation()"
+                               onclick="openCascadeModal(${sub.id}, ${JSON.stringify(sub.name).replace(/'/g, "&#39;")})">
+                             ⚠ Xem ảnh hưởng
+                           </button>`
                     : '';
 
                 html += `
                     <div class="study-plan-subject ${highlyRecommendedClass}"
                          id="plan-subject-${sub.id}-${ss.id}"
                          ${draggableAttr}
-                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top:100px; ${frozenStyle}">
+                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top:100px;">
 
                         <button type="button" class="icon-btn"
                                 style="position:absolute; top:8px; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
                                 onclick='openPrereqModal(${JSON.stringify(sub).replace(/'/g, "&#39;")})'
-                                title="Xem môn tiên quyết"
+                                title="Xem chi tiết môn"
                                 onmousedown="event.stopPropagation()">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                             </svg>
                         </button>
 
-                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:8px; padding-right:24px;">${sub.name}${retakeBadge}</div>
-                        <div style="font-size:0.8rem; color:var(--muted); margin-bottom:12px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
+                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:4px; padding-right:24px;">${sub.name}</div>
+                        <div style="font-size:0.8rem; color:var(--muted); margin-bottom:8px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
 
-                        <div style="display:flex; align-items:center; gap:8px;" onmousedown="event.stopPropagation()">
+                        ${prereqTooltipHtml}
+
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;" onmousedown="event.stopPropagation()">
                             <input type="number"
                                    class="ob-grade-input"
                                    placeholder="Điểm..."
                                    min="0" max="10" step="0.1"
                                    value="${hasGrade ? grade : ''}"
                                    data-plan-subject-id="${ss.id}"
-                                   style="width:80px; height:32px; font-size:0.85rem; ${isFrozen ? 'background:#f3f4f6; cursor:not-allowed;' : ''}"
-                                   ${isFrozen ? `readonly title="Đang học lại ở kỳ sau — nhập điểm tại card Học lại"` : ''}
+                                   style="width:80px; height:32px; font-size:0.85rem;"
                                    onchange="updatePlanGrade(${plan.id}, ${sub.id}, this)">
                             ${statusHtml}
                         </div>
-                        ${origGradeHint}
-                        ${frozenHint}
+                        ${cascadeBtn}
                     </div>
                 `;
             }
@@ -2227,15 +2296,66 @@ function handleDragLeave(event) {
 
 async function handleDrop(event, planId, targetSemesterIndex) {
     event.preventDefault();
-    const semesterCard = event.target.closest('.study-plan-semester');
-    if (semesterCard) {
-        semesterCard.classList.remove('drag-over');
-    }
+    event.target.closest('.study-plan-semester')?.classList.remove('drag-over');
+    if (!draggedSubjectId || draggedSourceSemester === targetSemesterIndex) return;
+    await executeSubjectMove(planId, targetSemesterIndex);
+}
 
-    if (!draggedSubjectId || draggedSourceSemester === targetSemesterIndex) {
-        return;
-    }
+// Drop vào kỳ đã hoàn thành → hiển thị cảnh báo trước khi thực hiện
+function handleDropToPast(event, planId, targetSemesterIndex) {
+    event.preventDefault();
+    event.target.closest('.study-plan-semester')?.classList.remove('drag-over');
+    if (!draggedSubjectId || draggedSourceSemester === targetSemesterIndex) return;
 
+    // Lưu lại thông tin drag vì user cần thời gian xác nhận
+    const subjectId = draggedSubjectId;
+    const sourceSem = draggedSourceSemester;
+
+    document.getElementById('past-drop-confirm-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'past-drop-confirm-modal';
+    modal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease;">
+            <div style="background:var(--surface,#fff);border-radius:16px;padding:28px 24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+                <div style="font-size:1.6rem;margin-bottom:10px;">⚠️</div>
+                <div style="font-weight:700;font-size:1rem;margin-bottom:8px;">Thêm môn vào kỳ đã hoàn thành?</div>
+                <div style="font-size:0.875rem;color:var(--muted,#6b7280);line-height:1.65;margin-bottom:22px;">
+                    Hành động này có thể:<br>
+                    <ul style="margin:8px 0 0 16px;padding:0;">
+                        <li>Thay đổi <strong>tổng tín chỉ và GPA</strong> của học kỳ đó</li>
+                        <li>Ảnh hưởng đến <strong>gợi ý và đánh giá học lực</strong> của hệ thống</li>
+                        <li>Làm sai lệch <strong>lộ trình</strong> so với thực tế</li>
+                    </ul>
+                </div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                    <button id="past-drop-cancel"
+                            style="padding:9px 18px;border-radius:8px;border:1px solid var(--hairline,#e5e7eb);background:transparent;cursor:pointer;font-size:0.875rem;">
+                        Hủy
+                    </button>
+                    <button id="past-drop-confirm"
+                            style="padding:9px 18px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:0.875rem;font-weight:600;">
+                        Vẫn tiếp tục
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#past-drop-cancel').onclick = () => {
+        modal.remove();
+        draggedSubjectId = null;
+        draggedSourceSemester = null;
+    };
+    modal.querySelector('#past-drop-confirm').onclick = async () => {
+        modal.remove();
+        // Khôi phục lại drag state vì đã bị clear khi handleDragEnd
+        draggedSubjectId = subjectId;
+        draggedSourceSemester = sourceSem;
+        await executeSubjectMove(planId, targetSemesterIndex);
+    };
+}
+
+async function executeSubjectMove(planId, targetSemesterIndex) {
     const loader = document.getElementById('planner-loader');
     const container = document.getElementById('study-plan-results');
     loader.style.display = 'block';
@@ -2257,14 +2377,16 @@ async function handleDrop(event, planId, targetSemesterIndex) {
         });
 
         const resData = await res.json();
-
-        if (!res.ok) {
-            throw new Error(resData.error || 'Lỗi hệ thống');
-        }
+        if (!res.ok) throw new Error(resData.error || 'Lỗi hệ thống');
 
         if (resData.success && resData.data) {
             renderStudyPlan(resData.data);
-            showToast('Di chuyển môn học thành công!', 'success');
+            const coreqsMoved = resData.coreqs_moved || [];
+            if (coreqsMoved.length > 0) {
+                showToast(`Đã di chuyển kèm môn song hành: ${coreqsMoved.join(', ')}`, 'success');
+            } else {
+                showToast('Di chuyển môn học thành công!', 'success');
+            }
         }
     } catch (e) {
         showToast(e.message || 'Lỗi khi di chuyển môn học', 'error');
@@ -2858,3 +2980,87 @@ async function fetchSkillFocusProgress() {
         if (msgEl) msgEl.textContent = evaluation.skill_message || 'Chưa có dữ liệu đủ để phân tích.';
     } catch (e) { console.warn('[Skill focus error]', e); }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// MODE DOWNGRADE NOTICE (forced_slow từ generate API)
+// ═══════════════════════════════════════════════════════════════
+function showModeDowngradeNotice(message) {
+    // Xóa banner cũ nếu có
+    document.getElementById('mode-downgrade-notice')?.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'mode-downgrade-notice';
+    banner.style.cssText = [
+        'position:fixed; top:72px; left:50%; transform:translateX(-50%);',
+        'background:#fef3c7; border:1px solid #fbbf24; border-radius:12px;',
+        'padding:14px 20px; max-width:520px; width:90%; z-index:9999;',
+        'display:flex; align-items:flex-start; gap:12px;',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.12); animation:slideDown 0.3s ease;'
+    ].join('');
+
+    banner.innerHTML = `
+        <span style="font-size:1.4rem; flex-shrink:0; margin-top:1px;">⚠️</span>
+        <div style="flex:1;">
+            <div style="font-weight:700; color:#92400e; margin-bottom:4px; font-size:0.9rem;">Chế độ học đã được điều chỉnh</div>
+            <div style="font-size:0.85rem; color:#78350f; line-height:1.5;">${message}</div>
+        </div>
+        <button onclick="this.closest('#mode-downgrade-notice').remove()"
+                style="border:none; background:transparent; color:#92400e; font-size:1.1rem; cursor:pointer; padding:2px; flex-shrink:0; line-height:1;">&times;</button>
+    `;
+
+    document.body.appendChild(banner);
+    // Tự đóng sau 8 giây
+    setTimeout(() => banner?.remove(), 8000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OVER-SEMESTERS NOTICE (kế hoạch vượt số kỳ mục tiêu)
+// ═══════════════════════════════════════════════════════════════
+function showOverSemestersNotice(message) {
+    document.getElementById('over-semesters-notice')?.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'over-semesters-notice';
+    banner.style.cssText = [
+        'position:fixed; top:72px; left:50%; transform:translateX(-50%);',
+        'background:#eff6ff; border:1px solid #60a5fa; border-radius:12px;',
+        'padding:14px 20px; max-width:560px; width:90%; z-index:9999;',
+        'display:flex; align-items:flex-start; gap:12px;',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.12); animation:slideDown 0.3s ease;'
+    ].join('');
+
+    banner.innerHTML = `
+        <span style="font-size:1.4rem; flex-shrink:0; margin-top:1px;">📋</span>
+        <div style="flex:1;">
+            <div style="font-weight:700; color:#1e40af; margin-bottom:4px; font-size:0.9rem;">Kế hoạch vượt số học kỳ mục tiêu</div>
+            <div style="font-size:0.85rem; color:#1e3a8a; line-height:1.5;">${message}</div>
+        </div>
+        <button onclick="this.closest('#over-semesters-notice').remove()"
+                style="border:none; background:transparent; color:#1e40af; font-size:1.1rem; cursor:pointer; padding:2px; flex-shrink:0; line-height:1;">&times;</button>
+    `;
+
+    document.body.appendChild(banner);
+    setTimeout(() => banner?.remove(), 10000);
+}
+
+// Inject CSS cho sem-past và animation nếu chưa có
+(function injectPlannerStyles() {
+    if (document.getElementById('planner-dynamic-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'planner-dynamic-styles';
+    style.textContent = `
+        .sem-past { opacity: 0.88; }
+        /* Drag-drop bị chặn bởi HTML (không có draggable attr + không có ondrop),
+           không dùng pointer-events: none để vẫn cho phép sửa điểm */
+        @keyframes slideDown {
+            from { opacity:0; transform:translateX(-50%) translateY(-10px); }
+            to   { opacity:1; transform:translateX(-50%) translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity:0; }
+            to   { opacity:1; }
+        }
+        .prereq-tooltip-wrap:hover > div { display:block !important; }
+    `;
+    document.head.appendChild(style);
+})();

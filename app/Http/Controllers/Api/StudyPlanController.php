@@ -3,604 +3,437 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\StudyPlanService;
-use App\Services\AcademicEvaluationService;
-use App\Services\PlanAdjustmentService;
 use App\Models\StudyPlan;
 use App\Models\StudyPlanSemester;
 use App\Models\StudyPlanSubject;
+use App\Models\Subject;
 use App\Models\UserGrade;
+use App\Services\AcademicEvaluationService;
+use App\Services\ProgressService;
+use App\Services\StudyPlanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class StudyPlanController extends Controller
 {
-    protected $studyPlanService;
-    protected $evaluationService;
-    protected $adjustmentService;
-
     public function __construct(
-        StudyPlanService $studyPlanService,
-        AcademicEvaluationService $evaluationService,
-        PlanAdjustmentService $adjustmentService
-    ) {
-        $this->studyPlanService = $studyPlanService;
-        $this->evaluationService = $evaluationService;
-        $this->adjustmentService = $adjustmentService;
-    }
+        protected StudyPlanService        $planService,
+        protected AcademicEvaluationService $evaluationService,
+        protected ProgressService         $progressService,
+    ) {}
 
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/generate
+    // ──────────────────────────────────────────────────────────────────────
     public function generate(Request $request)
     {
-        $userId = $request->input('user_id') ?? Auth::id();
-
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
-        }
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
 
         $request->validate([
-            'name' => 'required|string',
-            'mode' => 'nullable|string|in:normal,fast,slow',
+            'name' => 'required|string|max:120',
+            'mode' => 'nullable|in:normal,fast,slow',
         ]);
 
-        $mode = $request->input('mode', 'normal');
-        $name = $request->input('name');
+        $result = $this->planService->generatePlan(
+            $userId,
+            $request->input('name'),
+            $request->input('mode', 'normal')
+        );
 
-        // generatePlan() đã tự động: deactivate kế hoạch cũ + set is_active=true + is_saved=true
-        $plan = $this->studyPlanService->generatePlan($userId, $name, $mode);
-
-        $plan = $this->attachGrades($plan, $userId);
+        $plan = $this->attachGrades($result['plan'], $userId);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Study plan generated successfully',
-            'data'    => $plan
+            'success'                => true,
+            'data'                   => $plan,
+            'forced_slow'            => $result['forced_slow'],
+            'applied_mode'           => $result['applied_mode'],
+            'notice'                 => $result['forced_slow']
+                ? 'GPA của bạn đang dưới 5.0. Hệ thống đã tự động chuyển sang chế độ Học Nhẹ để bảo đảm an toàn học vụ.'
+                : null,
+            'over_semesters'         => $result['over_semesters'] ?? false,
+            'over_semesters_count'   => $result['over_semesters_count'] ?? 0,
+            'over_semesters_notice'  => $result['over_semesters_notice'] ?? null,
         ]);
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // GET /api/v1/study-plans
+    // ──────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        $userId = $request->input('user_id') ?? Auth::id();
+        $userId = Auth::id();
 
-        // Ư u tiên lấy kế hoạch is_active=true trước, fallback sang mới nhất
         $plan = StudyPlan::where('user_id', $userId)
             ->where('is_saved', true)
             ->where('is_active', true)
-            ->first();
-
-        if (!$plan) {
-            $plan = StudyPlan::where('user_id', $userId)
+            ->first()
+            ?? StudyPlan::where('user_id', $userId)
                 ->where('is_saved', true)
-                ->orderBy('updated_at', 'desc')
+                ->orderByDesc('updated_at')
                 ->first();
-        }
 
-        $plans = $plan ? collect([$plan]) : collect();
+        $plans = $plan ? collect([$this->attachGrades($plan, $userId)]) : collect();
 
-        foreach ($plans as $p) {
-            $this->attachGrades($p, $userId);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data'    => $plans
-        ]);
-    }
-
-    public function destroy(Request $request, $id)
-    {
-        $userId = Auth::id();
-        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
-        if (!$plan) {
-            return response()->json(['success' => false, 'error' => 'Không tìm thấy kế hoạch'], 404);
-        }
-        
-        $plan->delete(); // Soft delete
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã xóa kế hoạch'
-        ]);
-    }
-
-    public function getSavedPlans(Request $request)
-    {
-        $userId = $request->input('user_id') ?? Auth::id();
-        $plans = StudyPlan::where('user_id', $userId)->where('is_saved', true)->orderBy('updated_at', 'desc')->get();
-        // Only return basic info to list them
         return response()->json(['success' => true, 'data' => $plans]);
     }
 
-    public function savePlan($id, Request $request)
+    // ──────────────────────────────────────────────────────────────────────
+    // GET /api/v1/study-plans/active
+    // ──────────────────────────────────────────────────────────────────────
+    public function getActivePlan(Request $request)
     {
-        $userId = $request->input('user_id') ?? Auth::id();
-        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
-        if (!$plan) {
-            return response()->json(['success' => false, 'error' => 'Plan not found'], 404);
-        }
-        
-        $plan->is_saved = true;
-        if ($request->has('name') && !empty($request->name)) {
-            $plan->name = $request->name;
-        }
-        $plan->save();
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
 
-        return response()->json(['success' => true, 'message' => 'Lưu kế hoạch thành công']);
-    }
-
-    public function loadPlan($id, Request $request)
-    {
-        $userId = $request->input('user_id') ?? Auth::id();
-        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
-        if (!$plan) {
-            return response()->json(['success' => false, 'error' => 'Plan not found'], 404);
-        }
-        
-        $this->attachGrades($plan, $userId);
-        return response()->json(['success' => true, 'data' => $plan]);
-    }
-
-    private function attachGrades($plan, $userId)
-    {
-        $plan->loadMissing('semesters.subjects.subject.relatedRelations', 'semesters.subjects.subject.prerequisites');
-        $userGrades = UserGrade::where('user_id', $userId)->pluck('grade', 'subject_id')->toArray();
-
-        // Thu thập các subject_id đang có retake row trong plan
-        $subjectsWithRetake = [];
-        foreach ($plan->semesters as $semester) {
-            foreach ($semester->subjects as $ss) {
-                if ($ss->is_retake) {
-                    $subjectsWithRetake[$ss->subject_id] = true;
-                }
-            }
-        }
-
-        foreach ($plan->semesters as $semester) {
-            foreach ($semester->subjects as $ss) {
-                if ($ss->subject) {
-                    // ── Mỗi row có điểm riêng (subject_grade) ──────────────────────────
-                    $ss->grade         = $ss->subject_grade;  // đọc từ column mới
-                    $ss->is_retake     = (bool) $ss->is_retake;
-                    $ss->original_grade= $ss->original_grade;
-                    $ss->subject_grade = $ss->subject_grade;
-
-                    // Môn gốc đã có retake → readonly (không đồng bộ)
-                    $ss->is_frozen = (!$ss->is_retake && isset($subjectsWithRetake[$ss->subject_id]));
-
-                    $hasGradeForDisplay = $ss->grade !== null;
-                    $ss->is_completed  = $hasGradeForDisplay && $ss->grade > 5.0;
-
-                    $dependentCount = $ss->subject->relatedRelations->where('type', 'prerequisite')->count();
-                    $ss->is_highly_recommended = $dependentCount >= 2
-                        || in_array($ss->subject->requirement_type, ['completed_basic', 'completed_major']);
-
-                    $prereqDetails    = [];
-                    $passedSubjectIds = array_keys(array_filter($userGrades, fn($g) => $g > 5.0));
-                    foreach ($ss->subject->prerequisites as $prereq) {
-                        $prereqDetails[] = [
-                            'id'        => $prereq->id,
-                            'name'      => $prereq->name,
-                            'is_passed' => in_array($prereq->id, $passedSubjectIds),
-                        ];
-                    }
-
-                    $reqType = $ss->subject->requirement_type;
-                    if ($reqType && $reqType !== 'none') {
-                        $groupMap = [
-                            'completed_basic'       => [1, 2, 3],
-                            'completed_major'       => [4, 5],
-                            'completed_specialized' => [6, 7],
-                        ];
-                        $allSubjects = \App\Models\Subject::all();
-                        $implicit = isset($groupMap[$reqType])
-                            ? $allSubjects->whereIn('program_group_id', $groupMap[$reqType])
-                            : ($reqType === 'completed_all' ? $allSubjects->where('id', '!=', $ss->subject->id) : collect());
-
-                        foreach ($implicit as $impSub) {
-                            if (collect($prereqDetails)->contains('id', $impSub->id)) continue;
-                            $prereqDetails[] = [
-                                'id'        => $impSub->id,
-                                'name'      => $impSub->name,
-                                'is_passed' => in_array($impSub->id, $passedSubjectIds),
-                            ];
-                        }
-                    }
-                    $ss->subject->prerequisites_info = $prereqDetails;
-                }
-            }
-        }
-        return $plan;
-    }
-
-    /**
-     * Tính và cập nhật UserGrade cho một subject trong plan.
-     * UserGrade = max(original.subject_grade, retake.subject_grade)
-     */
-    private function syncUserGrade(int $userId, int $subjectId, $studyPlan): void
-    {
-        $origGrade   = null;
-        $retakeGrade = null;
-
-        foreach ($studyPlan->semesters as $sem) {
-            foreach ($sem->subjects as $ss) {
-                if ($ss->subject_id == $subjectId) {
-                    if (!$ss->is_retake && $ss->subject_grade !== null) {
-                        $origGrade = $ss->subject_grade;
-                    } elseif ($ss->is_retake && $ss->subject_grade !== null) {
-                        $retakeGrade = $ss->subject_grade;
-                    }
-                }
-            }
-        }
-
-        if ($origGrade === null && $retakeGrade === null) {
-            UserGrade::where('user_id', $userId)->where('subject_id', $subjectId)->delete();
-            return;
-        }
-
-        $bestGrade  = max(array_filter([$origGrade, $retakeGrade], fn($v) => $v !== null));
-        $bestStatus = $bestGrade >= 5.0 ? 'pass' : 'fail';  // khớp với SuggestionService
-
-        UserGrade::updateOrCreate(
-            ['user_id' => $userId, 'subject_id' => $subjectId],
-            ['grade' => $bestGrade, 'status' => $bestStatus]
-        );
-    }
-
-
-    public function updateGrade(Request $request)
-    {
-        $userId = $request->input('user_id') ?? Auth::id();
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
-        }
-
-        $request->validate([
-            'subject_id'      => 'required|exists:subjects,id',
-            'study_plan_id'   => 'required|exists:study_plans,id',
-            'grade'           => 'nullable|numeric|min:0|max:10',
-            'status'          => 'nullable|string|in:passed,failed',
-            'plan_subject_id' => 'nullable|integer', // ID của StudyPlanSubject row cụ thể
-        ]);
-
-        $subjectId     = $request->input('subject_id');
-        $grade         = $request->input('grade');  // null = xóa điểm
-        $planSubjectId = $request->input('plan_subject_id');
-
-        // Tải plan với toàn bộ subjects
-        $studyPlan = StudyPlan::with('semesters.subjects')->find($request->input('study_plan_id'));
-        if (!$studyPlan || $studyPlan->user_id != $userId) {
-            return response()->json(['error' => 'Study plan not found'], 404);
-        }
-
-        // Tìm row cụ thể cần cập nhật
-        $targetRow = null;
-        $fromSemesterIndex = null;
-        if ($planSubjectId) {
-            foreach ($studyPlan->semesters as $sem) {
-                foreach ($sem->subjects as $ss) {
-                    if ($ss->id == $planSubjectId) {
-                        $targetRow = $ss;
-                        $fromSemesterIndex = $sem->semester_index;
-                        break 2;
-                    }
-                }
-            }
-        }
-
-        // Nếu không tìm thấy row cụ thể, fallback: tìm row đầu tiên có subject_id (không phải retake)
-        if (!$targetRow) {
-            foreach ($studyPlan->semesters as $sem) {
-                foreach ($sem->subjects as $ss) {
-                    if ($ss->subject_id == $subjectId && !$ss->is_retake) {
-                        $targetRow = $ss;
-                        $fromSemesterIndex = $sem->semester_index;
-                        break 2;
-                    }
-                }
-            }
-        }
-
-        if (!$targetRow) {
-            return response()->json(['error' => 'Subject not found in plan'], 404);
-        }
-
-        // ── Cập nhật subject_grade cho row này ────────────────────────────────
-        $isCompleted = ($grade !== null && $grade >= 5.0);
-        $targetRow->update([
-            'subject_grade' => $grade,
-            'is_completed'  => $isCompleted,
-        ]);
-
-        // Reload để có dữ liệu mới
-        $studyPlan->load('semesters.subjects');
-
-        // ── Logic AUTO-CREATE / AUTO-DELETE retake ──────────────────────────
-        if (!$targetRow->is_retake) {
-            // Đây là môn GỐC
-            if ($grade !== null && $grade < 5.0) {
-                // Môn rớt → tự tạo retake ở kỳ tiếp theo (nếu chưa có)
-                $hasRetake = false;
-                foreach ($studyPlan->semesters as $sem) {
-                    foreach ($sem->subjects as $ss) {
-                        if ($ss->subject_id == $subjectId && $ss->is_retake) {
-                            $hasRetake = true;
-                            break 2;
-                        }
-                    }
-                }
-
-                if (!$hasRetake) {
-                    // Tìm kỳ tiếp theo
-                    $nextSem = $studyPlan->semesters
-                        ->where('semester_index', '>', $fromSemesterIndex)
-                        ->sortBy('semester_index')
-                        ->first();
-
-                    if (!$nextSem) {
-                        // Tạo kỳ mới nếu cần
-                        $maxIndex = $studyPlan->semesters->max('semester_index') ?? $fromSemesterIndex;
-                        $nextSem = StudyPlanSemester::create([
-                            'study_plan_id'    => $studyPlan->id,
-                            'semester_index'   => $maxIndex + 1,
-                            'expected_credits' => 0,
-                        ]);
-                    }
-
-                    StudyPlanSubject::create([
-                        'study_plan_semester_id' => $nextSem->id,
-                        'subject_id'             => $subjectId,
-                        'is_completed'           => false,
-                        'is_retake'              => true,
-                        'original_attempt_sem'   => $fromSemesterIndex,
-                        'original_grade'         => $grade,
-                        'subject_grade'          => null,
-                    ]);
-
-                    // Reload lại sau khi tạo retake
-                    $studyPlan->load('semesters.subjects');
-                }
-            } elseif ($grade === null || $grade >= 5.0) {
-                // Môn pass hoặc xóa điểm → tự xóa retake (nếu có)
-                foreach ($studyPlan->semesters as $sem) {
-                    foreach ($sem->subjects as $ss) {
-                        if ($ss->subject_id == $subjectId && $ss->is_retake) {
-                            $ss->delete();
-                        }
-                    }
-                }
-                $studyPlan->load('semesters.subjects');
-            }
-        }
-        // ── Sync UserGrade = max(orig.subject_grade, retake.subject_grade) ───────
-        $this->syncUserGrade($userId, $subjectId, $studyPlan);
-
-        // ── Trả về plan đã cập nhật + evaluation ─────────────────────────
-        $studyPlan->load('semesters.subjects');
-        $updatedPlan = $this->attachGrades($studyPlan, $userId);
-
-        $currentTargetSemesters = $studyPlan->target_semester_count ?? 8;
-        $currentSem = 1;
-        $gradedSubjectIds = UserGrade::where('user_id', $userId)->pluck('subject_id')->toArray();
-        foreach ($studyPlan->semesters as $sem) {
-            foreach ($sem->subjects as $ss) {
-                if (in_array($ss->subject_id, $gradedSubjectIds) && !$ss->is_retake) {
-                    if ($sem->semester_index >= $currentSem) {
-                        $currentSem = $sem->semester_index + 1;
-                    }
-                }
-            }
-        }
-
-        $evaluation = $this->evaluationService->evaluate(
-            $userId, $studyPlan->mode ?? 'normal', $currentTargetSemesters, $currentSem
-        );
-
-        return response()->json([
-            'success'    => true,
-            'evaluation' => $evaluation,
-            'data'       => $updatedPlan,  // trả về plan để FE re-render
-        ]);
-    }
-
-    public function adjust(Request $request)
-    {
-        $userId = $request->input('user_id') ?? Auth::id();
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
-
-        $request->validate([
-            'study_plan_id' => 'required|exists:study_plans,id',
-            'evaluation' => 'required|array'
-        ]);
-
-        $newPlan = $this->adjustmentService->adjustPlan($userId, $request->input('study_plan_id'), $request->input('evaluation'));
-        $newPlan = $this->attachGrades($newPlan, $userId);
+        $plan = StudyPlan::where('user_id', $userId)->where('is_active', true)->first();
 
         return response()->json([
             'success' => true,
-            'message' => 'Study plan adjusted successfully',
-            'data' => $newPlan
+            'data'    => $plan ? $this->attachGrades($plan, $userId) : null,
         ]);
     }
 
-    public function moveSubject(Request $request)
+    // ──────────────────────────────────────────────────────────────────────
+    // GET /api/v1/study-plans/saved
+    // ──────────────────────────────────────────────────────────────────────
+    public function getSavedPlans()
     {
-        $userId = $request->input('user_id') ?? Auth::id();
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
+        $plans = StudyPlan::where('user_id', Auth::id())
+            ->where('is_saved', true)
+            ->orderByDesc('updated_at')
+            ->get(['id', 'name', 'mode', 'target_semester_count', 'is_active', 'updated_at']);
 
-        $request->validate([
-            'study_plan_id' => 'required|exists:study_plans,id',
-            'subject_id' => 'required|exists:subjects,id',
-            'target_semester_index' => 'required|integer|min:1'
+        return response()->json(['success' => true, 'data' => $plans]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // GET /api/v1/study-plans/{id}/load
+    // ──────────────────────────────────────────────────────────────────────
+    public function loadPlan($id)
+    {
+        $userId = Auth::id();
+        $plan   = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
+
+        return response()->json(['success' => true, 'data' => $this->attachGrades($plan, $userId)]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/{id}/save
+    // ──────────────────────────────────────────────────────────────────────
+    public function savePlan($id, Request $request)
+    {
+        $plan = StudyPlan::where('id', $id)->where('user_id', Auth::id())->firstOrFail();
+        $plan->update([
+            'is_saved' => true,
+            'name'     => $request->filled('name') ? $request->input('name') : $plan->name,
         ]);
 
-        $plan = StudyPlan::with(['semesters.subjects.subject.prerequisites', 'semesters.subjects.subject.corequisites'])->where('id', $request->input('study_plan_id'))->where('user_id', $userId)->first();
-        if (!$plan) {
-            return response()->json(['error' => 'Study plan not found'], 404);
+        return response()->json(['success' => true, 'message' => 'Đã lưu kế hoạch.']);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // DELETE /api/v1/study-plans/{id}
+    // ──────────────────────────────────────────────────────────────────────
+    public function destroy($id)
+    {
+        $plan = StudyPlan::where('id', $id)->where('user_id', Auth::id())->firstOrFail();
+        $plan->delete();
+
+        return response()->json(['success' => true, 'message' => 'Đã xóa kế hoạch.']);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/{id}/change-mode
+    // ──────────────────────────────────────────────────────────────────────
+    public function changeMode(Request $request, $id)
+    {
+        $request->validate(['mode' => 'required|in:slow,normal,fast']);
+        $userId = Auth::id();
+
+        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
+
+        if ($plan->mode === $request->mode) {
+            return response()->json(['success' => false, 'message' => 'Chế độ này đang được kích hoạt.'], 422);
         }
 
-        $targetSemesterIndex = $request->input('target_semester_index');
-        $subjectId = $request->input('subject_id');
+        $plan->update(['mode' => $request->mode]);
 
-        // Tìm kiếm môn học trong plan
+        // Tìm học kỳ hiện tại (kỳ đầu tiên chưa hoàn thành)
+        $plan->load('semesters.subjects');
+        $currentSem = $this->detectCurrentSemester($plan, $userId);
+
+        $updated = $this->planService->redistributeFrom($plan, $currentSem);
+        $updated = $this->attachGrades($updated, $userId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã đổi chế độ và rải lại lộ trình.',
+            'data'    => $updated,
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/update-grade
+    // ──────────────────────────────────────────────────────────────────────
+    public function updateGrade(Request $request)
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $request->validate([
+            'study_plan_id'   => 'required|exists:study_plans,id',
+            'subject_id'      => 'required|exists:subjects,id',
+            'grade'           => 'nullable|numeric|min:0|max:10',
+            'plan_subject_id' => 'nullable|integer',
+        ]);
+
+        $subjectId     = (int)$request->input('subject_id');
+        $grade         = $request->input('grade'); // null = xóa điểm
+        $planSubjectId = $request->input('plan_subject_id');
+
+        $studyPlan = StudyPlan::with('semesters.subjects')
+            ->where('id', $request->input('study_plan_id'))
+            ->where('user_id', $userId)
+            ->firstOrFail();
+
+        // Tìm row cần cập nhật
+        $targetRow         = null;
+        $fromSemesterIndex = null;
+
+        foreach ($studyPlan->semesters as $sem) {
+            foreach ($sem->subjects as $ss) {
+                if ($planSubjectId && $ss->id == $planSubjectId) {
+                    $targetRow = $ss; $fromSemesterIndex = $sem->semester_index; break 2;
+                }
+                if (!$planSubjectId && $ss->subject_id == $subjectId && !$ss->is_retake) {
+                    $targetRow = $ss; $fromSemesterIndex = $sem->semester_index;
+                }
+            }
+        }
+
+        if (!$targetRow) {
+            return response()->json(['error' => 'Không tìm thấy môn trong kế hoạch.'], 404);
+        }
+
+        $targetRow->update([
+            'subject_grade' => $grade,
+            'is_completed'  => $grade !== null && $grade >= 5.0,
+        ]);
+
+        $studyPlan->load('semesters.subjects');
+
+        // Chỉ đồng bộ UserGrade, không tự động tạo/xóa môn học lại
+        $this->syncUserGrade($userId, $subjectId, $studyPlan);
+
+        $updatedPlan = $this->attachGrades($studyPlan->load('semesters.subjects'), $userId);
+        $currentSem  = $this->detectCurrentSemester($updatedPlan, $userId);
+        $evaluation  = $this->evaluationService->evaluate(
+            $userId,
+            $studyPlan->mode ?? 'normal',
+            $studyPlan->target_semester_count ?? 8,
+            $currentSem
+        );
+
+        return response()->json(['success' => true, 'data' => $updatedPlan, 'evaluation' => $evaluation]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/move-subject  (drag & drop)
+    // ──────────────────────────────────────────────────────────────────────
+    public function moveSubject(Request $request)
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $request->validate([
+            'study_plan_id'         => 'required|exists:study_plans,id',
+            'subject_id'            => 'required|exists:subjects,id',
+            'target_semester_index' => 'required|integer|min:1',
+        ]);
+
+        $plan = StudyPlan::with(['semesters.subjects.subject.prerequisites', 'semesters.subjects.subject.corequisites'])
+            ->where('id', $request->input('study_plan_id'))
+            ->where('user_id', $userId)
+            ->firstOrFail();
+
+        $subjectId   = (int)$request->input('subject_id');
+        $targetSemIdx = (int)$request->input('target_semester_index');
+
+        // Tìm môn cần di chuyển và lập map vị trí hiện tại
         $sourcePlanSubject = null;
-        $sourceSemesterIndex = null;
-        $allPlanSubjects = [];
-        $targetSemesterId = null;
+        $subjectSemMap     = []; // [subject_id => semester_index]
+        $targetSemId       = null;
 
         foreach ($plan->semesters as $sem) {
-            if ($sem->semester_index == $targetSemesterIndex) {
-                $targetSemesterId = $sem->id;
-            }
+            if ($sem->semester_index === $targetSemIdx) $targetSemId = $sem->id;
             foreach ($sem->subjects as $ss) {
-                $allPlanSubjects[$ss->subject_id] = $sem->semester_index;
-                if ($ss->subject_id == $subjectId) {
+                $subjectSemMap[$ss->subject_id] = $sem->semester_index;
+                if ($ss->subject_id === $subjectId && !$sourcePlanSubject) {
                     $sourcePlanSubject = $ss;
-                    $sourceSemesterIndex = $sem->semester_index;
                 }
             }
         }
 
         if (!$sourcePlanSubject) {
-            return response()->json(['error' => 'Subject not found in plan'], 404);
+            return response()->json(['error' => 'Môn không tồn tại trong kế hoạch.'], 404);
         }
-
         if ($sourcePlanSubject->is_completed) {
-            return response()->json(['error' => 'Không thể di chuyển môn đã hoàn thành'], 400);
+            return response()->json(['error' => 'Không thể di chuyển môn đã hoàn thành.'], 422);
         }
 
-        if (!$targetSemesterId) {
-            // Nếu học kỳ đích chưa có, tạo mới
-            $targetSemester = \App\Models\StudyPlanSemester::create([
-                'study_plan_id' => $plan->id,
-                'semester_index' => $targetSemesterIndex,
-                'expected_credits' => 0
-            ]);
-            $targetSemesterId = $targetSemester->id;
-        }
-
-        // Validate Prerequisites
+        // Validate tiên quyết: đảm bảo tiên quyết ở kỳ nhỏ hơn target
         $subject = $sourcePlanSubject->subject;
-        foreach ($subject->prerequisites as $prereq) {
-            if (isset($allPlanSubjects[$prereq->id])) {
-                $prereqSemIndex = $allPlanSubjects[$prereq->id];
-                if ($targetSemesterIndex <= $prereqSemIndex) {
-                    return response()->json([
-                        'error' => "Môn tiên quyết \"{$prereq->name}\" đang ở Học kỳ {$prereqSemIndex}. Không thể học môn này ở Học kỳ {$targetSemesterIndex}."
-                    ], 400);
-                }
-            } else {
-                // Môn tiên quyết không có trong plan (có thể đã qua hoặc chưa thêm)
-                // Ta kiểm tra UserGrade xem đã đậu chưa
-                $hasPassed = UserGrade::where('user_id', $userId)
+        foreach ($subject->prerequisites ?? [] as $prereq) {
+            $prereqSem = $subjectSemMap[$prereq->id] ?? null;
+
+            // Chưa có trong plan → kiểm tra UserGrade
+            if ($prereqSem === null) {
+                $passed = UserGrade::where('user_id', $userId)
                     ->where('subject_id', $prereq->id)
-                    ->where('grade', '>', 5)
-                    ->exists();
-                if (!$hasPassed) {
+                    ->where('grade', '>', 5.0)->exists();
+                if (!$passed) {
                     return response()->json([
-                        'error' => "Chưa hoàn thành môn tiên quyết: {$prereq->name}"
-                    ], 400);
+                        'error' => "Chưa hoàn thành tiên quyết: «{$prereq->name}»."
+                    ], 422);
                 }
+            } elseif ($prereqSem >= $targetSemIdx) {
+                return response()->json([
+                    'error' => "Tiên quyết «{$prereq->name}» đang ở Học kỳ {$prereqSem} — không thể kéo môn này lên Học kỳ {$targetSemIdx}."
+                ], 422);
             }
         }
 
-        // Gather corequisites to move together
-        $subjectsToMove = [$sourcePlanSubject];
-        foreach ($subject->corequisites as $coreq) {
-            foreach ($plan->semesters as $sem) {
-                foreach ($sem->subjects as $ss) {
-                    if ($ss->subject_id == $coreq->id && !$ss->is_completed) {
-                        $subjectsToMove[] = $ss;
-                    }
-                }
+        // Tạo kỳ đích nếu chưa có
+        if (!$targetSemId) {
+            $targetSem   = StudyPlanSemester::create([
+                'study_plan_id'    => $plan->id,
+                'semester_index'   => $targetSemIdx,
+                'expected_credits' => 0,
+            ]);
+            $targetSemId = $targetSem->id;
+        }
+
+        $sourcePlanSubject->update(['study_plan_semester_id' => $targetSemId]);
+
+        // Kéo corequisites theo cùng học kỳ (BFS để xử lý chain A↔B↔C)
+        $planSubjectMap  = []; // [subject_id => StudyPlanSubject]
+        $plan->load('semesters.subjects.subject.corequisites');
+        foreach ($plan->semesters as $sem) {
+            foreach ($sem->subjects as $ss) {
+                $planSubjectMap[$ss->subject_id] = $ss;
             }
         }
 
-        // Thực hiện di chuyển
-        foreach ($subjectsToMove as $ss) {
-            $ss->update(['study_plan_semester_id' => $targetSemesterId]);
+        $movedCoreqNames = [];
+        $coQueue  = [$subjectId];
+        $coPulled = [$subjectId => true];
+
+        while (!empty($coQueue)) {
+            $checkId = array_shift($coQueue);
+            $checkSs = $planSubjectMap[$checkId] ?? null;
+            if (!$checkSs) continue;
+
+            foreach ($checkSs->subject->corequisites ?? [] as $coreq) {
+                if (isset($coPulled[$coreq->id])) continue;
+                $coPulled[$coreq->id] = true;
+
+                $coreqSs = $planSubjectMap[$coreq->id] ?? null;
+                if (!$coreqSs || $coreqSs->is_completed) continue; // bỏ qua nếu không có trong plan hoặc đã pass
+
+                $coreqSs->update(['study_plan_semester_id' => $targetSemId]);
+                $movedCoreqNames[] = $coreq->name;
+                $coQueue[]         = $coreq->id;
+            }
         }
 
-        // Cập nhật lại expected_credits
+        // Cập nhật expected_credits cho tất cả kỳ
         $plan->load('semesters.subjects.subject');
         foreach ($plan->semesters as $sem) {
-            $credits = $sem->subjects->sum(function ($ss) {
-                return $ss->subject ? $ss->subject->credits : 0;
-            });
-            $sem->update(['expected_credits' => $credits]);
+            $sem->update(['expected_credits' => $sem->subjects->sum(fn($ss) => $ss->subject?->credits ?? 0)]);
         }
 
-        $plan = $this->attachGrades($plan, $userId);
+        $message = 'Đã di chuyển môn học.';
+        if (!empty($movedCoreqNames)) {
+            $message .= ' Môn song hành đi theo: ' . implode(', ', $movedCoreqNames) . '.';
+        }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Di chuyển môn học thành công.',
-            'data' => $plan
+            'success'          => true,
+            'message'          => $message,
+            'coreqs_moved'     => $movedCoreqNames,
+            'data'             => $this->attachGrades($plan->load('semesters.subjects.subject'), $userId),
         ]);
     }
 
-    /**
-     * Thêm môn học lại (retake) vào học kỳ tiếp theo trong kế hoạch.
-     * Môn gốc ở kỳ cũ giữ nguyên — chỉ thêm bản copy với is_retake=true.
-     *
-     * POST /api/v1/study-plans/add-retake
-     */
-    public function addRetake(Request $request)
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/apply-suggestions
+    // ──────────────────────────────────────────────────────────────────────
+    public function applySuggestions(Request $request)
     {
-        $userId = $request->input('user_id') ?? Auth::id();
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
 
         $request->validate([
-            'study_plan_id'   => 'required|exists:study_plans,id',
-            'subject_id'      => 'required|integer',
-            'from_semester'   => 'required|integer|min:1',
-            'original_grade'  => 'nullable|numeric|min:0|max:10',
+            'study_plan_id'         => 'required|exists:study_plans,id',
+            'subject_ids'           => 'required|array|min:1',
+            'subject_ids.*'         => 'integer|exists:subjects,id',
+            'target_semester_index' => 'required|integer|min:1',
         ]);
 
-        $plan = StudyPlan::with(['semesters.subjects'])
+        $plan = StudyPlan::where('id', $request->input('study_plan_id'))
+            ->where('user_id', $userId)
+            ->firstOrFail();
+
+        $updated = $this->planService->redistributeFrom(
+            $plan,
+            (int)$request->input('target_semester_index'),
+            $request->input('subject_ids')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã áp dụng gợi ý và rải lại lộ trình.',
+            'data'    => $this->attachGrades($updated, $userId),
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/add-retake
+    // ──────────────────────────────────────────────────────────────────────
+    public function addRetake(Request $request)
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $request->validate([
+            'study_plan_id'  => 'required|exists:study_plans,id',
+            'subject_id'     => 'required|integer|exists:subjects,id',
+            'from_semester'  => 'required|integer|min:1',
+            'original_grade' => 'nullable|numeric|min:0|max:10',
+        ]);
+
+        $plan = StudyPlan::with('semesters.subjects')
             ->where('id', $request->study_plan_id)
             ->where('user_id', $userId)
-            ->first();
+            ->firstOrFail();
 
-        if (!$plan) {
-            return response()->json(['error' => 'Study plan not found'], 404);
-        }
+        $fromSem   = (int)$request->from_semester;
+        $subjectId = (int)$request->subject_id;
 
-        $fromSem    = (int) $request->from_semester;
-        $subjectId  = (int) $request->subject_id;
-        $origGrade  = $request->original_grade;
-
-        // Tìm học kỳ tiếp theo (from_semester + 1 trở đi) có trong plan
-        $targetSem = $plan->semesters
-            ->where('semester_index', '>', $fromSem)
-            ->sortBy('semester_index')
-            ->first();
-
-        if (!$targetSem) {
-            // Nếu không có kỳ sau thì tạo mới
-            $maxIndex = $plan->semesters->max('semester_index') ?? $fromSem;
-            $targetSem = StudyPlanSemester::create([
+        // Tìm kỳ tiếp theo, tạo mới nếu cần
+        $targetSem = $plan->semesters->where('semester_index', '>', $fromSem)->sortBy('semester_index')->first()
+            ?? StudyPlanSemester::create([
                 'study_plan_id'  => $plan->id,
-                'semester_index' => $maxIndex + 1,
+                'semester_index' => ($plan->semesters->max('semester_index') ?? $fromSem) + 1,
             ]);
-        }
 
-        // Tránh thêm trùng nếu đã có retake cho môn này ở kỳ đó
-        $existing = StudyPlanSubject::where('study_plan_semester_id', $targetSem->id)
-            ->where('subject_id', $subjectId)
-            ->where('is_retake', true)
-            ->first();
+        // Tránh tạo retake trùng
+        $exists = StudyPlanSubject::where('study_plan_semester_id', $targetSem->id)
+            ->where('subject_id', $subjectId)->where('is_retake', true)->exists();
 
-        if ($existing) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Môn này đã được thêm vào kế hoạch học lại ở kỳ ' . $targetSem->semester_index,
-            ], 422);
+        if ($exists) {
+            return response()->json(['success' => false, 'message' => 'Môn này đã có trong kế hoạch học lại.'], 422);
         }
 
         StudyPlanSubject::create([
@@ -609,174 +442,148 @@ class StudyPlanController extends Controller
             'is_completed'           => false,
             'is_retake'              => true,
             'original_attempt_sem'   => $fromSem,
-            'original_grade'         => $origGrade,
+            'original_grade'         => $request->original_grade,
         ]);
 
-        // Reload plan với đầy đủ thông tin
         $plan->load('semesters.subjects.subject');
-        $plan = $this->attachGrades($plan, $userId);
-
         return response()->json([
-            'success' => true,
-            'message' => 'Đã thêm môn học lại vào học kỳ ' . $targetSem->semester_index . '.',
-            'data'    => $plan,
+            'success'         => true,
+            'message'         => "Đã thêm học lại vào Học kỳ {$targetSem->semester_index}.",
+            'data'            => $this->attachGrades($plan, $userId),
             'retake_semester' => $targetSem->semester_index,
         ]);
     }
 
-    public function applySuggestions(Request $request)
+    // ──────────────────────────────────────────────────────────────────────
+    // PRIVATE HELPERS
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Gắn thêm thông tin điểm, tiên quyết, trạng thái vào từng StudyPlanSubject.
+     * Tránh N+1 bằng cách cache Subject::all() và UserGrades ra ngoài vòng lặp.
+     */
+    private function attachGrades(StudyPlan $plan, int $userId): StudyPlan
     {
-        $userId = $request->input('user_id') ?? Auth::id();
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
+        $plan->loadMissing('semesters.subjects.subject.prerequisites', 'semesters.subjects.subject.corequisites', 'semesters.subjects.subject.relatedRelations');
 
-        $request->validate([
-            'study_plan_id'        => 'required|exists:study_plans,id',
-            'subject_ids'          => 'required|array',
-            'target_semester_index'=> 'required|integer|min:1',
-        ]);
+        $userGrades     = UserGrade::where('user_id', $userId)->pluck('grade', 'subject_id')->toArray();
+        $passedSet      = array_filter($userGrades, fn($g) => $g !== null && $g > 5.0);
+        $passedIds      = array_keys($passedSet);
 
-        $plan = StudyPlan::with(['semesters.subjects'])
-            ->where('id', $request->input('study_plan_id'))
-            ->where('user_id', $userId)
-            ->first();
+        // Cache tất cả Subject một lần cho implicit prerequisites
+        $allSubjectsMap = Subject::all()->keyBy('id');
 
-        if (!$plan) {
-            return response()->json(['error' => 'Study plan not found'], 404);
-        }
+        foreach ($plan->semesters as $sem) {
+            foreach ($sem->subjects as $ss) {
+                if (!$ss->subject) continue;
 
-        $targetSemesterIndex = $request->input('target_semester_index');
-        $subjectIds          = $request->input('subject_ids');
+                $ss->grade        = $ss->subject_grade;
+                $ss->is_completed = $ss->grade !== null && $ss->grade > 5.0;
+                $ss->is_failed    = $ss->grade !== null && $ss->grade <= 5.0;
 
-        // Lấy các môn có grade = failed để nhận diện retake
-        $failedGrades = UserGrade::where('user_id', $userId)
-            ->whereIn('subject_id', $subjectIds)
-            ->where('status', 'failed')
-            ->get()
-            ->keyBy('subject_id');
+                // Danh sách tiên quyết chi tiết (để hiển thị trên card)
+                $ss->subject->prerequisites_info = $this->buildPrereqDetails($ss->subject, $passedIds, $allSubjectsMap);
 
-        // Áp dụng gợi ý (thêm vào plan + rải lại)
-        $studyPlanService = app(\App\Services\StudyPlanService::class);
-        $plan = $studyPlanService->applySuggestionsAndRedistribute($plan->id, $subjectIds, $targetSemesterIndex);
-
-        // ── Nhận diện môn rớt để đánh dấu is_retake và gán original_grade ────
-        if ($failedGrades->isNotEmpty()) {
-
-            // Tìm kỳ gốc của từng môn rớt trong plan
-            $plan->load('semesters.subjects');
-
-            // Map: subject_id => semester_index của lần học gốc
-            $originalSemMap = [];
-            foreach ($plan->semesters as $sem) {
-                foreach ($sem->subjects as $ss) {
-                    if (isset($failedGrades[$ss->subject_id]) && !$ss->is_retake) {
-                        // Kỳ thấp hơn target → đây là kỳ gốc
-                        if ($sem->semester_index < $targetSemesterIndex) {
-                            $originalSemMap[$ss->subject_id] = $sem->semester_index;
-                        }
-                    }
-                }
-            }
-
-            $targetSem = $plan->semesters
-                ->where('semester_index', $targetSemesterIndex)
-                ->first();
-
-            if ($targetSem) {
-                foreach ($failedGrades as $subjectId => $failedGrade) {
-                    StudyPlanSubject::where('study_plan_semester_id', $targetSem->id)
-                        ->where('subject_id', $subjectId)
-                        ->where('is_retake', false)
-                        ->update([
-                            'is_retake'            => true,
-                            'original_grade'       => $failedGrade->grade,
-                            'original_attempt_sem' => $originalSemMap[$subjectId] ?? null,
-                            'subject_grade'        => null,  // điểm retake trống, chờ nhập
-                        ]);
-                }
+                // Môn có nhiều môn phụ thuộc vào nó → ưu tiên cao
+                $dependentCount = $ss->subject->relatedRelations->where('type', 'prerequisite')->count();
+                $ss->is_highly_recommended = $dependentCount >= 2
+                    || in_array($ss->subject->requirement_type, ['completed_basic', 'completed_major']);
             }
         }
 
-        $plan->load('semesters.subjects');
-        $plan = $this->attachGrades($plan, $userId);
-
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Áp dụng gợi ý và rải môn thành công.',
-            'data'    => $plan,
-        ]);
+        return $plan;
     }
 
     /**
-     * Lấy kế hoạch học tập đang hoạt động (is_active = true) của sinh viên.
-     * Đảm bảo mỗi sinh viên chỉ có 1 kế hoạch active tại mọi thời điểm.
-     *
-     * GET /api/v1/study-plans/active
+     * Build danh sách tiên quyết (tường minh + nhóm) cho một môn.
+     * Dùng $allSubjectsMap đã cache sẵn, không query DB thêm.
      */
-    public function getActivePlan(Request $request)
+    private function buildPrereqDetails(object $subject, array $passedIds, \Illuminate\Support\Collection $allSubjectsMap): array
     {
-        $userId = $request->input('user_id') ?? Auth::id();
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
+        $details = [];
+
+        // Tiên quyết tường minh (phải học trước)
+        foreach ($subject->prerequisites ?? [] as $prereq) {
+            $details[$prereq->id] = [
+                'id'        => $prereq->id,
+                'name'      => $prereq->name,
+                'is_passed' => in_array($prereq->id, $passedIds),
+                'type'      => 'explicit',
+            ];
         }
 
-        $plan = StudyPlan::where('user_id', $userId)
-            ->where('is_active', true)
-            ->first();
-
-        if (!$plan) {
-            // Fallback: không có active plan → trả về null (FE sẽ hiển thị wizard tạo mới)
-            return response()->json(['success' => true, 'data' => null]);
+        // Song hành (phải học cùng kỳ)
+        foreach ($subject->corequisites ?? [] as $coreq) {
+            $details['co_' . $coreq->id] = [
+                'id'        => $coreq->id,
+                'name'      => $coreq->name,
+                'is_passed' => in_array($coreq->id, $passedIds),
+                'type'      => 'corequisite',
+            ];
         }
 
-        $this->attachGrades($plan, $userId);
+        // Tiên quyết nhóm
+        $req = $subject->requirement_type ?? null;
+        if ($req && $req !== 'none') {
+            $groupLabel = match ($req) {
+                'completed_basic'       => 'Đại cương',
+                'completed_major'       => 'Cơ sở ngành',
+                'completed_specialized' => 'Chuyên ngành',
+                'completed_all'         => 'Toàn bộ',
+                default                 => $req,
+            };
+            $details["_group_{$req}"] = [
+                'id'        => null,
+                'name'      => "Hoàn thành khối {$groupLabel}",
+                'is_passed' => false, // simplified — không check từng môn trong group ở đây
+                'type'      => 'group',
+            ];
+        }
 
-        return response()->json(['success' => true, 'data' => $plan]);
+        return array_values($details);
     }
 
     /**
-     * Đổi chế độ học tập cho một kế hoạch hiện có (không tạo mới)
-     * và tái phân bổ môn học từ học kỳ hiện tại trở đi.
-     *
-     * POST /api/v1/study-plans/{id}/change-mode
+     * Đồng bộ UserGrade từ điểm trong kế hoạch.
      */
-    public function changeMode(Request $request, $id)
+    private function syncUserGrade(int $userId, int $subjectId, StudyPlan $plan): void
     {
-        $request->validate([
-            'mode' => 'required|in:slow,normal,fast'
-        ]);
-
-        $userId = Auth::id();
-        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->first();
-
-        if (!$plan) {
-            return response()->json(['success' => false, 'message' => 'Study plan not found'], 404);
+        $grade = null;
+        foreach ($plan->semesters as $sem) {
+            foreach ($sem->subjects as $ss) {
+                if ($ss->subject_id === $subjectId && $ss->subject_grade !== null) {
+                    $grade = $ss->subject_grade;
+                    break 2;
+                }
+            }
         }
 
-        // Cập nhật mode
-        $plan->update(['mode' => $request->mode]);
-
-        // Cập nhật target_semester_count tương ứng với mode mới nếu muốn
-        $currentSem = 1; // Mặc định nếu chưa có grade
-        $progressService = new \App\Services\ProgressService();
-        $progress = $progressService->evaluateProgress($userId);
-        if ($progress && isset($progress['completed_semesters'])) {
-             $currentSem = $progress['completed_semesters'] + 1;
+        if ($grade === null) {
+            UserGrade::where('user_id', $userId)->where('subject_id', $subjectId)->delete();
+            return;
         }
 
-        // Gọi service tái phân bổ môn học
-        $plan = $this->studyPlanService->applySuggestionsAndRedistribute($plan->id, [], $currentSem);
+        UserGrade::updateOrCreate(
+            ['user_id' => $userId, 'subject_id' => $subjectId],
+            ['grade' => $grade, 'status' => $grade >= 5.0 ? 'pass' : 'fail']
+        );
+    }
 
-        // Nạp lại dữ liệu
-        $plan = $this->attachGrades($plan, $userId);
+    /**
+     * Tìm học kỳ hiện tại = học kỳ đầu tiên còn môn chưa hoàn thành.
+     */
+    private function detectCurrentSemester(StudyPlan $plan, int $userId): int
+    {
+        // Ưu tiên SemesterHistory
+        $lastHistory = \App\Models\SemesterHistory::where('user_id', $userId)->max('semester_number');
+        if ($lastHistory) return (int)$lastHistory + 1;
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã thay đổi chế độ học tập và rải lại môn thành công.',
-            'data'    => $plan
-        ]);
+        // Fallback: học kỳ đầu tiên có môn chưa done
+        foreach ($plan->semesters->sortBy('semester_index') as $sem) {
+            $hasIncomplete = $sem->subjects->some(fn($ss) => !$ss->is_completed && !$ss->is_retake);
+            if ($hasIncomplete) return (int)$sem->semester_index;
+        }
+
+        return 1;
     }
 }
-
