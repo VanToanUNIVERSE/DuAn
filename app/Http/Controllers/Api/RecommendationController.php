@@ -20,12 +20,16 @@ class RecommendationController extends Controller
     {
         // For testing, user_id can be passed, otherwise get logged in user
         $userId = $request->input('user_id') ?? Auth::id();
-        
+
         if (!$userId) {
             return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
         }
 
-        $recommendations = $this->recommendationService->getRecommendations($userId);
+        // Get current semester and study plan context (optional)
+        $currentSemester = $request->input('current_semester');
+        $studyPlanId = $request->input('study_plan_id');
+
+        $recommendations = $this->recommendationService->getRecommendations($userId, $currentSemester, $studyPlanId);
 
         return response()->json([
             'success' => true,

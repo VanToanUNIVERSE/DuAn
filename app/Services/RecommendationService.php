@@ -12,9 +12,11 @@ class RecommendationService
      * Generate subject recommendations for a given user.
      *
      * @param int $userId
+     * @param int|null $currentSemester
+     * @param int|null $studyPlanId
      * @return array
      */
-    public function getRecommendations(int $userId): array
+    public function getRecommendations(int $userId, ?int $currentSemester = null, ?int $studyPlanId = null): array
     {
         // 1. Get user's grades
         $userGrades = UserGrade::where('user_id', $userId)->get();
@@ -31,14 +33,36 @@ class RecommendationService
         $user = \App\Models\User::find($userId);
         $allSubjects = $this->getSubjectsForUserCurriculum($user);
 
-        $currentSemester = 1;
-        foreach ($gradedSubjectIds as $pid) {
-            $sub = $allSubjects->firstWhere('id', $pid);
-            if ($sub && isset($sub->assigned_semester_index)) {
-                if ($sub->assigned_semester_index >= $currentSemester) {
-                    $currentSemester = $sub->assigned_semester_index + 1;
+        if (!$currentSemester) {
+            $currentSemester = 1;
+            foreach ($gradedSubjectIds as $pid) {
+                $sub = $allSubjects->firstWhere('id', $pid);
+                if ($sub && isset($sub->assigned_semester_index)) {
+                    if ($sub->assigned_semester_index >= $currentSemester) {
+                        $currentSemester = $sub->assigned_semester_index + 1;
+                    }
                 }
             }
+        }
+
+        // Get currently retaking subjects from active study plan
+        $currentRetakeSubjectIds = [];
+        $activePlan = null;
+        if ($studyPlanId) {
+            $activePlan = \App\Models\StudyPlan::find($studyPlanId);
+        } else {
+            $activePlan = \App\Models\StudyPlan::where('user_id', $userId)
+                ->where('is_active', true)
+                ->first();
+        }
+
+        if ($activePlan) {
+            $currentRetakeSubjectIds = \App\Models\StudyPlanSubject::whereHas('semester', function ($query) use ($activePlan) {
+                $query->where('study_plan_id', $activePlan->id);
+            })
+            ->where('is_retake', true)
+            ->pluck('subject_id')
+            ->toArray();
         }
 
         $recommendations = [];
@@ -117,8 +141,8 @@ class RecommendationService
             $score = 0;
             $reasons = [];
 
-            // +50 if it's a failed subject (Retake priority)
-            if (in_array($subject->id, $failedSubjectIds)) {
+            // +50 if it's a currently retaking subject in active plan
+            if (in_array($subject->id, $currentRetakeSubjectIds)) {
                 $score += 50;
                 $reasons[] = 'Học lại môn đã rớt';
             }
