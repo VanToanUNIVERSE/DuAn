@@ -143,6 +143,7 @@ class StudyPlanService
                             'study_plan_semester_id' => $semester->id,
                             'subject_id' => $item->subject_id,
                             'is_completed' => $item->status === 'pass',
+                            'subject_grade' => $item->grade,
                         ]);
                         $plannedSubjectIds[] = $item->subject_id;
                         $historySubjectIds[] = $item->subject_id;
