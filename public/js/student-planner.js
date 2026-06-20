@@ -2231,10 +2231,10 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
         showSaveIndicator('saved', grade === null ? 'Đã xóa điểm' : 'Đã lưu điểm');
 
         if (grade === null) {
-            // Khi xóa điểm: CHỈ reload lại plan để cập nhật trạng thái pass/fail
-            // KHÔNG gọi adjustStudyPlan() — tránh tái tạo toàn bộ lộ trình vì lý do vô lý
+            // Khi xóa điểm: reload plan + tái đánh giá cảnh báo học vụ
             fetchStudyPlans().then(() => {
                 fetchSuggestions();
+                fetchProgress();   // Tái sync cảnh báo — xóa warning cũ không còn hợp lệ
                 updateEarnedCredits();
                 updateCreditStats();
             });

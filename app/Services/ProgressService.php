@@ -118,7 +118,9 @@ class ProgressService
     }
 
     /**
-     * Generate warnings based on student progress
+     * Generate warnings based on student progress.
+     * Uses delete-when-resolved / create-when-triggered pattern
+     * to avoid stale warnings persisting after grades change.
      *
      * @param int $userId
      * @return \Illuminate\Database\Eloquent\Collection
@@ -126,28 +128,51 @@ class ProgressService
     public function generateWarnings(int $userId)
     {
         $progress = $this->evaluateProgress($userId);
-        
-        // 1. GPA Warning
+
+        // ── 1. GPA Warning ────────────────────────────────────────────
         if ($progress['current_gpa'] > 0 && $progress['current_gpa'] < 2.0) {
-            Warning::firstOrCreate([
-                'user_id' => $userId,
-                'type' => 'low_gpa',
-            ], [
-                'message' => 'Cảnh báo: Điểm trung bình tích lũy (GPA) của bạn đang dưới mức 2.0. Bạn có nguy cơ bị buộc thôi học. Hãy liên hệ cố vấn học tập ngay.',
-            ]);
+            Warning::updateOrCreate(
+                ['user_id' => $userId, 'type' => 'low_gpa'],
+                [
+                    'message'  => 'Cảnh báo: Điểm trung bình tích lũy (GPA) của bạn đang dưới mức 2.0. Bạn có nguy cơ bị buộc thôi học. Hãy liên hệ cố vấn học tập ngay.',
+                    'is_read'  => false,
+                ]
+            );
+        } else {
+            // GPA đã cải thiện → xóa cảnh báo cũ
+            Warning::where('user_id', $userId)->where('type', 'low_gpa')->delete();
         }
 
-        // 2. Debt Warning
+        // ── 2. Debt (Nợ môn) Warning ──────────────────────────────────
         if ($progress['failed_subjects_count'] >= 3) {
-            Warning::firstOrCreate([
-                'user_id' => $userId,
-                'type' => 'debt',
-            ], [
-                'message' => "Cảnh báo: Bạn đang nợ {$progress['failed_subjects_count']} môn. Điều này có thể ảnh hưởng nghiêm trọng đến tiến độ tốt nghiệp.",
-            ]);
+            Warning::updateOrCreate(
+                ['user_id' => $userId, 'type' => 'debt'],
+                [
+                    'message' => "Cảnh báo: Bạn đang nợ {$progress['failed_subjects_count']} môn. Điều này có thể ảnh hưởng nghiêm trọng đến tiến độ tốt nghiệp.",
+                    'is_read' => false,
+                ]
+            );
+        } else {
+            // Đã xóa điểm rớt / cải thiện → xóa cảnh báo nợ môn
+            Warning::where('user_id', $userId)->where('type', 'debt')->delete();
         }
 
-        // Return unread warnings
+        // ── 3. Late graduation warning ────────────────────────────────
+        $neededPerSem = $progress['needed_credits_per_sem'] ?? 0;
+        if ($neededPerSem > 25) {
+            $lateBy = $progress['remaining_semesters'] - ($progress['remaining_credits'] > 0 ? 8 : 0);
+            Warning::updateOrCreate(
+                ['user_id' => $userId, 'type' => 'late_graduation'],
+                [
+                    'message' => "Dựa trên tiến độ hiện tại, bạn có nguy cơ trễ tốt nghiệp. Chỉ cần {$neededPerSem} TC/kỳ để tốt nghiệp trong {$progress['remaining_semesters']} học kỳ tới.",
+                    'is_read' => false,
+                ]
+            );
+        } else {
+            Warning::where('user_id', $userId)->where('type', 'late_graduation')->delete();
+        }
+
+        // Trả về các cảnh báo chưa đọc hiện tại (đã được sync với thực tế)
         return Warning::where('user_id', $userId)->where('is_read', false)->get();
     }
 }
