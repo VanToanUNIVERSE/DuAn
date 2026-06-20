@@ -36,6 +36,7 @@ Route::prefix('v1')->middleware('web')->group(function () {
         Route::post('/adjust',       [\App\Http\Controllers\Api\StudyPlanController::class, 'adjust']);
         Route::post('/move-subject', [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
         Route::post('/apply-suggestions', [\App\Http\Controllers\Api\StudyPlanController::class, 'applySuggestions']);
+        Route::post('/add-retake',        [\App\Http\Controllers\Api\StudyPlanController::class, 'addRetake']);
 
         Route::get('/saved',         [\App\Http\Controllers\Api\StudyPlanController::class, 'getSavedPlans']);
         Route::post('/{id}/change-mode', [\App\Http\Controllers\Api\StudyPlanController::class, 'changeMode']);

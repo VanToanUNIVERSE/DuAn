@@ -2028,9 +2028,9 @@ function renderStudyPlan(plan) {
         <div style="display:flex; flex-direction:column; gap:20px;">
     `;
 
-    const seenSubjects = new Set();
 
     plan.semesters.forEach(sem => {
+
         html += `
             <div class="clay-card study-plan-semester" 
                  data-semester-index="${sem.semester_index}"
@@ -2047,22 +2047,44 @@ function renderStudyPlan(plan) {
         sem.subjects.forEach(ss => {
             const sub = ss.subject;
             if (sub) {
-                const hasGrade = ss.grade !== undefined && ss.grade !== null;
-                const isCompleted = hasGrade && ss.grade > 5.0;
-                const isFailed = hasGrade && ss.grade <= 5.0;
+                // ── Điểm riêng của row này ──────────────────────────────────────
+                // API trả về ss.subject_grade (độc lập, không dùng UserGrade trực tiếp)
+                const grade     = ss.subject_grade ?? ss.grade;  // fallback cho dữ liệu cũ
+                const hasGrade  = grade !== undefined && grade !== null;
+                const isCompleted = hasGrade && grade > 5.0;
+                const isFailed    = hasGrade && grade <= 5.0;
 
-                const cardBg = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
-                const borderColor = isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
-                const draggableAttr = !isCompleted ? 'draggable="true" ondragstart="handleDragStart(event, ' + sub.id + ', ' + sem.semester_index + ')" ondragend="handleDragEnd(event)"' : '';
+                const cardBg     = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
+                const borderColor= isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
 
-                // Đồng bộ nhãn Gợi ý với danh sách gợi ý hiện tại
+                // Retake card không drag được
+                const isRetake = ss.is_retake === true;
+                const isFrozen = ss.is_frozen === true;
+                const draggableAttr = (!isCompleted && !isRetake)
+                    ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
+                    : '';
+
+                // Gợi ý
                 const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
                 const highlyRecommendedClass = (!isCompleted && isSuggested) ? 'highly-recommended' : '';
 
-                // Đánh dấu môn Học lại (nếu đã xuất hiện ở các kỳ trước)
-                const isRetake = seenSubjects.has(sub.id);
-                seenSubjects.add(sub.id);
-                const retakeBadge = isRetake ? '<span class="pill" style="background:#fef3c7; color:#d97706; margin-left:8px; font-size:0.7rem; padding:2px 6px;">Học lại</span>' : '';
+                // Badge retake
+                const retakeBadge = isRetake
+                    ? `<span class="pill" style="background:#fef3c7; color:#d97706; margin-left:8px; font-size:0.7rem; padding:2px 6px;">🔄 Học lại</span>`
+                    : '';
+
+                // Hint điểm cũ cho card retake
+                const origGradeHint = (isRetake && ss.original_grade !== null && ss.original_grade !== undefined)
+                    ? `<div style="font-size:0.72rem; color:#d97706; margin-top:4px; display:flex; align-items:center; gap:4px;">
+                         <span>Điểm cũ: <strong>${ss.original_grade}</strong></span>
+                         <span style="opacity:0.6;">— GPA lấy điểm cao hơn</span>
+                       </div>`
+                    : '';
+
+                // Card gốc frozen: hint nhỏ bên dưới
+                const frozenHint = isFrozen
+                    ? `<div style="font-size:0.7rem; color:#9ca3af; margin-top:4px;">📌 Đang học lại ở kỳ sau</div>`
+                    : '';
 
                 let statusHtml = '';
                 if (isCompleted) {
@@ -2071,13 +2093,18 @@ function renderStudyPlan(plan) {
                     statusHtml = '<span style="color:#ef4444; font-size:0.85rem; font-weight:600;">✗ Rớt</span>';
                 }
 
+                // Style cho frozen card (màu tối hơn một chút, không hover)
+                const frozenStyle = isFrozen
+                    ? 'opacity:0.85; pointer-events:auto;'
+                    : '';
+
                 html += `
-                    <div class="study-plan-subject ${highlyRecommendedClass}" 
-                         id="plan-subject-${sub.id}"
+                    <div class="study-plan-subject ${highlyRecommendedClass}"
+                         id="plan-subject-${sub.id}-${ss.id}"
                          ${draggableAttr}
-                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top: 100px;">
-                        
-                        <button type="button" class="icon-btn" 
+                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top:100px; ${frozenStyle}">
+
+                        <button type="button" class="icon-btn"
                                 style="position:absolute; top:8px; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
                                 onclick='openPrereqModal(${JSON.stringify(sub).replace(/'/g, "&#39;")})'
                                 title="Xem môn tiên quyết"
@@ -2089,21 +2116,26 @@ function renderStudyPlan(plan) {
 
                         <div style="font-weight:600; font-size:0.95rem; margin-bottom:8px; padding-right:24px;">${sub.name}${retakeBadge}</div>
                         <div style="font-size:0.8rem; color:var(--muted); margin-bottom:12px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
-                        
+
                         <div style="display:flex; align-items:center; gap:8px;" onmousedown="event.stopPropagation()">
-                            <input type="number" 
-                                   class="ob-grade-input" 
-                                   placeholder="Điểm..." 
-                                   min="0" max="10" step="0.1" 
-                                   value="${hasGrade ? ss.grade : ''}"
-                                   style="width: 80px; height: 32px; font-size: 0.85rem;"
+                            <input type="number"
+                                   class="ob-grade-input"
+                                   placeholder="Điểm..."
+                                   min="0" max="10" step="0.1"
+                                   value="${hasGrade ? grade : ''}"
+                                   data-plan-subject-id="${ss.id}"
+                                   style="width:80px; height:32px; font-size:0.85rem; ${isFrozen ? 'background:#f3f4f6; cursor:not-allowed;' : ''}"
+                                   ${isFrozen ? `readonly title="Đang học lại ở kỳ sau — nhập điểm tại card Học lại"` : ''}
                                    onchange="updatePlanGrade(${plan.id}, ${sub.id}, this)">
                             ${statusHtml}
                         </div>
+                        ${origGradeHint}
+                        ${frozenHint}
                     </div>
                 `;
             }
         });
+
 
         html += '</div></div>';
     });
@@ -2221,7 +2253,13 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                 'X-CSRF-TOKEN': CSRF_TOKEN,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ study_plan_id: planId, subject_id: subjectId, grade: grade, status: status })
+            body: JSON.stringify({
+                study_plan_id:   planId,
+                subject_id:      subjectId,
+                grade:           grade,
+                status:          status,
+                plan_subject_id: inputEl.dataset.planSubjectId ? parseInt(inputEl.dataset.planSubjectId) : null
+            })
         });
 
         if (!res.ok) throw new Error('API error');
@@ -2230,53 +2268,51 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
         inputEl.disabled = false;
         showSaveIndicator('saved', grade === null ? 'Đã xóa điểm' : 'Đã lưu điểm');
 
+        // API trả về plan đã cập nhật (có retake auto-create/delete)
+        if (resData.data) {
+            window.currentActivePlan = resData.data;
+            renderStudyPlan(resData.data);
+        }
+
         if (grade === null) {
-            // Khi xóa điểm: reload plan + tái đánh giá cảnh báo học vụ
-            fetchStudyPlans().then(() => {
-                fetchSuggestions();
-                fetchProgress();   // Tái sync cảnh báo — xóa warning cũ không còn hợp lệ
-                updateEarnedCredits();
-                updateCreditStats();
-            });
+            // Xóa điểm → sync toàn bộ
+            fetchProgress();
+            fetchSuggestions();
+            updateEarnedCredits();
+            updateCreditStats();
         } else {
-            // Check if all grades in this semester card are filled to trigger suggestion modal automatically
+            // Kiểm tra kỳ học đã điền đủ để lưu lịch sử
             let allFilled = false;
-            let snapshot = [];
-            let semIndex = 1;
+            let snapshot  = [];
+            let semIndex  = 1;
             const semesterCard = inputEl.closest('.study-plan-semester');
             if (semesterCard) {
                 semIndex = parseInt(semesterCard.dataset.semesterIndex);
-                const inputs = semesterCard.querySelectorAll('.ob-grade-input');
+                const inputs = semesterCard.querySelectorAll('.ob-grade-input:not([readonly])');
                 allFilled = inputs.length > 0;
                 inputs.forEach(inp => {
-                    if (inp.value.trim() === '') allFilled = false;
-                    else {
-                        const subjCard = inp.closest('.study-plan-subject');
-                        if (subjCard && subjCard.id) {
-                            const idStr = subjCard.id.split('-')[2];
-                            if (idStr) {
-                                const sid = parseInt(idStr);
-                                const gradeVal = parseFloat(inp.value);
-                                snapshot.push({ id: sid, grade: gradeVal });
-                            }
-                        }
+                    if (inp.value.trim() === '') { allFilled = false; return; }
+                    const subjCard = inp.closest('.study-plan-subject');
+                    if (subjCard && subjCard.id) {
+                        // id format: plan-subject-{subjectId}-{ssId}
+                        const parts = subjCard.id.split('-');
+                        const sid   = parseInt(parts[2]);
+                        if (sid) snapshot.push({ id: sid, grade: parseFloat(inp.value) });
                     }
                 });
             }
 
             if (allFilled && snapshot.length > 0 && window.currentActivePlan) {
-                // Populate credits and names for the snapshot
                 const semData = window.currentActivePlan.semesters.find(s => s.semester_index === semIndex);
                 if (semData && semData.subjects) {
                     snapshot.forEach(c => {
                         const subData = semData.subjects.find(s => s.subject_id === c.id);
                         c.credits = subData && subData.subject ? subData.subject.credits : 0;
-                        c.name   = subData && subData.subject ? subData.subject.name   : '';
+                        c.name    = subData && subData.subject ? subData.subject.name   : '';
                     });
                 }
 
-                // ── Kiểm tra học kỳ này đã lưu vào lịch sử chưa ──
-                // Nếu rồi → chỉ cập nhật im lặng, tránh modal bắn ra khi sửa điểm cũ
+                // Kiểm tra đã lưu lịch sử kỳ này chưa
                 let alreadySaved = false;
                 try {
                     const histRes = await fetch('/semester-history', { headers: { 'Accept': 'application/json' } });
@@ -2284,74 +2320,104 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                         const histData = await histRes.json();
                         alreadySaved = histData.some(h => h.semester_number === semIndex);
                     }
-                } catch (e) { /* bỏ qua lỗi network phụ */ }
+                } catch (e) { /* bỏ qua */ }
 
-                // ── Gọi API lưu/cập nhật lịch sử học kỳ ──
+                // Lưu/cập nhật lịch sử học kỳ
                 try {
                     const completeRes = await fetch('/semester-history/complete', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': CSRF_TOKEN,
-                            'Accept': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
                         body: JSON.stringify({
                             semester_number: semIndex,
                             courses: snapshot.map(c => ({ subject_id: c.id, grade: c.grade }))
                         })
                     });
                     const completeData = await completeRes.json();
-                    _semEvaluation = completeData.evaluation || null;
+                    const _semEvaluation = completeData.evaluation || null;
 
-                    // Cập nhật badge mode nếu có gợi ý
                     if (_semEvaluation && _semEvaluation.status !== 'KEEP') {
                         window._pendingModeEvaluation = _semEvaluation;
                         window._pendingModeEvaluation.plan_id = planId;
                         updateModeSuggestionBadge(_semEvaluation);
                     }
-                } catch (e) {
-                    console.warn('Lỗi lưu lịch sử học kỳ', e);
-                }
+                } catch (e) { console.warn('Lỗi lưu lịch sử học kỳ', e); }
 
-                // ── Cập nhật đồng bộ toàn bộ giao diện ──
-                await fetchStudyPlans();
                 fetchGraduationForecast();
                 fetchSuggestions();
                 updateEarnedCredits();
                 updateCreditStats();
-                loadSemesterHistory(); // Refresh lịch sử bên drawer
+                loadSemesterHistory();
 
-                // ── Hiển thị modal kết quả (chỉ lần đầu, không hiện lại khi sửa) ──
                 if (!alreadySaved) {
                     showSemResultModal(semIndex, snapshot);
                 } else {
                     showToast(`✅ Đã cập nhật điểm học kỳ ${semIndex}`, 'success');
                 }
-            } else if (resData.success && resData.evaluation) {
-                // Chỉ lưu evaluation vào bộ nhớ, KHÔNG hiện popup
-                // Popup sẽ chỉ hiện khi người dùng chủ động hoàn tất học kỳ
+            } else if (resData.evaluation) {
                 if (resData.evaluation.status !== 'KEEP') {
                     window._pendingModeEvaluation = resData.evaluation;
                     window._pendingModeEvaluation.plan_id = planId;
                     updateModeSuggestionBadge(resData.evaluation);
                 }
-                // Cập nhật gợi ý môn học sau khi lưu điểm
-                fetchStudyPlans().then(() => {
-                    fetchSuggestions();
-                    updateEarnedCredits();
-                    updateCreditStats();
-                });
+                fetchSuggestions();
+                updateEarnedCredits();
+                updateCreditStats();
+                fetchProgress();
             } else {
-                fetchStudyPlans().then(() => {
-                    fetchSuggestions();
-                    updateEarnedCredits();
-                    updateCreditStats();
-                });
+                fetchSuggestions();
+                updateEarnedCredits();
+                updateCreditStats();
             }
         }
     } catch (e) {
         inputEl.disabled = false;
         showSaveIndicator('error', 'Lỗi lưu điểm');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THÊM MÔN HỌC LẠI (RETAKE)
+// ═══════════════════════════════════════════════════════════════
+async function addRetakeSubject(planId, subjectId, fromSemester, originalGrade) {
+    if (!planId || !subjectId) return;
+
+    try {
+        showSaveIndicator('saving', 'Đang thêm học lại...');
+
+        const res = await fetch('/api/v1/study-plans/add-retake', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                study_plan_id:  planId,
+                subject_id:     subjectId,
+                from_semester:  fromSemester,
+                original_grade: originalGrade
+            })
+        });
+
+        const resData = await res.json();
+
+        if (!res.ok || !resData.success) {
+            showToast(resData.message || 'Không thể thêm môn học lại.', 'error');
+            showSaveIndicator('error', 'Lỗi');
+            return;
+        }
+
+        // Cập nhật plan từ response
+        window.currentActivePlan = resData.data;
+        renderStudyPlan(resData.data);
+
+        const retakeSem = resData.retake_semester;
+        showToast(`✅ Đã thêm học lại vào Học kỳ ${retakeSem}. Điểm sẽ lấy cao hơn giữa 2 lần thi.`, 'success');
+        showSaveIndicator('saved', 'Đã lưu');
+
+    } catch (e) {
+        console.error('Lỗi addRetakeSubject:', e);
+        showToast('Đã xảy ra lỗi khi thêm môn học lại.', 'error');
     }
 }
 
