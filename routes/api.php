@@ -39,7 +39,10 @@ Route::prefix('v1')->middleware('web')->group(function () {
         Route::post('/add-retake',        [\App\Http\Controllers\Api\StudyPlanController::class, 'addRetake']);
 
         Route::get('/saved',         [\App\Http\Controllers\Api\StudyPlanController::class, 'getSavedPlans']);
-        Route::post('/{id}/change-mode', [\App\Http\Controllers\Api\StudyPlanController::class, 'changeMode']);
+        Route::post('/{id}/dedup-retakes',   [\App\Http\Controllers\Api\StudyPlanController::class, 'dedupRetakes']);
+        Route::post('/{id}/adjust-target',  [\App\Http\Controllers\Api\StudyPlanController::class, 'adjustTarget']);
+        Route::get('/{id}/advisory',         [\App\Http\Controllers\Api\StudyPlanController::class, 'advisory']);
+        Route::post('/{id}/apply-advisory',  [\App\Http\Controllers\Api\StudyPlanController::class, 'applyAdvisory']);
         Route::post('/{id}/save',    [\App\Http\Controllers\Api\StudyPlanController::class, 'savePlan']);
         Route::get('/{id}/load',     [\App\Http\Controllers\Api\StudyPlanController::class, 'loadPlan']);
         Route::delete('/{id}',       [\App\Http\Controllers\Api\StudyPlanController::class, 'destroy']);

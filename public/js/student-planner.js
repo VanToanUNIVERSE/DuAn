@@ -76,11 +76,11 @@ function getCurrentSemester() {
     return maxSem + 1;
 }
 let obStep = 0;
-let obData = { academic_year: null, program_type: null, current_semester: null, target_years: null, grades: {} };
+let obData = { academic_year: null, program_type: null, target_semesters: 8, grades: {} };
 
 const OB_STEPS = [
     { label: 'Bước 1 / 2', icon: '🎓', iconBg: '#f5f0e0', title: 'Chào mừng bạn!', desc: 'Hãy cho chúng tôi biết bạn đang theo học chương trình nào để hệ thống gợi ý chính xác nhất.' },
-    { label: 'Bước 2 / 2', icon: '📝', iconBg: '#faf5e8', title: 'Điểm số của bạn', desc: 'Nhập điểm các môn bạn đã học. Chỉ nhập những môn đã có điểm.' },
+    { label: 'Bước 2 / 2', icon: '🏁', iconBg: '#f0fdf4', title: 'Mục tiêu tốt nghiệp', desc: 'Bạn muốn hoàn thành chương trình trong bao nhiêu năm? Hệ thống sẽ phân bổ tín chỉ phù hợp.' },
 ];
 
 function renderObDots() {
@@ -114,24 +114,29 @@ function renderObBody() {
                 <div class="ob-input-group"><label>Hệ đào tạo</label><select class="ob-select" id="ob-program-type" onchange="obData.program_type=this.value"><option value="">-- Chọn hệ đào tạo --</option>${typeOpts}</select></div>
             </div>`;
     } else if (obStep === 1) {
-        let sectionsHtml = '';
-        for (const [semName, subjects] of Object.entries(SUBJECTS_BY_SEM)) {
-            const rows = subjects.map(sub => {
-                const g = obData.grades[sub.id];
-                const cls = g === undefined ? '' : (g > 5 ? 'pass' : 'fail');
-                const statusTxt = g === undefined ? '' : (g > 5 ? '✓ Pass' : '✗ Fail');
-                const statusCls = g === undefined ? '' : (g > 5 ? 'pass' : 'fail');
-                return `<div class="ob-subject-row ${g !== undefined ? 'has-grade' : ''}" id="ob-row-${sub.id}">
-                        <div class="ob-subject-info"><div class="ob-subject-name">${sub.name}</div><div class="ob-subject-meta">${sub.credits} TC · HK chuẩn ${sub.semName}</div></div>
-                        <div class="ob-grade-wrap">
-                            <input type="number" class="ob-grade-input ${cls}" id="ob-grade-${sub.id}" min="0" max="10" step="0.1" placeholder="—" value="${g !== undefined ? g : ''}" oninput="obGradeChange(${sub.id},this)">
-                            <span class="ob-grade-status ${statusCls}" id="ob-gstatus-${sub.id}">${statusTxt}</span>
-                        </div>
-                    </div>`;
-            }).join('');
-            sectionsHtml += `<div class="ob-semester-section"><div class="ob-semester-section-title">Học kỳ chuẩn ${semName}</div>${rows}</div>`;
-        }
-        body.innerHTML = `<div class="ob-warning"><span class="ob-warning-icon">⚠️</span><p><strong>Lưu ý:</strong> Chỉ nhập điểm những môn bạn <strong>đã học và có kết quả</strong>.</p></div><div class="ob-subjects-scroll">${sectionsHtml}</div>`;
+        const goals = [
+            { sems: 6,  label: '3 Năm',   sub: '6 học kỳ · Rút ngắn tối đa' },
+            { sems: 7,  label: '3.5 Năm', sub: '7 học kỳ · Nhanh hơn chuẩn' },
+            { sems: 8,  label: '4 Năm',   sub: '8 học kỳ · Chuẩn chương trình', recommended: true },
+            { sems: 9,  label: '4.5 Năm', sub: '9 học kỳ · Nhẹ nhàng hơn' },
+            { sems: 10, label: '5 Năm',   sub: '10 học kỳ · Thoải mái nhất' },
+        ];
+        body.innerHTML = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:4px 0;">
+            ${goals.map(g => {
+                const tcEst = Math.ceil(130 / g.sems);
+                const isSel = obData.target_semesters === g.sems;
+                return `<div onclick="obSelectGoal(${g.sems},this)"
+                    style="padding:14px 12px; border-radius:10px; border:2px solid ${isSel ? 'var(--ink)' : 'var(--hairline)'}; background:${isSel ? 'var(--surface-card)' : 'var(--canvas)'}; cursor:pointer; text-align:center; transition:all 0.15s; user-select:none;"
+                    onmouseover="if(!this.classList.contains('ob-goal-sel'))this.style.background='var(--surface-soft)'"
+                    onmouseout="if(!this.classList.contains('ob-goal-sel'))this.style.background='var(--canvas)'"
+                    class="ob-goal-card ${isSel ? 'ob-goal-sel' : ''}">
+                    <div style="font-weight:700; font-size:0.95rem; color:var(--ink);">${g.label}</div>
+                    <div style="font-size:0.75rem; color:var(--muted); margin-top:3px;">${g.sub}</div>
+                    ${g.recommended ? '<div style="font-size:0.7rem; color:#16a34a; font-weight:700; margin-top:5px;">✓ Khuyến nghị</div>' : ''}
+                    <div style="font-size:0.78rem; color:var(--muted); margin-top:6px; padding-top:6px; border-top:1px solid var(--hairline);">~${tcEst} TC/kỳ</div>
+                </div>`;
+            }).join('')}
+        </div>`;
     }
 
     const btnBack = document.getElementById('ob-btn-back');
@@ -145,20 +150,16 @@ function renderObBody() {
 
 function obSelectSem(i, el) { obData.current_semester = i; document.querySelectorAll('.ob-sem-btn').forEach(b => b.classList.remove('selected')); el.classList.add('selected'); }
 function obSelectYear(y, el) { obData.target_years = y; document.querySelectorAll('.ob-year-btn').forEach(b => b.classList.remove('selected')); el.classList.add('selected'); }
-
-function obGradeChange(id, input) {
-    const rawVal = parseFloat(input.value);
-    if (!isNaN(rawVal)) { if (rawVal > 10) input.value = 10; else if (rawVal < 0) input.value = 0; }
-    const val = parseFloat(input.value);
-    const status = document.getElementById(`ob-gstatus-${id}`);
-    const row = document.getElementById(`ob-row-${id}`);
-    input.classList.remove('pass', 'fail'); status.classList.remove('pass', 'fail'); row.classList.remove('has-grade');
-    if (input.value === '' || isNaN(val)) { delete obData.grades[id]; status.textContent = ''; }
-    else {
-        obData.grades[id] = val; row.classList.add('has-grade');
-        if (val > 5) { input.classList.add('pass'); status.classList.add('pass'); status.textContent = '✓ Pass'; }
-        else { input.classList.add('fail'); status.classList.add('fail'); status.textContent = '✗ Fail'; }
-    }
+function obSelectGoal(sems, el) {
+    obData.target_semesters = sems;
+    document.querySelectorAll('.ob-goal-card').forEach(c => {
+        c.classList.remove('ob-goal-sel');
+        c.style.border = '2px solid var(--hairline)';
+        c.style.background = 'var(--canvas)';
+    });
+    el.classList.add('ob-goal-sel');
+    el.style.border = '2px solid var(--ink)';
+    el.style.background = 'var(--surface-card)';
 }
 
 function obNext() {
@@ -173,9 +174,7 @@ async function obFinish() {
     const btnNext = document.getElementById('ob-btn-next');
     btnNext.disabled = true; btnNext.textContent = '⏳ Đang lưu...';
     try {
-        await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify({ academic_year: obData.academic_year, program_type: obData.program_type }) });
-        const gradesToSave = Object.entries(obData.grades).map(([sid, grade]) => ({ subject_id: parseInt(sid), grade }));
-        if (gradesToSave.length > 0) await fetch('/grades/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify(gradesToSave) });
+        await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify({ academic_year: obData.academic_year, program_type: obData.program_type, target_semesters: obData.target_semesters }) });
         closeOnboarding(); applyPreferencesToUI(obData);
         showToast('Chào mừng! Đã thiết lập chương trình của bạn 🎉', 'success');
     } catch (err) { showToast('Có lỗi xảy ra, vui lòng thử lại!', 'error'); btnNext.disabled = false; btnNext.textContent = '🎉 Hoàn thành!'; }
@@ -559,48 +558,42 @@ async function fetchSuggestions() {
         let mappedData = (resData.data || []).map(item => ({
             ...item.subject,
             suggestion_score: item.score,
-            skill_evaluation: item.reasons.join(', ')
+            skill_evaluation: item.reasons.join(', '),
+            is_failed_subject: item.is_failed || false,
         }));
 
-        // Limit subjects by max credits of active plan mode or personalized recommendation
-        if (window.currentActivePlan && window.currentActivePlan.mode) {
-            const mode = window.currentActivePlan.mode;
-            
-            // Check if there's a personalized recommendation from completing a semester
-            const savedRec = localStorage.getItem('recommended_credits_per_sem');
-            let maxCredits = savedRec ? parseInt(savedRec) : 18; 
-            
-            if (!savedRec) {
-                if (mode === 'fast') maxCredits = 22;
-                else if (mode === 'slow') maxCredits = 14;
-            }
+        // Lấy giới hạn TC từ active plan
+        const maxCredits = window.currentActivePlan?.tc_per_sem || 18;
 
-            let currentTotal = 0;
-            let limitedData = [];
-            for (let subj of mappedData) {
-                if (subj.can_study !== false) {
-                    if (currentTotal + subj.credits <= maxCredits) {
-                        limitedData.push(subj);
-                        currentTotal += subj.credits;
-                    }
-                } else {
-                    limitedData.push(subj); // Keep locked subjects for reference if wanted, or just skip. We'll skip them to be clean, wait, no, the old UI showed them at the bottom.
-                    // Actually let's just keep the ones we can study for the target semester.
-                }
+        // Tách môn rớt ra — ưu tiên tuyệt đối, hiển thị đầu danh sách
+        const retakeSubjs  = mappedData.filter(s => s.is_failed_subject);
+        const regularSubjs = mappedData.filter(s => !s.is_failed_subject && s.can_study !== false);
+
+        // Môn rớt chiếm credit trước; môn mới chỉ lấp phần còn lại trong giới hạn
+        const retakeCredits  = retakeSubjs.reduce((sum, s) => sum + (parseInt(s.credits) || 3), 0);
+        const remainingSlots = Math.max(0, maxCredits - retakeCredits);
+
+        let currentTotal = 0;
+        const limitedRegular = [];
+        for (const subj of regularSubjs) {
+            const cr = parseInt(subj.credits) || 3;
+            if (currentTotal + cr <= remainingSlots) {
+                limitedRegular.push(subj);
+                currentTotal += cr;
             }
-            // Also append the locked ones at the bottom if needed, but let's just show the eligible ones up to maxCredits.
-            mappedData = limitedData;
         }
-        window.currentSuggestions = mappedData.filter(s => s.can_study !== false); // Save for apply button
+
+        mappedData = [...retakeSubjs, ...limitedRegular];
+        window.currentSuggestions = mappedData;
+        window._suggestionMeta = { retakeCredits, regularCredits: currentTotal, maxCredits };
 
         renderSuggestions(mappedData, semester);
 
-        // Re-render study plan to sync the "Gợi ý cho bạn" badges
         if (window.currentActivePlan) {
             renderStudyPlan(window.currentActivePlan);
         }
 
-        fetchProgress(); // Update progress and warnings
+        fetchProgress();
     } catch (error) {
         suggestionsContainer.innerHTML = `<div class="empty-state"><p style="color:var(--error);font-weight:600;">⚠️ Đã có lỗi xảy ra khi phân tích dữ liệu.</p></div>`;
     } finally { loader.style.display = 'none'; suggestionsContainer.style.opacity = '1'; }
@@ -819,54 +812,53 @@ function renderSuggestions(subjects, targetSemester) {
         return;
     }
     
-    let totalCredits = 0;
-    subjects.forEach(s => {
-        if (s.can_study !== false) totalCredits += parseInt(s.credits || 0);
-    });
-    if (creditsSpan) creditsSpan.textContent = `(${totalCredits} TC)`;
+    const meta = window._suggestionMeta;
+    if (creditsSpan) {
+        if (meta && meta.retakeCredits > 0 && meta.regularCredits > 0) {
+            creditsSpan.textContent = `(${meta.retakeCredits} TC học lại · ${meta.regularCredits} TC mới / ${meta.maxCredits} TC/kỳ)`;
+        } else if (meta && meta.retakeCredits > 0) {
+            creditsSpan.textContent = `(${meta.retakeCredits} TC học lại)`;
+        } else {
+            const total = subjects.reduce((s, x) => s + (parseInt(x.credits) || 0), 0);
+            creditsSpan.textContent = `(${total} TC / ${meta?.maxCredits || 18} TC/kỳ)`;
+        }
+    }
     container.innerHTML = subjects.map(subject => {
         const subSem = parseInt(subject.semester?.name || 1);
         const targetSem = parseInt(targetSemester);
         const isAdded = currentCourses.find(c => c.id == subject.id);
-        const failedIds = getFailedSubjectIds();
-        const isFailed = failedIds.has(subject.id);
-        let priorityLabel = '';
-        let scoreText = `<span style="opacity:0.85;margin-left:4px;font-size:0.9em;">(${subject.suggestion_score}đ)</span>`;
-
-        if (isFailed) priorityLabel = `<span class="pill pill-red">Học lại 🔄 ${scoreText}</span>`;
-        else if (subject.suggestion_score >= 105) priorityLabel = `<span class="pill pill-mint">Ưu tiên Rất Cao 🔥 ${scoreText}</span>`;
-        else if (subject.suggestion_score >= 95) priorityLabel = `<span class="pill pill-lavender">Ưu tiên Cao 👍 ${scoreText}</span>`;
-        else if (subject.suggestion_score >= 80) priorityLabel = `<span class="pill pill-ochre">Ưu tiên Vừa 👌 ${scoreText}</span>`;
-        else priorityLabel = `<span class="pill pill-red" style="background:#fee2e2;color:#b91c1c;border:none;">Ít Ưu tiên ⬇️ ${scoreText}</span>`;
+        const isFailed = subject.is_failed_subject === true;
         const isEligible = subject.can_study !== false;
 
-        let tagHtml = '';
-        let actionHtml = '';
-        if (isEligible) {
-            tagHtml = `
-                    <span class="pill pill-cream" style="background:#e8f8f3;color:#1a3a3a;border:none;">${subject.credits} Tín chỉ</span>
-                    ${priorityLabel}
-                `;
-            if (subject.skill_evaluation) {
-                let evalColor = subject.skill_evaluation.includes('+') ? '#10b981' : '#f59e0b';
-                if (subject.skill_evaluation.includes('-15')) evalColor = '#ef4444';
-                let evalIcon = subject.skill_evaluation.includes('+') ? '⭐' : (subject.skill_evaluation.includes('-15') ? '⚠️' : '📊');
-                tagHtml += `<span class="pill" style="background:var(--surface);color:${evalColor};border:1px solid ${evalColor}40;font-size:0.68rem;padding:2px 8px;">${evalIcon} ${subject.skill_evaluation}</span>`;
-            }
+        let priorityLabel = '';
+        if (isFailed) {
+            priorityLabel = `<span class="pill" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;font-weight:700;">🔄 Cần học lại</span>`;
+        } else if (subject.suggestion_score >= 100) {
+            priorityLabel = `<span class="pill pill-mint">Ưu tiên Rất Cao 🔥</span>`;
+        } else if (subject.suggestion_score >= 60) {
+            priorityLabel = `<span class="pill pill-lavender">Ưu tiên Cao 👍</span>`;
+        } else if (subject.suggestion_score >= 30) {
+            priorityLabel = `<span class="pill pill-ochre">Ưu tiên Vừa 👌</span>`;
         } else {
-            tagHtml = `
-                    <span class="pill pill-cream" style="background:transparent;color:#dc2626;border:none;padding:0;font-size:0.75rem;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;margin-right:2px;vertical-align:-3px;"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg> Thiếu môn tiên quyết</span>
-                `;
+            priorityLabel = `<span class="pill" style="background:#f3f4f6;color:#6b7280;border:none;">Ít Ưu tiên</span>`;
         }
 
+        let tagHtml = `<span class="pill pill-cream" style="background:#e8f8f3;color:#1a3a3a;border:none;">${subject.credits} TC</span> ${priorityLabel}`;
+        if (subject.skill_evaluation && !isFailed) {
+            let evalColor = subject.skill_evaluation.includes('+') ? '#10b981' : '#f59e0b';
+            if (subject.skill_evaluation.includes('-15')) evalColor = '#ef4444';
+            tagHtml += `<span class="pill" style="background:var(--surface);color:${evalColor};border:1px solid ${evalColor}40;font-size:0.68rem;padding:2px 8px;">${subject.skill_evaluation}</span>`;
+        }
+
+        const cardBorder = isFailed ? '1px solid #fca5a5' : '1px solid var(--hairline)';
+        const cardBg     = isFailed ? 'rgba(254,226,226,0.3)' : '';
+
         return `
-                <div class="suggestion-card${isFailed ? ' is-locked' : (!isEligible ? ' is-locked' : '')}" onclick="scrollToSubject(${subject.id})" style="cursor:pointer; transition: all 0.2s; border:1px solid var(--hairline);" onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='var(--brand-mint)'; this.style.boxShadow='var(--shadow-sm)'" onmouseout="this.style.transform='none'; this.style.borderColor='var(--hairline)'; this.style.boxShadow='none'">
+                <div class="suggestion-card" onclick="scrollToSubject(${subject.id})" style="cursor:pointer; transition:all 0.2s; border:${cardBorder}; background:${cardBg};" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-sm)'" onmouseout="this.style.transform='none'; this.style.boxShadow='none'">
                     <div class="suggestion-card-top" style="padding-bottom: 0;">
                         <div class="suggestion-details">
                             <span class="suggestion-title">${subject.name}</span>
-                            <div class="suggestion-tags">
-                                ${tagHtml}
-                            </div>
+                            <div class="suggestion-tags">${tagHtml}</div>
                         </div>
                     </div>
                 </div>`;
@@ -985,7 +977,7 @@ function showSemResultModal(semNumber, snapshot) {
             }
         });
     }
-    const planMode = window.currentActivePlan ? window.currentActivePlan.mode : (document.getElementById('planner-mode')?.value || 'normal');
+    const planMode = window.currentActivePlan ? window.currentActivePlan.mode : 'normal';
     const totalSem = planMode === 'fast' ? 6 : (planMode === 'slow' ? 10 : 8);
     const nextSem = Math.min(semNumber + 1, totalSem);
     const remSem = Math.max(1, totalSem - semNumber);
@@ -1220,40 +1212,71 @@ document.addEventListener('DOMContentLoaded', async () => {
         fetchWarnings();
     }
     
-    // Khởi tạo và lắng nghe thay đổi chế độ học (Mode) để tính toán số tín chỉ mục tiêu
-    const modeSelect = document.getElementById('planner-mode');
-    if (modeSelect) {
-        modeSelect.addEventListener('change', updateTargetCreditsUI);
-        // Đợi load xong điểm để tính cho chính xác
-        setTimeout(updateTargetCreditsUI, 500); 
-    }
+    // Tính TC/kỳ preview cho config goal cards
+    setTimeout(() => _updateConfigGoalPreview(window._selectedGoalSems || 8), 400);
 });
 
-function updateTargetCreditsUI() {
-    const targetEl = document.getElementById('planner-target-credits');
-    const modeSelect = document.getElementById('planner-mode');
-    if (!targetEl || !modeSelect) return;
+// ── Graduation goal selection (unified — lives in config panel) ─
+window._selectedGoalSems = 8;
 
-    // TOTAL_CREDITS có sẵn từ HTML render
-    let earned = 0;
-    if (obData && obData.grades) {
-        earned = Object.values(obData.grades)
-            .filter(g => g.grade > 5.0 || ['passed', 'pass'].includes(g.status))
-            .reduce((sum, g) => sum + (parseInt(subjectMap[g.subject_id]?.credits || 0)), 0);
+function selectConfigGoal(sems, applyNow = false) {
+    window._selectedGoalSems = sems;
+    document.querySelectorAll('#config-goal-cards .goal-card.cfg').forEach(el => {
+        const isThis = +el.dataset.sems === sems;
+        el.style.border = isThis ? '2px solid var(--brand-mint)' : '2px solid var(--hairline)';
+        el.style.background = isThis ? 'rgba(155,217,177,0.15)' : '';
+        if (isThis) el.classList.add('selected'); else el.classList.remove('selected');
+    });
+    _updateConfigGoalPreview(sems);
+    if (applyNow && window.currentActivePlan) {
+        applyTargetAdjustment();
     }
+}
 
-    const unpassed = Math.max(0, TOTAL_CREDITS - earned);
-    const currentSem = getCurrentSemester();
-    
-    let targetTotalSems = 8;
-    if (modeSelect.value === 'fast') targetTotalSems = 6;
-    if (modeSelect.value === 'slow') targetTotalSems = 10;
-    
-    const remainingSems = Math.max(1, targetTotalSems - currentSem + 1);
-    const targetPerSem = Math.ceil(unpassed / remainingSems);
+function _updateConfigGoalPreview(sems) {
+    const el = document.getElementById('config-goal-preview');
+    if (!el) return;
+    let earned = 0;
+    if (window.obData && window.obData.grades) {
+        earned = Object.values(window.obData.grades)
+            .filter(g => g.grade > 5.0 || ['passed', 'pass'].includes(g.status))
+            .reduce((sum, g) => sum + (parseInt((window.subjectMap || {})[g.subject_id]?.credits || 0)), 0);
+    }
+    const remaining = Math.max(0, (window.TOTAL_CREDITS || 130) - earned);
+    const completedSems = (window.currentActivePlan?.semesters?.filter(s => s.subjects.every(ss => ss.is_completed))?.length) || 0;
+    const remSems = Math.max(1, sems - completedSems);
+    const tcPerSem = Math.min(22, Math.max(12, Math.ceil(remaining / remSems)));
+    el.innerHTML = `Cần đạt <strong>~${tcPerSem} TC/kỳ</strong> trong <strong>${remSems}</strong> kỳ còn lại (${remaining} TC chưa học).`;
+}
 
-    targetEl.style.display = 'block';
-    targetEl.innerHTML = `Mục tiêu cần đạt: <strong>~${targetPerSem} tín chỉ/kỳ</strong> (để ra trường đúng tiến độ)`;
+// Aliases for backward compat
+function selectGoal(sems) { selectConfigGoal(sems); }
+function selectAdjGoal(sems) { selectConfigGoal(sems); }
+
+async function applyTargetAdjustment() {
+    if (!window.currentActivePlan) return;
+    const targetSemesters = window._selectedGoalSems || 8;
+    const loader = document.getElementById('planner-loader');
+    if (loader) loader.style.display = 'block';
+    try {
+        const res = await fetch(`/api/v1/study-plans/${window.currentActivePlan.id}/adjust-target`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
+            body: JSON.stringify({ target_semesters: targetSemesters })
+        });
+        const resData = await res.json();
+        if (resData.success && resData.data) {
+            showToast(`Đã cập nhật mục tiêu ${targetSemesters} kỳ, ~${resData.data.tc_per_sem || '?'} TC/kỳ`, 'success');
+            renderStudyPlan(resData.data);
+            fetchSavedPlansList();
+        } else {
+            showToast('Lỗi khi cập nhật mục tiêu', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi mạng', 'error');
+    } finally {
+        if (loader) loader.style.display = 'none';
+    }
 }
 
 
@@ -1852,7 +1875,7 @@ async function fetchSavedPlansList() {
             listContainer.innerHTML = resData.data.map(plan => `
                 <div class="saved-plan-item" style="padding:12px 16px; border:1px solid var(--hairline); border-radius:8px; background:var(--surface); transition:all 0.2s; display:flex; justify-content:space-between; align-items:center;">
                     <div style="flex:1; cursor:pointer;" onclick="loadSavedPlan(${plan.id})">
-                        <div style="font-weight:600; margin-bottom:4px;">${plan.name} <span class="pill pill-lavender" style="font-size:0.7rem; padding:2px 6px;">${plan.mode.toUpperCase()}</span></div>
+                        <div style="font-weight:600; margin-bottom:4px;">${plan.name} <span class="pill pill-lavender" style="font-size:0.7rem; padding:2px 6px;">${plan.target_semesters || plan.target_semester_count || 8} kỳ</span></div>
                         <div style="font-size:0.8rem; color:var(--muted);">Cập nhật: ${new Date(plan.updated_at).toLocaleString('vi-VN')}</div>
                     </div>
                     <button onclick="deleteSavedPlan(${plan.id}, event)" title="Xóa kế hoạch này" style="background:none; border:none; color:var(--red); padding:8px; cursor:pointer; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:background 0.2s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'">
@@ -1891,34 +1914,24 @@ async function loadSavedPlan(planId) {
 
 function backToPlannerSelection() {
     window.currentActivePlan = null;
-    document.getElementById('planner-selection-view').style.display = 'grid';
+    window._advisoryCheckedForPlan = null;
+    document.getElementById('planner-selection-view').style.display = 'block';
     document.getElementById('study-plan-results').style.display = 'none';
-    fetchSavedPlansList();
-    checkActivePlanStatus();
 }
 
 async function checkActivePlanStatus() {
     try {
         const res = await fetch('/api/v1/study-plans/active');
         const resData = await res.json();
-        const switcher = document.getElementById('plan-mode-switcher');
-        const wizard = document.getElementById('plan-creation-wizard');
+        const selectionView = document.getElementById('planner-selection-view');
         if (resData.success && resData.data) {
             window.currentActivePlan = resData.data;
-            if (wizard) wizard.style.display = 'none';
-            if (switcher) {
-                switcher.style.display = 'block';
-                // Check current mode radio
-                const modeRadios = document.getElementsByName('change_mode');
-                for (let r of modeRadios) {
-                    if (r.value === resData.data.mode) {
-                        r.checked = true;
-                    }
-                }
-            }
+            if (selectionView) selectionView.style.display = 'none';
+            const curSems = resData.data.target_semesters || resData.data.target_semester_count || 8;
+            selectConfigGoal(curSems);
         } else {
-            if (wizard) wizard.style.display = 'block';
-            if (switcher) switcher.style.display = 'none';
+            if (selectionView) selectionView.style.display = 'block';
+            selectConfigGoal(window._selectedGoalSems || 8);
         }
     } catch(e) {
         console.error('Error checkActivePlanStatus', e);
@@ -1926,51 +1939,8 @@ async function checkActivePlanStatus() {
 }
 
 async function changeActivePlanMode() {
-    if (!window.currentActivePlan) return;
-    let selectedMode = 'normal';
-    const radios = document.getElementsByName('change_mode');
-    for (let r of radios) {
-        if (r.checked) {
-            selectedMode = r.value;
-            break;
-        }
-    }
-    
-    if (selectedMode === window.currentActivePlan.mode) {
-        showToast('Chế độ này đang được kích hoạt', 'info');
-        return;
-    }
-    
-    const loader = document.getElementById('planner-loader');
-    loader.style.display = 'block';
-    
-    try {
-        const res = await fetch(`/api/v1/study-plans/${window.currentActivePlan.id}/change-mode`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': CSRF_TOKEN,
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ mode: selectedMode })
-        });
-        const resData = await res.json();
-        if (resData.success && resData.data) {
-            showToast('Đã cập nhật chế độ học thành công!', 'success');
-            renderStudyPlan(resData.data);
-            fetchSavedPlansList();
-            // Xóa badge gợi ý vì user đã chủ động đổi mode
-            window._pendingModeEvaluation = null;
-            const badgeEl = document.getElementById('grad-mode-suggestion');
-            if (badgeEl) badgeEl.style.display = 'none';
-        } else {
-            showToast('Lỗi khi đổi chế độ', 'error');
-        }
-    } catch (e) {
-        showToast('Lỗi mạng', 'error');
-    } finally {
-        loader.style.display = 'none';
-    }
+    // Deprecated — forward to applyTargetAdjustment
+    await applyTargetAdjustment();
 }
 
 async function deleteSavedPlan(planId, event) {
@@ -2005,9 +1975,9 @@ async function deleteSavedPlan(planId, event) {
 }
 
 async function generateStudyPlan() {
-    const mode = document.getElementById('planner-mode').value;
+    const targetSemesters = window._selectedGoalSems || 8;
     const name = document.getElementById('planner-name').value.trim();
-    
+
     if (!name) {
         showToast('Vui lòng nhập tên kế hoạch!', 'error');
         return;
@@ -2026,7 +1996,7 @@ async function generateStudyPlan() {
                 'X-CSRF-TOKEN': CSRF_TOKEN,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ mode, name })
+            body: JSON.stringify({ target_semesters: targetSemesters, name })
         });
         if (!res.ok) throw new Error('API error');
         const resData = await res.json();
@@ -2035,13 +2005,11 @@ async function generateStudyPlan() {
             fetchSavedPlansList();
             fetchSuggestions();
 
-            if (resData.forced_slow) {
-                showModeDowngradeNotice(resData.notice || 'Hệ thống đã chuyển sang chế độ Học Nhẹ do GPA thấp.');
-            } else if (resData.over_semesters) {
+            if (resData.over_semesters) {
                 showOverSemestersNotice(resData.over_semesters_notice
-                    || `Kế hoạch cần thêm ${resData.over_semesters_count} học kỳ so với mục tiêu.`);
+                    || `Kế hoạch cần thêm ${resData.over_semesters_count} học kỳ so với mục tiêu ${targetSemesters} kỳ.`);
             } else {
-                showToast('Tạo kế hoạch học tập thành công!', 'success');
+                showToast(`Tạo kế hoạch thành công! ~${resData.tc_per_sem} TC/kỳ`, 'success');
             }
         }
     } catch (e) {
@@ -2060,25 +2028,68 @@ function renderStudyPlan(plan) {
     container.style.display = 'block';
 
     if (!plan.semesters || plan.semesters.length === 0) {
-        container.innerHTML = `
-            <button onclick="backToPlannerSelection()" class="btn-secondary" style="margin-bottom:16px;">⬅ Trở lại</button>
-            <div class="empty-state">Không có môn học nào cần học nữa. Bạn đã đủ tín chỉ!</div>`;
+        container.innerHTML = `<div class="empty-state">Không có môn học nào cần học nữa. Bạn đã đủ tín chỉ!</div>`;
         return;
     }
 
+    // ── Tính trạng thái tốt nghiệp ────────────────────────────────
+    const targetSems      = plan.target_semesters || plan.target_semester_count || 8;
+    const totalPlanned    = plan.semesters.length;
+    const completedSems   = plan.semesters.filter(s => s.subjects.length > 0 && s.subjects.every(ss => ss.is_completed)).length;
+    const delta           = totalPlanned - targetSems;
+
+    const yearLabel = n => {
+        const months = n * 6;
+        if (months < 12) return `${months} tháng`;
+        const y = months / 12;
+        return y === Math.floor(y) ? `${y} năm` : `${y} năm`;
+    };
+
+    let statusColor, statusIcon, statusText, statusDesc;
+    if (delta <= 0) {
+        statusColor = '#10b981';
+        statusIcon  = '✅';
+        statusText  = delta === 0 ? 'Đúng hạn' : `Sớm ${Math.abs(delta)} HK`;
+        statusDesc  = delta === 0 ? `Kế hoạch khớp đúng ${targetSems} kỳ mục tiêu.` : `Hoàn thành sớm hơn ${Math.abs(delta)} kỳ (${yearLabel(Math.abs(delta))}) so với mục tiêu!`;
+    } else if (delta === 1) {
+        statusColor = '#f59e0b';
+        statusIcon  = '⚠️';
+        statusText  = `Trễ hơn 1 HK (nửa năm)`;
+        statusDesc  = `Dự kiến ${totalPlanned} kỳ, vượt mục tiêu ${targetSems} kỳ 1 học kỳ (6 tháng). Tăng TC/kỳ để rút ngắn.`;
+    } else {
+        statusColor = '#ef4444';
+        statusIcon  = '🔴';
+        statusText  = `Trễ hơn ${delta} HK (~${yearLabel(delta)})`;
+        statusDesc  = `Dự kiến ${totalPlanned} kỳ, vượt mục tiêu ${targetSems} kỳ ${delta} học kỳ (~${yearLabel(delta)}). Cần tăng TC/kỳ đáng kể.`;
+    }
+
     let html = `
-        <div style="background:var(--surface-soft); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--hairline); display:flex; justify-content:space-between; align-items:center;">
-            <div style="display:flex; align-items:center; gap:12px;">
-                <button onclick="backToPlannerSelection()" style="background:var(--surface); border:1px solid var(--hairline); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:6px; color:var(--ink); transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='var(--surface)'">
-                    <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
-                    Trở lại
-                </button>
-                <div style="border-left:1px solid var(--hairline); padding-left:12px;">
-                    <h3 style="margin:0 0 4px 0;">${plan.name} <span class="pill pill-lavender">${plan.mode.toUpperCase()}</span></h3>
-                    <p style="margin:0; color:var(--muted); font-size:0.9rem;">Dự kiến hoàn thành trong <strong>${plan.target_semester_count}</strong> học kỳ.</p>
+        <div style="background:var(--surface-soft); border:1px solid var(--hairline); border-radius:14px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="font-size:0.72rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em;">Đang áp dụng</span>
+                    <span style="font-size:1.35rem; font-weight:800; color:var(--ink); font-family:'Sora',sans-serif; line-height:1;">${plan.tc_per_sem || 18} <span style="font-size:0.78rem; font-weight:500; color:var(--muted);">TC/kỳ</span></span>
+                </div>
+                <div style="width:1px; height:36px; background:var(--hairline);"></div>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="font-size:0.72rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em;">Mục tiêu</span>
+                    <span style="font-size:1.35rem; font-weight:800; color:var(--ink); font-family:'Sora',sans-serif; line-height:1;">${targetSems} <span style="font-size:0.78rem; font-weight:500; color:var(--muted);">học kỳ</span></span>
+                </div>
+                <div style="width:1px; height:36px; background:var(--hairline);"></div>
+                <div style="display:flex; flex-direction:column; gap:2px;" title="${statusDesc}">
+                    <span style="font-size:0.72rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em;">Tiến độ</span>
+                    <span style="font-size:1.1rem; font-weight:800; color:${statusColor}; font-family:'Sora',sans-serif; line-height:1;">${statusIcon} ${statusText}</span>
+                    <span style="font-size:0.75rem; color:var(--muted);">Dự kiến ${totalPlanned} kỳ · đã xong ${completedSems} kỳ</span>
                 </div>
             </div>
-            <span style="color:#10b981; font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:4px;" title="Mọi chỉnh sửa kéo thả của bạn đều được hệ thống tự động lưu ngay lập tức.">✅ Đã lưu <span style="font-size:0.7rem; font-weight:400; color:var(--muted);">(Auto-save)</span></span>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button onclick="fetchAndShowAdvisory(${plan.id})" id="advisory-btn-${plan.id}"
+                    style="background:var(--surface); border:1px solid var(--hairline); padding:7px 14px; border-radius:8px; cursor:pointer; font-size:0.82rem; font-weight:600; color:var(--ink); display:flex; align-items:center; gap:6px; transition:all 0.2s; white-space:nowrap;"
+                    onmouseover="this.style.borderColor='var(--brand-mint)'" onmouseout="this.style.borderColor='var(--hairline)'">
+                    💡 Tư vấn điều chỉnh
+                </button>
+                <span style="color:#10b981; font-weight:600; font-size:0.82rem; display:flex; align-items:center; gap:4px; white-space:nowrap;" title="Mọi thay đổi được lưu tự động.">✅ Đã lưu</span>
+            </div>
         </div>
         <div style="display:flex; flex-direction:column; gap:20px;">
     `;
@@ -2091,9 +2102,7 @@ function renderStudyPlan(plan) {
         if (hasIncomplete) { currentSemIdx = sem.semester_index; break; }
     }
 
-    // Giới hạn tín chỉ theo mode (để tính credit bar)
-    const modeMaxCredits = { fast: 22, normal: 18, slow: 14 };
-    const maxCr = modeMaxCredits[plan.mode] || 18;
+    const maxCr = plan.tc_per_sem || 18;
 
     plan.semesters.forEach(sem => {
         const isPast    = currentSemIdx > 0 && sem.semester_index < currentSemIdx;
@@ -2214,14 +2223,29 @@ function renderStudyPlan(plan) {
                            </button>`
                     : '';
 
+                // Badge cho retake — phân biệt "lần thử đã qua" vs "lần tới"
+                let retakeBadge = '';
+                if (ss.is_retake) {
+                    if (hasGrade && isFailed) {
+                        retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fef3c7; color:#92400e; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
+                            📌 Đã thử – Rớt lại (điểm ${grade}) — lịch sử lần học này</div>`;
+                    } else if (!hasGrade) {
+                        retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fee2e2; color:#991b1b; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
+                            🔄 Cần học lại kỳ này</div>`;
+                    }
+                }
+                const retakePadTop = retakeBadge ? 'padding-top:28px;' : '';
+
                 html += `
                     <div class="study-plan-subject ${highlyRecommendedClass}"
                          id="plan-subject-${sub.id}-${ss.id}"
                          ${draggableAttr}
-                         style="padding:12px; border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top:100px;">
+                         style="padding:12px; ${retakePadTop} border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top:100px;">
+
+                        ${retakeBadge}
 
                         <button type="button" class="icon-btn"
-                                style="position:absolute; top:8px; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
+                                style="position:absolute; top:${retakeBadge ? '30px' : '8px'}; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
                                 onclick='openPrereqModal(${JSON.stringify(sub).replace(/'/g, "&#39;")})'
                                 title="Xem chi tiết môn"
                                 onmousedown="event.stopPropagation()">
@@ -2258,6 +2282,8 @@ function renderStudyPlan(plan) {
 
     html += '</div>';
     container.innerHTML = html;
+
+    // Advisory panel được cập nhật bởi fetchSuggestions() — không auto-popup modal nữa
 }
 
 // ─── Drag and Drop Handlers ───
@@ -2519,6 +2545,10 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
 
                 if (!alreadySaved) {
                     showSemResultModal(semIndex, snapshot);
+                    // Sau khi lưu kỳ học mới, mở tư vấn điều chỉnh kế hoạch
+                    setTimeout(() => {
+                        if (window.currentActivePlan) fetchAndShowAdvisory(window.currentActivePlan.id);
+                    }, 1800);
                 } else {
                     showToast(`✅ Đã cập nhật điểm học kỳ ${semIndex}`, 'success');
                 }
@@ -2528,12 +2558,10 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                     window._pendingModeEvaluation.plan_id = planId;
                     updateModeSuggestionBadge(resData.evaluation);
                 }
-                fetchSuggestions();
                 updateEarnedCredits();
                 updateCreditStats();
                 fetchProgress();
             } else {
-                fetchSuggestions();
                 updateEarnedCredits();
                 updateCreditStats();
             }
@@ -2637,7 +2665,11 @@ function scrollToSubject(id) {
 
         // Close the drawer if it exists
         const drawer = document.getElementById('suggestion-drawer');
-        if (drawer) drawer.style.right = '-450px';
+        if (drawer) {
+            drawer.style.right = '-450px';
+            const ov = document.getElementById('suggestion-drawer-overlay');
+            if (ov) { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; }
+        }
     } else {
         showToast('Môn học này chưa có trong lộ trình.', 'warning');
     }
@@ -2672,10 +2704,11 @@ async function applySuggestionsToPlan() {
         }
     }
 
-    const finalConfirmMsg = `Bạn sắp áp dụng gợi ý cho Học kỳ ${targetSemesterIndex}.\nLưu ý: Các môn tương lai sẽ được sắp xếp lại. Bạn có chắc chắn muốn tiếp tục không?`;
-    if (!window.confirm(finalConfirmMsg)) {
-        return;
-    }
+    const confirmed = await showConfirm(
+        `Áp dụng gợi ý cho Học kỳ ${targetSemesterIndex}`,
+        `Các môn tương lai sẽ được sắp xếp lại tự động. Môn học lại sẽ được chuyển sang học kỳ này. Bạn có chắc chắn muốn tiếp tục không?`
+    );
+    if (!confirmed) return;
 
     const btn = document.getElementById('btn-apply-suggestions');
     const originalText = btn.innerHTML;
@@ -2708,7 +2741,11 @@ async function applySuggestionsToPlan() {
             showToast('Đã áp dụng môn học vào học kỳ ' + targetSemesterIndex + '!', 'success');
 
             const drawer = document.getElementById('suggestion-drawer');
-            if (drawer) drawer.style.right = '-450px';
+            if (drawer) {
+                drawer.style.right = '-450px';
+                const ov = document.getElementById('suggestion-drawer-overlay');
+                if (ov) { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; }
+            }
         }
     } catch (e) {
         showToast(e.message || 'Lỗi khi áp dụng gợi ý.', 'error');
@@ -3043,12 +3080,208 @@ function showOverSemestersNotice(message) {
     setTimeout(() => banner?.remove(), 10000);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ADVISORY MODAL (tư vấn sau khi nhập điểm học kỳ)
+// ═══════════════════════════════════════════════════════════════
+window._advisoryData = null;
+
+// Fetch advisory và render vào panel trong drawer (không popup modal)
+async function fetchAdvisoryForDrawer(planId) {
+    try {
+        const res = await fetch(`/api/v1/study-plans/${planId}/advisory`, { headers: { 'Accept': 'application/json' } });
+        const resData = await res.json();
+        if (!resData.success) return;
+        window._advisoryData = resData.data;
+        renderAdvisoryPanel(resData.data);
+    } catch (e) { /* bỏ qua */ }
+}
+
+function renderAdvisoryPanel(data) {
+    const panel = document.getElementById('advisory-panel');
+    if (!panel) return;
+
+    const plan = window.currentActivePlan;
+    const targetSems  = plan?.target_semesters || plan?.target_semester_count || 8;
+    const currentTc   = plan?.tc_per_sem || 18;
+
+    const icons = { increase: '🚀', decrease: '🌱', maintain: '⚖️' };
+    const colors = {
+        increase: { bg: '#f0fdf4', border: '#86efac', text: '#15803d', badge: '#dcfce7', badgeText: '#15803d' },
+        decrease: { bg: '#fffbeb', border: '#fcd34d', text: '#92400e', badge: '#fef3c7', badgeText: '#92400e' },
+        maintain: { bg: '#f8fafc', border: '#e2e8f0', text: '#475569', badge: '#f1f5f9', badgeText: '#475569' },
+    };
+    const c = colors[data.recommend] || colors.maintain;
+    const icon = icons[data.recommend] || '💡';
+
+    // Row trạng thái kế hoạch hiện tại
+    let statsHtml = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.8rem; color:#64748b;">Mục tiêu tốt nghiệp</span>
+            <strong style="font-size:0.82rem;">${targetSems} học kỳ</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.8rem; color:#64748b;">TC/kỳ đang áp dụng</span>
+            <strong style="font-size:0.82rem;">${currentTc} TC</strong>
+        </div>`;
+
+    if (data.recommend !== 'maintain') {
+        const dir  = data.recommend === 'increase' ? '▲' : '▼';
+        const grad = data.new_graduation_estimate;
+        statsHtml += `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.8rem; color:#64748b;">TC/kỳ đề xuất</span>
+            <strong style="font-size:0.82rem; color:${c.text};">${dir} ${data.recommended_tc_per_sem} TC</strong>
+        </div>`;
+        if (grad) {
+            const delta = Math.abs(data.semesters_delta);
+            statsHtml += `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.8rem; color:#64748b;">Tốt nghiệp dự kiến</span>
+            <strong style="font-size:0.82rem; color:${data.recommend==='increase'&&delta>0?'#059669':data.recommend==='decrease'&&delta>0?'#d97706':'inherit'};">HK ${grad} ${delta > 0 ? `(${data.recommend==='increase'?'sớm hơn':'trễ hơn'} ${delta} kỳ)` : '(đúng mục tiêu)'}</strong>
+        </div>`;
+        }
+    }
+
+    let actionHtml = '';
+    if (data.recommend !== 'maintain') {
+        actionHtml = `
+        <div style="display:flex; gap:6px; margin-top:10px;">
+            <button onclick="applyAdvisoryAction(true)" style="flex:1; background:${c.text}; color:#fff; border:none; padding:7px 0; border-radius:8px; font-size:0.8rem; font-weight:700; cursor:pointer;">
+                Rải lại tự động
+            </button>
+            <button onclick="applyAdvisoryAction(false)" style="flex:1; background:${c.badge}; color:${c.text}; border:1px solid ${c.border}; padding:7px 0; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer;">
+                Chỉ đổi giới hạn TC
+            </button>
+        </div>`;
+    }
+
+    panel.style.display = 'block';
+    panel.innerHTML = `
+        <div style="margin:12px 16px; background:${c.bg}; border:1px solid ${c.border}; border-radius:12px; padding:12px 14px;">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                <span style="font-size:1.05rem;">${icon}</span>
+                <span style="font-size:0.82rem; font-weight:700; color:${c.text};">
+                    ${data.recommend === 'increase' ? 'Nên tăng tải' : data.recommend === 'decrease' ? 'Nên giảm tải' : 'Tiếp tục duy trì'}
+                </span>
+                <span style="margin-left:auto; font-size:0.75rem; background:${c.badge}; color:${c.badgeText}; padding:2px 8px; border-radius:99px; border:1px solid ${c.border};">Tư vấn</span>
+            </div>
+            <p style="font-size:0.8rem; color:${c.text}; margin:0 0 10px 0; line-height:1.45;">${data.reason}</p>
+            <div style="background:rgba(255,255,255,0.6); border-radius:8px; padding:10px 12px;">
+                ${statsHtml}
+            </div>
+            ${actionHtml}
+        </div>`;
+}
+
+async function fetchAndShowAdvisory(planId) {
+    try {
+        const res = await fetch(`/api/v1/study-plans/${planId}/advisory`, {
+            headers: { 'Accept': 'application/json' }
+        });
+        const resData = await res.json();
+        if (!resData.success) return;
+        showAdvisoryModal(resData.data);
+    } catch (e) {
+        console.error('Advisory fetch error', e);
+    }
+}
+
+function showAdvisoryModal(data) {
+    window._advisoryData = data;
+    const overlay   = document.getElementById('advisory-modal-overlay');
+    const bodyEl    = document.getElementById('advisory-body');
+    const titleEl   = document.getElementById('advisory-title');
+    const btnManual = document.getElementById('advisory-apply-manual');
+    const btnRedist = document.getElementById('advisory-apply-redistribute');
+    if (!overlay || !bodyEl) return;
+
+    const icons = { increase: '🚀', decrease: '🌱', maintain: '⚖️' };
+    const icon  = icons[data.recommend] || '💡';
+
+    titleEl.textContent = `${icon} Tư Vấn Điều Chỉnh Kế Hoạch`;
+
+    let body = `<p style="margin-bottom:12px;">${data.reason}</p>`;
+
+    if (data.recommend !== 'maintain') {
+        const dir = data.recommend === 'increase' ? 'tăng' : 'giảm';
+        const delta = Math.abs(data.semesters_delta);
+        const grad  = data.new_graduation_estimate;
+        body += `
+            <div style="background:var(--surface-soft); border-radius:10px; padding:14px 16px; margin-bottom:14px; border:1px solid var(--hairline);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="color:var(--muted); font-size:0.85rem;">TC/kỳ hiện tại</span>
+                    <strong>${data.current_tc_per_sem} TC</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="color:var(--muted); font-size:0.85rem;">TC/kỳ đề xuất</span>
+                    <strong style="color:${data.recommend==='increase'?'#059669':'#d97706'};">${data.recommended_tc_per_sem} TC</strong>
+                </div>
+                ${grad ? `<div style="display:flex; justify-content:space-between;">
+                    <span style="color:var(--muted); font-size:0.85rem;">Tốt nghiệp dự kiến</span>
+                    <strong style="color:${data.recommend==='increase'&&delta>0?'#059669':data.recommend==='decrease'&&delta>0?'#d97706':'inherit'};">
+                        Học kỳ ${grad} ${delta > 0 ? `(${data.recommend==='increase'?'sớm hơn':'trễ hơn'} ${delta} kỳ)` : '(đúng mục tiêu)'}</strong>
+                </div>` : ''}
+            </div>
+            <p style="font-size:0.85rem; color:var(--muted);">Chọn cách áp dụng đề xuất:</p>
+            <ul style="font-size:0.88rem; margin:8px 0 0 0; padding-left:18px; display:flex; flex-direction:column; gap:6px;">
+                <li><strong>Tự động rải lại:</strong> Hệ thống tính lại và phân bổ môn học theo tải mới.</li>
+                <li><strong>Chỉ đổi giới hạn TC:</strong> Cập nhật giới hạn tín chỉ/kỳ, bạn tự kéo thả điều chỉnh.</li>
+            </ul>`;
+        btnManual.style.display  = 'inline-block';
+        btnRedist.style.display  = 'inline-block';
+        btnManual.textContent    = `Chỉ đổi giới hạn (${data.recommended_tc_per_sem} TC/kỳ)`;
+        btnRedist.textContent    = `Tự động rải lại`;
+    } else {
+        body += `<p style="color:var(--muted); font-size:0.88rem;">Không cần thay đổi gì. Tiếp tục theo kế hoạch hiện tại.</p>`;
+        btnManual.style.display = 'none';
+        btnRedist.style.display = 'none';
+    }
+
+    bodyEl.innerHTML = body;
+    overlay.classList.remove('hidden');
+}
+
+function closeAdvisoryModal() {
+    document.getElementById('advisory-modal-overlay')?.classList.add('hidden');
+    window._advisoryData = null;
+}
+
+async function applyAdvisoryAction(redistribute) {
+    if (!window._advisoryData || !window.currentActivePlan) return;
+    const tc = window._advisoryData.recommended_tc_per_sem;
+    const loader = document.getElementById('planner-loader');
+    if (loader) loader.style.display = 'block';
+    closeAdvisoryModal();
+    const panel = document.getElementById('advisory-panel');
+    if (panel) panel.style.display = 'none';
+    try {
+        const res = await fetch(`/api/v1/study-plans/${window.currentActivePlan.id}/apply-advisory`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
+            body: JSON.stringify({ tc_per_sem: tc, redistribute })
+        });
+        const resData = await res.json();
+        if (resData.success && resData.data) {
+            renderStudyPlan(resData.data);
+            showToast(redistribute ? `Đã rải lại lộ trình với ${tc} TC/kỳ` : `Đã cập nhật giới hạn ${tc} TC/kỳ`, 'success');
+        } else {
+            showToast('Lỗi khi áp dụng tư vấn', 'error');
+        }
+    } catch (e) {
+        showToast('Lỗi mạng', 'error');
+    } finally {
+        if (loader) loader.style.display = 'none';
+    }
+}
+
 // Inject CSS cho sem-past và animation nếu chưa có
 (function injectPlannerStyles() {
     if (document.getElementById('planner-dynamic-styles')) return;
     const style = document.createElement('style');
     style.id = 'planner-dynamic-styles';
     style.textContent = `
+        .goal-card:hover { border-color:var(--brand-mint) !important; background:rgba(155,217,177,0.08) !important; }
+        .goal-card.selected { border-color:var(--brand-mint) !important; background:rgba(155,217,177,0.15) !important; }
         .sem-past { opacity: 0.88; }
         /* Drag-drop bị chặn bởi HTML (không có draggable attr + không có ondrop),
            không dùng pointer-events: none để vẫn cho phép sửa điểm */

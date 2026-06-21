@@ -23,83 +23,82 @@ class StudyPlanService
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * Tạo kế hoạch học tập mới hoàn toàn.
+     * Tạo kế hoạch học tập mới.
      *
-     * @return array{plan: StudyPlan, forced_slow: bool, applied_mode: string}
+     * @param  int    $targetSemesters  Số kỳ mục tiêu tốt nghiệp (6/7/8/9/10)
+     * @return array{plan: StudyPlan, tc_per_sem: int, target_semesters: int, over_semesters: bool, over_semesters_notice: ?string}
      */
-    public function generatePlan(int $userId, string $name, string $mode): array
+    public function generatePlan(int $userId, string $name, int $targetSemesters = 8): array
     {
-        return DB::transaction(function () use ($userId, $name, $mode) {
-            $user      = User::findOrFail($userId);
-            $forcedSlow = false;
+        return DB::transaction(function () use ($userId, $name, $targetSemesters) {
+            $user     = User::findOrFail($userId);
+            $targetSemesters = max(6, min(10, $targetSemesters));
 
-            // Kiểm tra GPA — buộc chuyển slow nếu đang yếu
-            if ($mode !== 'slow') {
-                $progress = (new ProgressService())->evaluateProgress($userId);
-                if ($progress['current_gpa'] > 0 && $progress['current_gpa'] < 5.0) {
-                    $mode       = 'slow';
-                    $forcedSlow = true;
-                }
-            }
-
-            // Mỗi sinh viên chỉ có 1 active plan
             StudyPlan::where('user_id', $userId)->where('is_active', true)->update(['is_active' => false]);
+
+            [$allSubjects, $passedIds, $failedIds, $historySubjectIds] = $this->loadPlanningData($userId);
+            $groupIds = $this->resolveGroupIds();
+
+            $lastHistorySem  = 0; // sẽ được set sau khi create plan
+            $completedSems   = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
+            $remainingSems   = max(1, $targetSemesters - $completedSems);
+
+            // Tính TC/kỳ từ số tín chỉ còn lại / số kỳ còn lại
+            $remainingCredits = $allSubjects
+                ->reject(fn($s) => in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds))
+                ->sum(fn($s) => (int)($s->credits ?? 3));
+            $tcPerSem = (int) ceil($remainingCredits / $remainingSems);
+            $tcPerSem = max(12, min(22, $tcPerSem));
+
+            // Derive mode for backward compat (hiển thị UI cũ nếu cần)
+            $mode = $tcPerSem >= 20 ? 'fast' : ($tcPerSem <= 14 ? 'slow' : 'normal');
 
             $plan = StudyPlan::create([
                 'user_id'               => $userId,
                 'name'                  => $name,
                 'mode'                  => $mode,
-                'target_semester_count' => $this->defaultTargetSems($mode),
+                'target_semester_count' => $targetSemesters,
+                'target_semesters'      => $targetSemesters,
+                'tc_per_sem'            => $tcPerSem,
                 'is_active'             => true,
                 'is_saved'              => true,
             ]);
 
-            // Load dữ liệu
-            [$allSubjects, $passedIds, $failedIds, $historySubjectIds] = $this->loadPlanningData($userId);
-            $groupIds = $this->resolveGroupIds();
-
-            // Tái tạo các kỳ lịch sử (đã học qua)
             $lastHistorySem = $this->buildHistorySemesters($plan, $userId);
 
-            // Sinh viên mới, chưa có điểm, mode normal → clone thẳng chương trình khung
-            if (empty($passedIds) && $lastHistorySem === 0 && $mode === 'normal') {
+            // Sinh viên mới, chưa có điểm, target = 8 kỳ → clone chương trình khung
+            if (empty($passedIds) && $lastHistorySem === 0 && $targetSemesters === 8) {
                 $this->cloneCurriculumFramework($plan, $allSubjects);
                 return [
-                    'plan'        => $plan->load('semesters.subjects.subject'),
-                    'forced_slow' => false,
-                    'applied_mode'=> 'normal',
+                    'plan'                  => $plan->load('semesters.subjects.subject'),
+                    'tc_per_sem'            => $tcPerSem,
+                    'target_semesters'      => $targetSemesters,
+                    'over_semesters'        => false,
+                    'over_semesters_notice' => null,
                 ];
             }
 
-            // Subjects cần schedule = tất cả chương trình TRỪ những cái đã PASS và có trong lịch sử.
-            // Môn FAIL trong lịch sử vẫn cần học lại nên giữ lại trong toSchedule.
             $toSchedule = $allSubjects->reject(fn($s) =>
                 in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds)
             );
 
-            // alreadyPlanned = môn đã pass + môn lịch sử không thất bại.
-            // Môn fail KHÔNG được đưa vào plannedSet ban đầu → môn phụ thuộc vào chúng
-            // sẽ không được xếp trước kỳ học lại của chúng.
             $passedHistoryIds = array_diff($historySubjectIds, $failedIds);
             $alreadyPlanned   = array_unique(array_merge($passedIds, $passedHistoryIds));
             $startSem         = max(1, $lastHistorySem + 1);
 
-            $schedule     = $this->buildSchedule($toSchedule, $alreadyPlanned, $startSem, $mode, $user, $groupIds);
-            $totalSems    = $this->persistSchedule($plan, $schedule, $passedIds);
-            $plan->update(['target_semester_count' => max($totalSems, $plan->target_semester_count)]);
+            $schedule  = $this->buildSchedule($toSchedule, $alreadyPlanned, $startSem, $tcPerSem, $targetSemesters, $user, $groupIds);
+            $totalSems = $this->persistSchedule($plan, $schedule, $passedIds);
+            $plan->update(['target_semester_count' => max($totalSems, $targetSemesters)]);
 
-            // Kiểm tra overflow: kế hoạch có vượt số kỳ mục tiêu của mode không?
-            $defaultTarget  = $this->defaultTargetSems($mode);
-            $maxSemInPlan   = empty($schedule) ? 0 : max(array_keys($schedule));
-            $overSems       = $maxSemInPlan > $defaultTarget;
-            $overSemCount   = max(0, $maxSemInPlan - $defaultTarget);
-            $overNotice     = null;
+            // Kiểm tra overflow
+            $maxSemInPlan = empty($schedule) ? 0 : max(array_keys($schedule));
+            $overSems     = $maxSemInPlan > $targetSemesters;
+            $overSemCount = max(0, $maxSemInPlan - $targetSemesters);
+            $overNotice   = null;
 
             if ($overSems) {
-                $overCredits = 0;
-                $overSubjectCount = 0;
-                $modeLimit = $this->modeMaxCredits($mode);
-                for ($s = $defaultTarget + 1; $s <= $maxSemInPlan; $s++) {
+                $overCredits = $overSubjectCount = 0;
+                for ($s = $targetSemesters + 1; $s <= $maxSemInPlan; $s++) {
                     foreach ($schedule[$s] ?? [] as $subId) {
                         $sub = $toSchedule->firstWhere('id', $subId);
                         $overCredits += (int)(($sub->credits ?? null) ?? 3);
@@ -107,16 +106,16 @@ class StudyPlanService
                     }
                 }
                 $overNotice = "Kế hoạch cần thêm {$overSemCount} học kỳ ({$overSubjectCount} môn, {$overCredits} TC) "
-                    . "vượt ngoài {$defaultTarget} kỳ mục tiêu. "
-                    . "Nguyên nhân: tổng tín chỉ chưa học vượt quá giới hạn {$modeLimit} TC/kỳ, "
+                    . "vượt ngoài {$targetSemesters} kỳ mục tiêu. "
+                    . "Nguyên nhân: tổng tín chỉ chưa học vượt quá giới hạn {$tcPerSem} TC/kỳ, "
                     . "hoặc ràng buộc tiên quyết buộc một số môn phải dời sang kỳ sau.";
             }
 
             return [
-                'plan'               => $plan->load('semesters.subjects.subject'),
-                'forced_slow'        => $forcedSlow,
-                'applied_mode'       => $mode,
-                'over_semesters'     => $overSems,
+                'plan'                  => $plan->load('semesters.subjects.subject'),
+                'tc_per_sem'            => $tcPerSem,
+                'target_semesters'      => $targetSemesters,
+                'over_semesters'        => $overSems,
                 'over_semesters_count'  => $overSemCount,
                 'over_semesters_notice' => $overNotice,
             ];
@@ -124,21 +123,127 @@ class StudyPlanService
     }
 
     /**
+     * Tính toán tư vấn điều chỉnh TC/kỳ sau khi sinh viên hoàn thành một học kỳ.
+     *
+     * @return array{recommend: string, reason: string, current_tc_per_sem: int,
+     *               recommended_tc_per_sem: int, new_graduation_estimate: ?int, semesters_delta: int}
+     */
+    public function computeAdvisory(StudyPlan $plan, int $userId): array
+    {
+        $histories = SemesterHistory::where('user_id', $userId)->orderBy('semester_number')->get();
+        if ($histories->isEmpty()) {
+            return ['recommend' => 'maintain', 'reason' => 'Chưa có dữ liệu học kỳ.', 'current_tc_per_sem' => $plan->tc_per_sem, 'recommended_tc_per_sem' => $plan->tc_per_sem, 'new_graduation_estimate' => null, 'semesters_delta' => 0];
+        }
+
+        [$allSubjects, $passedIds, $failedIds] = $this->loadPlanningData($userId);
+        $completedSems   = $histories->count();
+        $remainingSems   = max(1, $plan->target_semesters - $completedSems);
+        $remainingCredits = $allSubjects
+            ->reject(fn($s) => in_array($s->id, $passedIds))
+            ->sum(fn($s) => (int)($s->credits ?? 3));
+
+        // GPA: kỳ gần nhất (60%) + trung bình tích lũy (40%) → phản ánh xu hướng mà không bỏ qua lịch sử
+        $avgGpa      = round($histories->avg('gpa'), 2);
+        $lastGpa     = round((float) $histories->last()->gpa, 2);
+        $effectiveGpa = round($lastGpa * 0.6 + $avgGpa * 0.4, 2);
+        $currentTc   = $plan->tc_per_sem;
+
+        // Tính TC/kỳ cần thiết để đạt đúng mục tiêu
+        $neededTc = $remainingSems > 0 ? (int) ceil($remainingCredits / $remainingSems) : $currentTc;
+
+        // Ngữ cảnh GPA để hiển thị trong lý do
+        $gpaContext = $completedSems > 1
+            ? "GPA kỳ gần nhất {$lastGpa} (trung bình tích lũy {$avgGpa})"
+            : "GPA {$lastGpa}";
+
+        // Quyết định dựa trên effectiveGpa để tránh bị lừa bởi 1 kỳ bất thường
+        if ($effectiveGpa >= 7.0 && $currentTc < 22) {
+            $newTc        = min(22, $currentTc + max(2, (int)($currentTc * 0.15)));
+            $newSems      = (int) ceil($remainingCredits / $newTc) + $completedSems;
+            $delta        = $plan->target_semesters - $newSems;
+            $earlyBy      = $delta > 0 ? " Dự kiến tốt nghiệp sớm hơn {$delta} học kỳ so với mục tiêu." : '';
+            return [
+                'recommend'               => 'increase',
+                'reason'                  => "{$gpaContext} — học lực tốt, bạn hoàn toàn có thể tăng tải lên {$newTc} TC/kỳ.{$earlyBy}",
+                'current_tc_per_sem'      => $currentTc,
+                'recommended_tc_per_sem'  => $newTc,
+                'new_graduation_estimate' => $newSems,
+                'semesters_delta'         => $delta,
+            ];
+        }
+
+        if ($effectiveGpa < 5.5 || $neededTc > $currentTc * 1.15) {
+            // Học yếu hoặc đang tụt hậu → gợi ý giảm
+            $newTc        = max(12, $currentTc - max(2, (int)(($currentTc * 0.15))));
+            $newSems      = (int) ceil($remainingCredits / $newTc) + $completedSems;
+            $delta        = $newSems - $plan->target_semesters;
+            $tradeOff     = $delta > 0
+                ? " Tuy nhiên, điều này sẽ khiến bạn tốt nghiệp trễ hơn mục tiêu ban đầu {$delta} học kỳ (dự kiến học kỳ {$newSems})."
+                : '';
+            $trigger      = $effectiveGpa < 5.5
+                ? "{$gpaContext} — học lực yếu"
+                : "{$gpaContext} — cần đến {$neededTc} TC/kỳ để đúng tiến độ trong khi hiện tại chỉ có {$currentTc} TC/kỳ";
+            return [
+                'recommend'               => 'decrease',
+                'reason'                  => "{$trigger}. Giảm xuống {$newTc} TC/kỳ giúp tránh nguy cơ học lại.{$tradeOff}",
+                'current_tc_per_sem'      => $currentTc,
+                'recommended_tc_per_sem'  => $newTc,
+                'new_graduation_estimate' => $newSems,
+                'semesters_delta'         => $delta,
+            ];
+        }
+
+        return [
+            'recommend'               => 'maintain',
+            'reason'                  => "{$gpaContext} — tiến độ ổn định, phù hợp với kế hoạch hiện tại. Tiếp tục duy trì.",
+            'current_tc_per_sem'      => $currentTc,
+            'recommended_tc_per_sem'  => $currentTc,
+            'new_graduation_estimate' => null,
+            'semesters_delta'         => 0,
+        ];
+    }
+
+    /**
+     * Áp dụng tư vấn: cập nhật tc_per_sem và tùy chọn rải lại môn học.
+     *
+     * @param  bool $redistribute  true = rải lại tự động, false = chỉ cập nhật giới hạn
+     */
+    public function applyAdvisory(StudyPlan $plan, int $userId, int $newTcPerSem, bool $redistribute): StudyPlan
+    {
+        $newTcPerSem = max(12, min(22, $newTcPerSem));
+        $mode = $newTcPerSem >= 20 ? 'fast' : ($newTcPerSem <= 14 ? 'slow' : 'normal');
+
+        $plan->update(['tc_per_sem' => $newTcPerSem, 'mode' => $mode]);
+
+        if ($redistribute) {
+            $currentSem = $this->detectCurrentSemesterIndex($plan, $userId);
+            return $this->redistributeFrom($plan->fresh(), $currentSem);
+        }
+
+        return $plan->load('semesters.subjects.subject');
+    }
+
+    /**
      * Tái phân bổ môn học từ học kỳ $fromSem trở đi.
-     * Dùng cho: đổi chế độ (changeMode) và áp dụng gợi ý (applySuggestions).
+     * Dùng cho: applyAdvisory (redistribute) và applySuggestions.
      *
      * @param  int[]   $pinnedSubjectIds  Danh sách môn cần ghim vào đúng $fromSem (cho applySuggestions)
      */
     public function redistributeFrom(StudyPlan $plan, int $fromSem, array $pinnedSubjectIds = []): StudyPlan
     {
         return DB::transaction(function () use ($plan, $fromSem, $pinnedSubjectIds) {
-            $userId   = $plan->user_id;
-            $mode     = $plan->mode;
-            $user     = User::findOrFail($userId);
-            $groupIds = $this->resolveGroupIds();
+            $userId          = $plan->user_id;
+            $tcPerSem        = $plan->tc_per_sem ?? 18;
+            $targetSemesters = $plan->target_semesters ?? 8;
+            $user            = User::findOrFail($userId);
+            $groupIds        = $this->resolveGroupIds();
 
             [$allSubjects, $passedIds, $failedIds, $historySubjectIds] = $this->loadPlanningData($userId);
 
+            $plan->load('semesters.subjects');
+
+            // Dọn sạch retake trùng trước khi rebuild (sửa dữ liệu cũ bị duplicate)
+            $this->deduplicateRetakes($plan);
             $plan->load('semesters.subjects');
 
             // Gom subject_id đã có trong các kỳ TRƯỚC fromSem (từ plan)
@@ -171,22 +276,46 @@ class StudyPlanService
                 in_array($s->id, $alreadyPlanned) && !in_array($s->id, $failedIds)
             );
 
-            $schedule = [];
             $startSem = $fromSem;
 
-            // Ghim môn được chỉ định vào đầu kỳ (applySuggestions)
+            // Ghim môn được chỉ định vào đúng $fromSem (applySuggestions)
             if (!empty($pinnedSubjectIds)) {
-                $pinnedSubs          = $toSchedule->whereIn('id', $pinnedSubjectIds)->values();
-                $schedule[$startSem] = $pinnedSubs->pluck('id')->toArray();
-                $alreadyPlanned      = array_merge($alreadyPlanned, $schedule[$startSem]);
-                $toSchedule          = $toSchedule->whereNotIn('id', $pinnedSubjectIds)->values();
-                $startSem++;
+                $priorSemIds = $plan->semesters->where('semester_index', '<', $fromSem)->pluck('id');
+
+                // Tạo học kỳ mục tiêu
+                $pinnedCreditMap = Subject::whereIn('id', $pinnedSubjectIds)->pluck('credits', 'id')->toArray();
+                $pinnedSem = StudyPlanSemester::create([
+                    'study_plan_id'    => $plan->id,
+                    'semester_index'   => $fromSem,
+                    'expected_credits' => (int) array_sum(array_map(fn($id) => (int)($pinnedCreditMap[$id] ?? 3), $pinnedSubjectIds)),
+                ]);
+
+                foreach ($pinnedSubjectIds as $subjectId) {
+                    $isRetake = in_array($subjectId, $failedIds);
+
+                    if ($isRetake && $priorSemIds->isNotEmpty()) {
+                        // Môn học lại: xóa TẤT CẢ entries cũ của môn này trong các kỳ trước.
+                        // Plan chỉ giữ 1 bản mỗi môn — điểm lịch sử đã lưu trong UserGrade/SemesterHistory.
+                        StudyPlanSubject::whereIn('study_plan_semester_id', $priorSemIds)
+                            ->where('subject_id', $subjectId)
+                            ->delete();
+                    }
+
+                    StudyPlanSubject::create([
+                        'study_plan_semester_id' => $pinnedSem->id,
+                        'subject_id'             => $subjectId,
+                        'is_completed'           => false,
+                        'is_retake'              => $isRetake,
+                    ]);
+                }
+
+                $alreadyPlanned = array_merge($alreadyPlanned, $pinnedSubjectIds);
+                $toSchedule     = $toSchedule->whereNotIn('id', $pinnedSubjectIds)->values();
+                $startSem       = $fromSem + 1;
             }
 
-            $rest     = $this->buildSchedule($toSchedule, $alreadyPlanned, $startSem, $mode, $user, $groupIds);
-            $schedule = $schedule + $rest;
-
-            $totalSems = $this->persistSchedule($plan, $schedule, $passedIds);
+            $rest      = $this->buildSchedule($toSchedule, $alreadyPlanned, $startSem, $tcPerSem, $targetSemesters, $user, $groupIds);
+            $totalSems = $this->persistSchedule($plan, $rest, $passedIds);
             $plan->update(['target_semester_count' => max($totalSems, $fromSem)]);
 
             return $plan->load('semesters.subjects.subject');
@@ -210,14 +339,12 @@ class StudyPlanService
      * @param  int        $startSem       Học kỳ bắt đầu xếp
      * @return array<int, int[]>          [semesterIndex => [subjectId, ...]]
      */
-    private function buildSchedule(Collection $subjects, array $alreadyPlanned, int $startSem, string $mode, User $user, array $groupIds): array
+    private function buildSchedule(Collection $subjects, array $alreadyPlanned, int $startSem, int $tcPerSem, int $targetSemesters, User $user, array $groupIds): array
     {
-        // Dùng PHP array thuần để tránh overhead của Illuminate Collection trong vòng lặp nóng
-        $remaining   = $subjects->keyBy('id')->all(); // [id => Subject object]
-        $subjectMap  = $remaining;                    // reference tĩnh — không bị unset theo vòng lặp
-        $plannedSet  = array_flip($alreadyPlanned);   // [id => 0] for O(1) lookup
+        $remaining   = $subjects->keyBy('id')->all();
+        $subjectMap  = $remaining;
+        $plannedSet  = array_flip($alreadyPlanned);
 
-        // Precompute failed set cho priority
         $failedSet = array_flip(
             UserGrade::where('user_id', $user->id)
                 ->get()
@@ -227,8 +354,8 @@ class StudyPlanService
                 ->toArray()
         );
 
-        $modeLimit     = $this->modeMaxCredits($mode);
-        $targetSemsCap = $this->defaultTargetSems($mode); // cố định theo mode, không adaptive
+        $modeLimit     = $tcPerSem;        // giới hạn TC/kỳ = input trực tiếp
+        $targetSemsCap = $targetSemesters; // cố định theo mục tiêu, không adaptive
         $semIndex      = $startSem;
         $maxIterations = $startSem + 24; // safety guard
         $schedule      = [];
@@ -236,11 +363,9 @@ class StudyPlanService
         while (!empty($remaining) && $semIndex <= $maxIterations) {
             $isOdd = ($semIndex % 2) !== 0;
 
-            // Phân bổ đều tín chỉ qua các kỳ còn lại trong target.
-            // Nếu vượt targetSemsCap, thuật toán tự tạo thêm kỳ → caller sẽ cảnh báo.
-            $remCredits    = array_sum(array_map(fn($s) => (int)($s->credits ?? 3), $remaining));
-            $remSems       = max(1, $targetSemsCap - $semIndex + 1);
-            $targetCredits = min((int)ceil($remCredits / $remSems), $modeLimit);
+            // Luôn cố gắng pack đúng tcPerSem mỗi kỳ.
+            // Không dùng adaptive (ceil(rem/sems)) vì sẽ kéo xuống thấp hơn giới hạn user chọn.
+            $targetCredits = $modeLimit;
 
             // Lọc môn có thể xếp vào học kỳ này
             $available = [];
@@ -257,8 +382,8 @@ class StudyPlanService
 
             // Sắp xếp theo priority giảm dần
             usort($available, fn($a, $b) =>
-                $this->computePriority($b, $failedSet, $groupIds, $semIndex, $mode, $user)
-                <=> $this->computePriority($a, $failedSet, $groupIds, $semIndex, $mode, $user)
+                $this->computePriority($b, $failedSet, $groupIds, $semIndex, $user)
+                <=> $this->computePriority($a, $failedSet, $groupIds, $semIndex, $user)
             );
 
             // Greedy packing: nhét môn vào học kỳ cho đến khi đầy tín chỉ.
@@ -381,46 +506,38 @@ class StudyPlanService
      * Tính điểm ưu tiên cho môn học trong một học kỳ cụ thể.
      * Điểm cao hơn → được xếp sớm hơn.
      */
-    private function computePriority(object $subject, array $failedSet, array $groupIds, int $semIndex, string $mode, User $user): int
+    private function computePriority(object $subject, array $failedSet, array $groupIds, int $semIndex, User $user): int
     {
         $score = 0;
 
-        // Nhóm chương trình (Đại cương > Cơ sở ngành > phần còn lại)
         $pgId = $subject->program_group_id ?? null;
         if (in_array($pgId, $groupIds['basic']))       $score += 200;
         elseif (in_array($pgId, $groupIds['major']))   $score += 150;
 
-        // Môn rớt → cần học lại càng sớm càng tốt
         if (isset($failedSet[$subject->id]))           $score += 120;
 
-        // Số môn phụ thuộc vào môn này → unlock nhiều môn khác = ưu tiên cao
         $dependents = $subject->relatedRelations?->where('type', 'prerequisite')->count() ?? 0;
         $score += $dependents * 50;
 
-        // Đồ án / Thực tập → schedule sớm nhất khi đủ điều kiện
         if (str_contains($subject->name, 'Đồ án') || str_contains($subject->name, 'Thực tập')) {
             $score += 300;
         }
 
-        // Môn có tiên quyết nhóm → ưu tiên
         $reqType = $subject->requirement_type ?? null;
         if ($reqType && $reqType !== 'none') $score += 30;
 
-        // Định hướng kỹ năng của sinh viên
         if ($user->pref_skill_focus
             && $subject->skillGroup
             && $subject->skillGroup->focus_area === $user->pref_skill_focus) {
             $score += 80;
         }
 
-        // Bám sát học kỳ chuẩn trong chương trình khung (mode normal/slow)
-        if ($mode !== 'fast') {
-            $assigned = $subject->assigned_semester_index ?? null;
-            if ($assigned) {
-                if ($assigned === $semIndex)    $score += 200; // đúng học kỳ chuẩn
-                elseif ($assigned < $semIndex)  $score += 150; // đã trễ, ưu tiên học bù
-                else                            $score -= ($assigned - $semIndex) * 80; // còn sớm
-            }
+        // Bám sát học kỳ chuẩn trong chương trình khung
+        $assigned = $subject->assigned_semester_index ?? null;
+        if ($assigned) {
+            if ($assigned === $semIndex)    $score += 200;
+            elseif ($assigned < $semIndex)  $score += 150;
+            else                            $score -= ($assigned - $semIndex) * 80;
         }
 
         return $score;
@@ -601,6 +718,55 @@ class StudyPlanService
             'major'       => ProgramGroup::where('name', 'like', '%Cơ sở ngành%')->pluck('id')->toArray(),
             'specialized' => ProgramGroup::where('name', 'like', '%Chuyên ngành%')->pluck('id')->toArray(),
         ];
+    }
+
+    /**
+     * Trả về semester_index hiện tại (sau các kỳ history, trước các kỳ chưa học).
+     */
+    private function detectCurrentSemesterIndex(StudyPlan $plan, int $userId): int
+    {
+        $lastHistory = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
+        return max(1, $lastHistory + 1);
+    }
+
+    /**
+     * Xóa các bản sao retake trùng trong cùng một kế hoạch.
+     * Với mỗi subject_id xuất hiện > 1 lần dưới dạng retake chưa hoàn thành,
+     * giữ lại bản ở kỳ MỚI NHẤT (vì đó là lần học lại gần nhất được lên lịch),
+     * xóa các bản ở kỳ cũ hơn.
+     */
+    public function deduplicateRetakes(StudyPlan $plan): void
+    {
+        $plan->load('semesters.subjects');
+
+        // Chỉ gộp các entry retake CHƯA CÓ ĐIỂM (subject_grade = null).
+        // Entry có điểm (dù rớt) = lịch sử lần học thực tế → GIỮ NGUYÊN, không xóa.
+        $groups = [];
+        foreach ($plan->semesters as $sem) {
+            foreach ($sem->subjects as $ss) {
+                if ($ss->is_retake && !$ss->is_completed && $ss->subject_grade === null) {
+                    $groups[$ss->subject_id][] = [
+                        'id'             => $ss->id,
+                        'semester_index' => $sem->semester_index,
+                    ];
+                }
+            }
+        }
+
+        $toDelete = [];
+        foreach ($groups as $subjectId => $rows) {
+            if (count($rows) <= 1) continue;
+            // Giữ bản ở kỳ MỚI NHẤT (lịch dự kiến gần nhất), xóa các bản ở kỳ cũ hơn
+            usort($rows, fn($a, $b) => $a['semester_index'] <=> $b['semester_index']);
+            array_pop($rows);
+            foreach ($rows as $row) {
+                $toDelete[] = $row['id'];
+            }
+        }
+
+        if (!empty($toDelete)) {
+            StudyPlanSubject::whereIn('id', $toDelete)->delete();
+        }
     }
 
     private function modeMaxCredits(string $mode): int

@@ -163,7 +163,16 @@ class SuggestionService
                 }
             }
 
-            $subject->can_study = $canStudy;
+            $isRetake = in_array($subject->id, $failedSubjects);
+
+            // Môn rớt: sinh viên đã từng học qua (điều kiện tiên quyết đã đạt lúc đó)
+            // → luôn cho phép học lại, không cần kiểm tra prerequisite lại
+            if ($isRetake) {
+                $canStudy = true;
+            }
+
+            $subject->can_study  = $canStudy;
+            $subject->is_retake  = $isRetake;
             $subject->prerequisites_info = $prereqDetails;
 
             $corequisites = SubjectRelation::where('type', 'corequisite')
@@ -213,9 +222,9 @@ class SuggestionService
                 }
             }
 
-            // Nếu là môn rớt, ưu tiên học lại
-            if (in_array($subject->id, $failedSubjects)) {
-                $score += 50;
+            // Môn rớt: ưu tiên tối cao — phải học lại ngay
+            if ($isRetake) {
+                $score += 200;
             }
 
             $subject->suggestion_score = $score;
@@ -235,7 +244,7 @@ class SuggestionService
         });
 
         // Tùy chọn giới hạn số lượng gợi ý (ví dụ: 15 môn) để tránh danh sách quá dài
-        $suggestions = array_slice($suggestions, 0, 15);
+        $suggestions = array_slice($suggestions, 0, 25);
 
         return $suggestions;
     }

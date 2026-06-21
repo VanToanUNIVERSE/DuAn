@@ -131,8 +131,17 @@ class RecommendationService
                 }
             }
 
+            $isFailedSubject = in_array($subject->id, $failedSubjectIds);
+
+            // Môn rớt: sinh viên đã học qua → điều kiện tiên quyết đã được đáp ứng trước đó
+            // Luôn cho phép học lại, không bỏ qua dù prerequisite check không đủ
+            if ($isFailedSubject) {
+                $hasUnmetPrerequisite = false;
+            }
+
             $subject->prerequisites_info = $prereqDetails;
             $subject->can_study = !$hasUnmetPrerequisite;
+            $subject->is_retake_candidate = $isFailedSubject;
 
             if ($hasUnmetPrerequisite) {
                 continue;
@@ -142,10 +151,16 @@ class RecommendationService
             $score = 0;
             $reasons = [];
 
-            // +50 if it's a currently retaking subject in active plan
+            // Môn rớt: ưu tiên tuyệt đối — phải học lại ngay
+            if ($isFailedSubject) {
+                $score += 100;
+                $reasons[] = 'Cần học lại (đã rớt)';
+            }
+
+            // +50 if it's already added as retake row in plan
             if (in_array($subject->id, $currentRetakeSubjectIds)) {
-                $score += 50;
-                $reasons[] = 'Học lại môn đã rớt';
+                $score += 30;
+                $reasons[] = 'Đã thêm vào kế hoạch học lại';
             }
 
             // +30 for specific requirement types (Mandatory/Core)
@@ -186,7 +201,7 @@ class RecommendationService
                 'score'          => $score,
                 'reasons'        => $reasons,
                 'dependent_count'=> $subject->relatedRelations->where('type', 'prerequisite')->count(),
-                'is_failed'      => in_array($subject->id, $failedSubjectIds),
+                'is_failed'      => $isFailedSubject,
             ];
         }
 

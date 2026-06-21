@@ -17,8 +17,10 @@ class StudyPlan extends Model
         'name',
         'mode',
         'target_semester_count',
+        'target_semesters',
+        'tc_per_sem',
         'is_saved',
-        'is_active',  // true = kế hoạch đang hoạt động, mỗi user chỉ có 1
+        'is_active',
     ];
 
 

@@ -28,6 +28,7 @@ class UserPreferenceController extends Controller
             'program_type'     => $user->pref_program_type,
             'current_semester' => $user->pref_current_semester,
             'target_years'     => $user->pref_target_years,
+            'target_semesters' => $user->pref_graduation_semester,
             'current_courses'  => $user->pref_current_courses ? json_decode($user->pref_current_courses, true) : [],
             'skill_focus'      => $user->pref_skill_focus,
         ]);
@@ -56,6 +57,7 @@ class UserPreferenceController extends Controller
             'program_type'     => 'nullable|string|max:50',
             'current_semester' => 'nullable|integer|min:1|max:10',
             'target_years'     => 'nullable|integer|min:3|max:8',
+            'target_semesters' => 'nullable|integer|min:4|max:12',
             'current_courses'  => 'nullable|array',
             'skill_focus'      => "nullable|string|in:,{$validFocusAreas}",
         ]);
@@ -74,6 +76,9 @@ class UserPreferenceController extends Controller
         }
         if (array_key_exists('target_years', $validated)) {
             $toUpdate['pref_target_years'] = $validated['target_years'];
+        }
+        if (array_key_exists('target_semesters', $validated)) {
+            $toUpdate['pref_graduation_semester'] = $validated['target_semesters'];
         }
         if (array_key_exists('current_courses', $validated)) {
             $toUpdate['pref_current_courses'] = $validated['current_courses'] === null ? null : json_encode($validated['current_courses']);

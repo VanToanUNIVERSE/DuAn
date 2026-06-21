@@ -31,14 +31,14 @@ class StudyPlanController extends Controller
         if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
 
         $request->validate([
-            'name' => 'required|string|max:120',
-            'mode' => 'nullable|in:normal,fast,slow',
+            'name'             => 'required|string|max:120',
+            'target_semesters' => 'nullable|integer|in:6,7,8,9,10',
         ]);
 
         $result = $this->planService->generatePlan(
             $userId,
             $request->input('name'),
-            $request->input('mode', 'normal')
+            (int)$request->input('target_semesters', 8)
         );
 
         $plan = $this->attachGrades($result['plan'], $userId);
@@ -46,11 +46,8 @@ class StudyPlanController extends Controller
         return response()->json([
             'success'                => true,
             'data'                   => $plan,
-            'forced_slow'            => $result['forced_slow'],
-            'applied_mode'           => $result['applied_mode'],
-            'notice'                 => $result['forced_slow']
-                ? 'GPA của bạn đang dưới 5.0. Hệ thống đã tự động chuyển sang chế độ Học Nhẹ để bảo đảm an toàn học vụ.'
-                : null,
+            'tc_per_sem'             => $result['tc_per_sem'],
+            'target_semesters'       => $result['target_semesters'],
             'over_semesters'         => $result['over_semesters'] ?? false,
             'over_semesters_count'   => $result['over_semesters_count'] ?? 0,
             'over_semesters_notice'  => $result['over_semesters_notice'] ?? null,
@@ -87,6 +84,11 @@ class StudyPlanController extends Controller
         if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
 
         $plan = StudyPlan::where('user_id', $userId)->where('is_active', true)->first();
+
+        if ($plan) {
+            // Tự động dọn retake trùng mỗi khi load plan (sửa data cũ nếu có)
+            $this->planService->deduplicateRetakes($plan);
+        }
 
         return response()->json([
             'success' => true,
@@ -144,32 +146,82 @@ class StudyPlanController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // POST /api/v1/study-plans/{id}/change-mode
+    // POST /api/v1/study-plans/{id}/adjust-target
+    // Thay thế change-mode: điều chỉnh mục tiêu tốt nghiệp và/hoặc TC/kỳ
     // ──────────────────────────────────────────────────────────────────────
-    public function changeMode(Request $request, $id)
+    public function adjustTarget(Request $request, $id)
     {
-        $request->validate(['mode' => 'required|in:slow,normal,fast']);
+        $request->validate([
+            'target_semesters' => 'nullable|integer|in:6,7,8,9,10',
+            'tc_per_sem'       => 'nullable|integer|min:12|max:22',
+        ]);
         $userId = Auth::id();
 
         $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
 
-        if ($plan->mode === $request->mode) {
-            return response()->json(['success' => false, 'message' => 'Chế độ này đang được kích hoạt.'], 422);
-        }
+        $newTarget = (int)$request->input('target_semesters', $plan->target_semesters ?? 8);
+        $newTc     = (int)$request->input('tc_per_sem', $plan->tc_per_sem ?? 18);
+        $newMode   = $newTc >= 20 ? 'fast' : ($newTc <= 14 ? 'slow' : 'normal');
 
-        $plan->update(['mode' => $request->mode]);
+        $plan->update([
+            'target_semesters' => $newTarget,
+            'tc_per_sem'       => $newTc,
+            'mode'             => $newMode,
+        ]);
 
-        // Tìm học kỳ hiện tại (kỳ đầu tiên chưa hoàn thành)
         $plan->load('semesters.subjects');
         $currentSem = $this->detectCurrentSemester($plan, $userId);
+        $updated    = $this->planService->redistributeFrom($plan->fresh(), $currentSem);
 
-        $updated = $this->planService->redistributeFrom($plan, $currentSem);
-        $updated = $this->attachGrades($updated, $userId);
+        return response()->json([
+            'success'          => true,
+            'message'          => 'Đã cập nhật mục tiêu và rải lại lộ trình.',
+            'data'             => $this->attachGrades($updated, $userId),
+            'target_semesters' => $newTarget,
+            'tc_per_sem'       => $newTc,
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // GET /api/v1/study-plans/{id}/advisory
+    // ──────────────────────────────────────────────────────────────────────
+    public function advisory($id)
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
+        $data = $this->planService->computeAdvisory($plan, $userId);
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/{id}/apply-advisory
+    // ──────────────────────────────────────────────────────────────────────
+    public function applyAdvisory(Request $request, $id)
+    {
+        $request->validate([
+            'tc_per_sem'   => 'required|integer|min:12|max:22',
+            'redistribute' => 'required|boolean',
+        ]);
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $plan    = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
+        $updated = $this->planService->applyAdvisory(
+            $plan,
+            $userId,
+            (int)$request->input('tc_per_sem'),
+            (bool)$request->input('redistribute')
+        );
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã đổi chế độ và rải lại lộ trình.',
-            'data'    => $updated,
+            'message' => $request->input('redistribute')
+                ? 'Đã cập nhật TC/kỳ và rải lại lộ trình.'
+                : 'Đã cập nhật TC/kỳ. Bạn có thể tự điều chỉnh thứ tự môn học.',
+            'data'    => $this->attachGrades($updated, $userId),
         ]);
     }
 
@@ -395,6 +447,22 @@ class StudyPlanController extends Controller
             'success' => true,
             'message' => 'Đã áp dụng gợi ý và rải lại lộ trình.',
             'data'    => $this->attachGrades($updated, $userId),
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/{id}/dedup-retakes
+    // ──────────────────────────────────────────────────────────────────────
+    public function dedupRetakes($id)
+    {
+        $userId = Auth::id();
+        $plan = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
+        $this->planService->deduplicateRetakes($plan);
+        $plan->load('semesters.subjects');
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã dọn sạch môn học trùng lặp.',
+            'data'    => $this->attachGrades($plan, $userId),
         ]);
     }
 

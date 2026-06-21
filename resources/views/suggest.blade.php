@@ -284,6 +284,37 @@
                 <option value="security" {{ Auth::user()->pref_skill_focus === 'security' ? 'selected' : '' }}>🔒 Cybersecurity</option>
             </select>
         </div>
+        {{-- Mục tiêu tốt nghiệp --}}
+        <div class="input-group" style="margin-top:16px;">
+            <label class="input-label" style="display:flex; align-items:center; gap:6px;">
+                🎓 Mục tiêu tốt nghiệp
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:400;">(ảnh hưởng đến lộ trình TC/kỳ)</span>
+            </label>
+            <div id="config-goal-cards" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                <div class="goal-card cfg" data-sems="6" onclick="selectConfigGoal(6, true)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                    <div style="font-weight:700; font-size:0.88rem;">3 Năm</div>
+                    <div style="font-size:0.75rem; color:var(--muted);">6 học kỳ</div>
+                </div>
+                <div class="goal-card cfg" data-sems="7" onclick="selectConfigGoal(7, true)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                    <div style="font-weight:700; font-size:0.88rem;">3.5 Năm</div>
+                    <div style="font-size:0.75rem; color:var(--muted);">7 học kỳ</div>
+                </div>
+                <div class="goal-card cfg selected" data-sems="8" onclick="selectConfigGoal(8, true)" style="padding:8px 10px; border:2px solid var(--brand-mint); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center; background:rgba(155,217,177,0.15);">
+                    <div style="font-weight:700; font-size:0.88rem;">4 Năm <span style="font-size:0.68rem; background:var(--brand-mint); color:var(--ink); padding:1px 5px; border-radius:99px;">Chuẩn</span></div>
+                    <div style="font-size:0.75rem; color:var(--muted);">8 học kỳ</div>
+                </div>
+                <div class="goal-card cfg" data-sems="9" onclick="selectConfigGoal(9, true)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                    <div style="font-weight:700; font-size:0.88rem;">4.5 Năm</div>
+                    <div style="font-size:0.75rem; color:var(--muted);">9 học kỳ</div>
+                </div>
+                <div class="goal-card cfg" data-sems="10" onclick="selectConfigGoal(10, true)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                    <div style="font-weight:700; font-size:0.88rem;">5 Năm</div>
+                    <div style="font-size:0.75rem; color:var(--muted);">10 học kỳ</div>
+                </div>
+            </div>
+            <div id="config-goal-preview" style="margin-top:8px; font-size:0.82rem; color:var(--muted); min-height:18px;"></div>
+        </div>
+
         <div class="config-stats">
             <div class="config-stat">
                 <div class="config-stat-val" id="stat-total-credits">{{ $totalCredits }}</div>
@@ -873,68 +904,23 @@
                     còn lại đến khi tốt nghiệp.</p>
             </div>
 
-            <div id="planner-selection-view" style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:var(--sp-xl);">
-                
-                <!-- Cột 1: Quản Lý Chế Độ / Tạo Kế Hoạch -->
+            <div id="planner-selection-view" style="display:none; max-width:480px; margin-bottom:var(--sp-xl);">
                 <div class="clay-card">
-                    <!-- Khối: Tạo Kế Hoạch Mới (Khi chưa có kế hoạch) -->
+                    <!-- Khối: Tạo Kế Hoạch Mới -->
                     <div id="plan-creation-wizard">
                         <div class="card-title-row">
-                            <div class="card-heading">⚙️ Tạo Kế Hoạch Mới</div>
+                            <div class="card-heading">✨ Tạo Kế Hoạch Học Tập</div>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:16px;">
-                            <div>
-                                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Chế độ học (Mode)</label>
-                                <select id="planner-mode" class="clay-select" style="width: 100%;">
-                                    <option value="normal" selected>Bình thường (8 kỳ - 4 năm)</option>
-                                    <option value="fast">Nhanh (6 kỳ - 3 năm)</option>
-                                    <option value="slow">Chậm (10 kỳ - 5 năm)</option>
-                                </select>
-                            </div>
+                            <p style="font-size:0.85rem; color:var(--muted); margin:0;">Mục tiêu tốt nghiệp được cài trong <strong>⚙️ Cấu Hình Chương Trình</strong>. Hệ thống sẽ tự động phân bổ tín chỉ theo mục tiêu đó.</p>
                             <div>
                                 <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Tên kế hoạch <span style="color:var(--red);">*</span></label>
                                 <input type="text" id="planner-name" class="ob-grade-input"
-                                    placeholder="Ví dụ: Kế hoạch ra trường sớm"
+                                    placeholder="Ví dụ: Kế hoạch ra trường 4 năm"
                                     style="width: 100%; text-align:left; padding:0 12px; height:42px;">
                             </div>
-                            <button class="btn-primary" onclick="generateStudyPlan()" style="height: 42px; width:100%; justify-content:center; margin-top:8px;">✨ Tạo kế hoạch</button>
+                            <button class="btn-primary" onclick="generateStudyPlan()" style="height: 42px; width:100%; justify-content:center; margin-top:4px;">✨ Tạo kế hoạch</button>
                         </div>
-                    </div>
-
-                    <!-- Khối: Đổi Chế Độ (Khi đã có kế hoạch active) -->
-                    <div id="plan-mode-switcher" style="display:none;">
-                        <div class="card-title-row">
-                            <div class="card-heading">🎛️ Điều Chỉnh Cường Độ Học</div>
-                        </div>
-                        <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 16px;">Bạn đã có kế hoạch đang hoạt động. Bạn có thể đổi cường độ học để hệ thống tự động rải lại môn.</p>
-                        
-                        <div style="display:flex; flex-direction:column; gap:12px;">
-                            <label style="display:flex; align-items:center; gap:12px; padding: 12px; border: 1px solid var(--hairline); border-radius: 8px; cursor: pointer;" class="mode-radio-label">
-                                <input type="radio" name="change_mode" value="slow" style="width: 18px; height: 18px;">
-                                <div>
-                                    <div style="font-weight: 600; color: var(--ink);">🌱 Học Nhẹ (~12-14 TC/kỳ)</div>
-                                    <div style="font-size: 0.8rem; color: var(--muted);">Giảm áp lực, kéo dài thời gian</div>
-                                </div>
-                            </label>
-                            
-                            <label style="display:flex; align-items:center; gap:12px; padding: 12px; border: 1px solid var(--hairline); border-radius: 8px; cursor: pointer;" class="mode-radio-label">
-                                <input type="radio" name="change_mode" value="normal" style="width: 18px; height: 18px;">
-                                <div>
-                                    <div style="font-weight: 600; color: var(--ink);">⚖️ Cân Bằng (~15-18 TC/kỳ)</div>
-                                    <div style="font-size: 0.8rem; color: var(--muted);">Tốt nghiệp đúng hạn chuẩn</div>
-                                </div>
-                            </label>
-                            
-                            <label style="display:flex; align-items:center; gap:12px; padding: 12px; border: 1px solid var(--hairline); border-radius: 8px; cursor: pointer;" class="mode-radio-label">
-                                <input type="radio" name="change_mode" value="fast" style="width: 18px; height: 18px;">
-                                <div>
-                                    <div style="font-weight: 600; color: var(--ink);">🚀 Tăng Tốc (~20-25 TC/kỳ)</div>
-                                    <div style="font-size: 0.8rem; color: var(--muted);">Tốt nghiệp sớm hơn</div>
-                                </div>
-                            </label>
-                        </div>
-                        
-                        <button class="btn-primary" onclick="changeActivePlanMode()" style="height: 42px; width:100%; justify-content:center; margin-top:16px;">🔄 Cập nhật lộ trình</button>
                     </div>
 
                     <div id="planner-loader" class="loader" style="display:none; text-align:center; padding:20px;">
@@ -942,17 +928,28 @@
                         <p style="color:var(--muted);font-size:0.9rem;margin-top:10px;">Hệ thống đang chạy thuật toán tái phân bổ...</p>
                     </div>
                 </div>
+            </div>
 
-                <!-- Cột Danh Sách Kế Hoạch -->
-                <div class="clay-card">
-                    <div class="card-title-row">
-                        <div class="card-heading">
-                            📂 Kế Hoạch Của Bạn
-                        </div>
+            {{-- ── Custom Confirm Modal (thay thế window.confirm) ── --}}
+            <div id="custom-confirm-overlay"
+                style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:99999; align-items:center; justify-content:center;">
+                <div style="background:var(--canvas); border-radius:16px; padding:28px 28px 20px; width:420px; max-width:92vw; box-shadow:0 20px 60px rgba(0,0,0,0.25); border:1px solid var(--hairline); animation:fadeUp 0.2s ease-out;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+                        <span style="font-size:1.4rem;">📋</span>
+                        <h3 id="confirm-title" style="margin:0; font-size:1rem; font-weight:700; color:var(--ink);"></h3>
                     </div>
-                    <div id="inline-saved-plans-list" style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding-right:8px;">
-                        <!-- Danh sách kế hoạch load bằng JS -->
-                        <p style="color:var(--muted); text-align:center; padding:20px;">Đang tải danh sách...</p>
+                    <p id="confirm-message" style="margin:0 0 20px; font-size:0.88rem; color:var(--body); line-height:1.6; padding:12px 14px; background:var(--surface-soft); border-radius:8px; border:1px solid var(--hairline);"></p>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button id="confirm-cancel-btn"
+                            style="padding:9px 20px; border-radius:8px; border:1px solid var(--hairline); background:var(--surface-card); color:var(--body); font-size:0.88rem; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s;"
+                            onmouseover="this.style.background='var(--surface-strong)'" onmouseout="this.style.background='var(--surface-card)'">
+                            Huỷ
+                        </button>
+                        <button id="confirm-ok-btn"
+                            style="padding:9px 22px; border-radius:8px; border:none; background:var(--ink); color:var(--canvas); font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit; transition:background 0.15s;"
+                            onmouseover="this.style.background='#333'" onmouseout="this.style.background='var(--ink)'">
+                            Xác nhận
+                        </button>
                     </div>
                 </div>
             </div>
@@ -964,8 +961,12 @@
                 ✨
             </button>
 
+            <div id="suggestion-drawer-overlay"
+                onclick="toggleSuggestionDrawer()"
+                style="position:fixed; inset:0; background:rgba(10,10,10,0.35); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:9998; opacity:0; pointer-events:none; transition:opacity 0.3s ease;"></div>
+
             <div id="suggestion-drawer"
-                style="position: fixed; top: 0; right: -450px; width: 450px; max-width: 100vw; height: 100vh; background: var(--surface); box-shadow: -4px 0 24px rgba(0,0,0,0.12); z-index: 9999; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column;">
+                style="position: fixed; top: 0; right: -450px; width: 450px; max-width: 100vw; height: 100vh; background: rgba(255,254,247,0.88); backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5); box-shadow: -4px 0 32px rgba(0,0,0,0.18); z-index: 9999; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.6);">
                 <div
                     style="padding: 20px; border-bottom: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center; background: var(--brand-mint);">
                     <div style="display:flex; align-items:center; gap: 8px;">
@@ -1009,12 +1010,40 @@
 
             <script>
                 function toggleSuggestionDrawer() {
-                    const drawer = document.getElementById('suggestion-drawer');
+                    const drawer  = document.getElementById('suggestion-drawer');
+                    const overlay = document.getElementById('suggestion-drawer-overlay');
                     if (drawer.style.right === '0px') {
                         drawer.style.right = '-450px';
+                        if (overlay) { overlay.style.opacity = '0'; overlay.style.pointerEvents = 'none'; }
                     } else {
                         drawer.style.right = '0px';
+                        if (overlay) { overlay.style.opacity = '1'; overlay.style.pointerEvents = 'auto'; }
                     }
+                }
+
+                // Promise-based confirm popup thay thế window.confirm
+                function showConfirm(title, message) {
+                    return new Promise(resolve => {
+                        const overlay = document.getElementById('custom-confirm-overlay');
+                        document.getElementById('confirm-title').textContent   = title;
+                        document.getElementById('confirm-message').textContent = message;
+                        overlay.style.display = 'flex';
+
+                        const okBtn     = document.getElementById('confirm-ok-btn');
+                        const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+                        function cleanup(result) {
+                            overlay.style.display = 'none';
+                            okBtn.removeEventListener('click', onOk);
+                            cancelBtn.removeEventListener('click', onCancel);
+                            resolve(result);
+                        }
+                        const onOk     = () => cleanup(true);
+                        const onCancel = () => cleanup(false);
+
+                        okBtn.addEventListener('click', onOk);
+                        cancelBtn.addEventListener('click', onCancel);
+                    });
                 }
             </script>
 
@@ -1135,6 +1164,26 @@
             </div>
         </div>
     </div>
+    <!-- Advisory Modal -->
+    <div class="prereq-modal-overlay hidden" id="advisory-modal-overlay" onclick="if(event.target===this) closeAdvisoryModal()">
+        <div class="prereq-modal" style="max-width:520px;">
+            <div class="prereq-header">
+                <h3 class="prereq-title" id="advisory-title">Tư Vấn Điều Chỉnh Kế Hoạch</h3>
+                <button class="prereq-close" onclick="closeAdvisoryModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="prereq-body" id="advisory-body" style="line-height:1.65; font-size:0.94rem;">
+                <!-- Nội dung load bởi JS -->
+            </div>
+            <div class="prereq-footer" style="padding:16px 20px; border-top:1px solid var(--hairline); display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+                <button onclick="closeAdvisoryModal()" style="background:var(--surface-soft); border:1px solid var(--hairline); padding:8px 18px; border-radius:8px; cursor:pointer; font-weight:600; color:var(--ink);">Giữ nguyên</button>
+                <button id="advisory-apply-manual" onclick="applyAdvisoryAction(false)" style="background:var(--surface); border:2px solid var(--brand-mint); padding:8px 18px; border-radius:8px; cursor:pointer; font-weight:600; color:var(--ink); display:none;">Chỉ đổi giới hạn TC</button>
+                <button id="advisory-apply-redistribute" onclick="applyAdvisoryAction(true)" style="background:var(--brand-mint); border:none; padding:8px 18px; border-radius:8px; cursor:pointer; font-weight:700; color:var(--ink); display:none;">Tự động rải lại lộ trình</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     </script>
