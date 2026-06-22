@@ -96,20 +96,6 @@
                     <span id="srm-prog-pace">Cần -- TC/kỳ</span>
                 </div>
             </div>
-            <div class="srm-recommend" id="srm-recommend">
-                <div class="srm-recommend-icon" id="srm-rec-icon">📈</div>
-                <div class="srm-recommend-body">
-                    {{-- Badge phạm vi: chỉ ảnh hưởng kỳ tiếp --}}
-                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                        <div class="srm-recommend-tag" id="srm-rec-tag">Gợi ý chung</div>
-                        <span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.03em;">CHỈ KỲ TIẾP</span>
-                    </div>
-                    <div class="srm-recommend-headline" id="srm-rec-headline">Giữ nguyên số tín chỉ</div>
-                    <div class="srm-credit-change" id="srm-credit-change"><span>--</span> TC/kỳ</div>
-                    <div class="srm-recommend-desc" id="srm-rec-desc">--</div>
-                </div>
-            </div>
-            <div class="srm-reasons" id="srm-reasons"></div>
             
             {{-- Advisor Section: Gợi ý điều chỉnh mode lộ trình --}}
             <div class="srm-advisor-section" id="srm-advisor-section"
@@ -153,15 +139,8 @@
 
             <div class="srm-subj-section" id="srm-subj-section"></div>
 
-            <div class="srm-footer" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-top: 1px solid var(--hairline);">
+            <div class="srm-footer" style="display: flex; align-items: center; justify-content: flex-end; padding: 14px 24px; border-top: 1px solid var(--hairline);">
                 <button class="srm-btn-close" onclick="closeSemResultModal()">Đóng</button>
-
-                {{-- Nút này CHỈ đặt mục tiêu TC cho kỳ tiếp, không thay đổi lộ trình tổng thể --}}
-                <button class="srm-btn-apply" id="srm-btn-apply" onclick="applyCreditRecommendation()" style="display:none;"
-                        title="Lưu mục tiêu số tín chỉ cho kỳ học tiếp theo. Không thay đổi cấu trúc lộ trình.">
-                    <span style="font-size: 0.75rem; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; margin-right: 5px; font-weight: 700;">KỲ TIẾP</span>
-                    ✨ Áp dụng gợi ý
-                </button>
             </div>
         </div>
     </div>

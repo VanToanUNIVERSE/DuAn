@@ -1064,17 +1064,6 @@ function showSemResultModal(semNumber, snapshot) {
     fill.style.background = progPct >= 75 ? 'var(--success)' : progPct >= 40 ? 'var(--ink)' : 'var(--brand-ochre)';
     document.getElementById('srm-prog-left').textContent = `Còn lại: ${remCredits} TC`;
     document.getElementById('srm-prog-pace').textContent = `Cần ${neededPerSem} TC/kỳ`;
-    const recEl = document.getElementById('srm-recommend'); recEl.className = `srm-recommend ${recType}`;
-    document.getElementById('srm-rec-icon').textContent = recIcon;
-    document.getElementById('srm-rec-tag').textContent = recTag;
-    document.getElementById('srm-rec-headline').textContent = recHeadline;
-    document.getElementById('srm-rec-desc').innerHTML = recDesc;
-    const changeEl = document.getElementById('srm-credit-change');
-    if (recDelta > 0) { changeEl.className = 'srm-credit-change up'; changeEl.innerHTML = `↑ ${suggestedCredits} <small style="font-size:.72rem;font-weight:500;color:var(--muted);">TC/kỳ (tăng +${recDelta})</small>`; }
-    else if (recDelta < 0) { changeEl.className = 'srm-credit-change down'; changeEl.innerHTML = `↓ ${suggestedCredits} <small style="font-size:.72rem;font-weight:500;color:var(--muted);">TC/kỳ (giảm ${recDelta})</small>`; }
-    else { changeEl.className = 'srm-credit-change same'; changeEl.innerHTML = `= ${suggestedCredits} <small style="font-size:.72rem;font-weight:500;color:var(--muted);">TC/kỳ (giữ nguyên)</small>`; }
-    const reasonsEl = document.getElementById('srm-reasons');
-    reasonsEl.innerHTML = reasons.map(r => `<div class="srm-reason-item"><span class="srm-reason-icon">${r.icon}</span><span>${r.text}</span></div>`).join('');
     const subjEl = document.getElementById('srm-subj-section');
     const subjectData = snapshot.map(c => { const input = document.getElementById(`grade-${c.id}`); const credits = parseInt(input?.dataset.credits || c.credits || 0); return { ...c, credits }; });
     const passHtml = subjectData.filter(c => c.grade > 5.0).map(c => `<div class="srm-subj-row pass"><span class="srm-subj-name">${c.name}</span><span class="srm-subj-credits">${c.credits} TC</span><span class="srm-subj-grade pass">${c.grade}</span></div>`).join('');
