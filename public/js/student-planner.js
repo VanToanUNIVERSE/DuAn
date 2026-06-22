@@ -2109,6 +2109,13 @@ function renderStudyPlan(plan) {
 
         // Credit utilization bar
         const usedCr  = sem.expected_credits || 0;
+
+        // Tính TC bắt buộc / tự chọn
+        const electiveCr = (sem.elective_groups || []).reduce((sum, g) => {
+            return sum + g.options.filter(o => o.selected).reduce((s, o) => s + o.credits, 0);
+        }, 0);
+        const mandatoryCr = usedCr - electiveCr;
+
         const barPct  = Math.min(100, Math.round((usedCr / maxCr) * 100));
         // Kỳ đã qua: không tô đỏ (dữ liệu lịch sử, giới hạn mode hiện tại không áp dụng ngược)
         const barColor = isPast
@@ -2144,145 +2151,273 @@ function renderStudyPlan(plan) {
                     <span class="pill" style="background:#e8f8f3; color:#10b981;">${usedCr} TC</span>
                 </div>
                 <div style="margin-bottom:10px; pointer-events:none;">
-                    <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--muted); margin-bottom:4px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--muted); margin-bottom:4px;">
                         <span>Tải tín chỉ</span>
-                        <span>${usedCr}/${maxCr} TC</span>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            ${mandatoryCr > 0 ? `<span style="color:#374151;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;margin-right:3px;vertical-align:middle;"></span>${mandatoryCr} TC bắt buộc</span>` : ''}
+                            ${electiveCr > 0 ? `<span style="color:#374151;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#3b82f6;margin-right:3px;vertical-align:middle;"></span>${electiveCr} TC tự chọn</span>` : ''}
+                            <span style="color:var(--muted);">${usedCr}/${maxCr} TC</span>
+                        </div>
                     </div>
-                    <div style="height:5px; background:var(--hairline); border-radius:99px; overflow:hidden;">
-                        <div style="height:100%; width:${barPct}%; background:${barColor}; border-radius:99px; transition:width 0.4s;"></div>
+                    <div style="height:5px; background:var(--hairline); border-radius:99px; overflow:hidden; display:flex;">
+                        ${mandatoryCr > 0 ? `<div style="height:100%; width:${Math.round((mandatoryCr/maxCr)*100)}%; background:#10b981; border-radius:99px 0 0 99px; transition:width 0.4s;"></div>` : ''}
+                        ${electiveCr  > 0 ? `<div style="height:100%; width:${Math.round((electiveCr /maxCr)*100)}%; background:#3b82f6; transition:width 0.4s;"></div>` : ''}
                     </div>
                 </div>
                 <div class="semester-subjects-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:12px; min-height: 50px;">
         `;
 
+        // Tập hợp subject_id thuộc nhóm tự chọn (sẽ render qua group frame, không render riêng)
+        const egSubjectIds = new Set(
+            (sem.elective_groups || []).flatMap(g => g.options.map(o => o.id))
+        );
+
         sem.subjects.forEach(ss => {
             const sub = ss.subject;
-            if (sub) {
-                // ── Điểm riêng của row này ──────────────────────────────────────
-                // API trả về ss.subject_grade (độc lập, không dùng UserGrade trực tiếp)
-                const grade     = ss.subject_grade ?? ss.grade;  // fallback cho dữ liệu cũ
-                const hasGrade  = grade !== undefined && grade !== null;
-                const isCompleted = hasGrade && grade > 5.0;
-                const isFailed    = hasGrade && grade <= 5.0;
+            if (!sub) return;
+            if (egSubjectIds.has(sub.id)) return; // handled by group frame below
 
-                const cardBg     = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
-                const borderColor= isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
+            // ── Điểm riêng của row này ──────────────────────────────────────
+            const grade     = ss.subject_grade ?? ss.grade;
+            const hasGrade  = grade !== undefined && grade !== null;
+            const isCompleted = hasGrade && grade > 5.0;
+            const isFailed    = hasGrade && grade <= 5.0;
 
-                const draggableAttr = (!isCompleted && !isPast)
-                    ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
-                    : '';
+            const cardBg     = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
+            const borderColor= isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
 
-                const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
-                const highlyRecommendedClass = (!isCompleted && isSuggested) ? 'highly-recommended' : '';
+            const draggableAttr = (!isCompleted && !isPast)
+                ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
+                : '';
 
-                let statusHtml = '';
-                if (isCompleted) {
-                    statusHtml = '<span style="color:#10b981; font-size:0.85rem; font-weight:600;">✓ Pass</span>';
-                } else if (isFailed) {
-                    statusHtml = '<span style="color:#ef4444; font-size:0.85rem; font-weight:600;">✗ Rớt</span>';
+            const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
+            const highlyRecommendedClass = (!isCompleted && isSuggested) ? 'highly-recommended' : '';
+
+            let statusHtml = '';
+            if (isCompleted) {
+                statusHtml = '<span style="color:#10b981; font-size:0.85rem; font-weight:600;">✓ Pass</span>';
+            } else if (isFailed) {
+                statusHtml = '<span style="color:#ef4444; font-size:0.85rem; font-weight:600;">✗ Rớt</span>';
+            }
+
+            const prereqInfo = sub.prerequisites_info || [];
+            let prereqTooltipHtml = '';
+            if (prereqInfo.length > 0) {
+                const typeLabel = { explicit: 'Tiên quyết', corequisite: 'Song hành', group: 'Nhóm' };
+                const items = prereqInfo.map(p => {
+                    const icon = p.is_passed ? '✅' : (p.type === 'corequisite' ? '🔗' : '⏳');
+                    const color = p.is_passed ? '#10b981' : (p.type === 'corequisite' ? '#7c3aed' : '#f59e0b');
+                    const tag = typeLabel[p.type] || p.type;
+                    return `<div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;margin-bottom:3px;">
+                        <span>${icon}</span>
+                        <span style="color:${color};">${p.name}</span>
+                        <span style="color:#9ca3af;font-size:0.68rem;">(${tag})</span>
+                    </div>`;
+                }).join('');
+                prereqTooltipHtml = `
+                    <div class="prereq-tooltip-wrap" style="position:relative; display:inline-block;" onmousedown="event.stopPropagation()">
+                        <button type="button" title="Tiên quyết"
+                                onmouseenter="this.nextElementSibling.style.display='block'"
+                                onmouseleave="this.nextElementSibling.style.display='none'"
+                                style="border:none; background:transparent; padding:2px 4px; cursor:pointer; color:var(--muted); font-size:0.75rem; display:flex; align-items:center; gap:3px;">
+                            🔗 <span style="text-decoration:underline dotted;">Tiên quyết (${prereqInfo.length})</span>
+                        </button>
+                        <div style="display:none; position:absolute; bottom:calc(100% + 6px); left:0; background:var(--surface); border:1px solid var(--hairline); border-radius:8px; padding:8px 10px; min-width:200px; box-shadow:0 4px 12px rgba(0,0,0,0.12); z-index:50;">
+                            <div style="font-size:0.7rem; font-weight:600; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em;">Tiên quyết</div>
+                            ${items}
+                        </div>
+                    </div>`;
+            }
+
+            const cascadeBtn = isFailed
+                ? `<button type="button" title="Xem ảnh hưởng chuỗi"
+                           style="border:1px solid #fca5a5; background:#fef2f2; color:#ef4444; border-radius:6px; padding:3px 8px; font-size:0.72rem; cursor:pointer; margin-top:6px; display:flex; align-items:center; gap:4px;"
+                           onmousedown="event.stopPropagation()"
+                           onclick="openCascadeModal(${sub.id}, ${JSON.stringify(sub.name).replace(/'/g, "&#39;")})">
+                         ⚠ Xem ảnh hưởng
+                       </button>`
+                : '';
+
+            let retakeBadge = '';
+            if (ss.is_retake) {
+                if (hasGrade && isFailed) {
+                    retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fef3c7; color:#92400e; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
+                        📌 Đã thử – Rớt lại (điểm ${grade}) — lịch sử lần học này</div>`;
+                } else if (!hasGrade) {
+                    retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fee2e2; color:#991b1b; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
+                        🔄 Cần học lại kỳ này</div>`;
                 }
+            }
+            const retakePadTop = retakeBadge ? 'padding-top:28px;' : '';
 
-                // Prereq tooltip từ prerequisites_info (enriched từ controller)
-                const prereqInfo = sub.prerequisites_info || [];
-                let prereqTooltipHtml = '';
-                if (prereqInfo.length > 0) {
-                    const typeLabel = { explicit: 'Tiên quyết', corequisite: 'Song hành', group: 'Nhóm' };
-                    const items = prereqInfo.map(p => {
-                        const icon = p.is_passed ? '✅' : (p.type === 'corequisite' ? '🔗' : '⏳');
-                        const color = p.is_passed ? '#10b981' : (p.type === 'corequisite' ? '#7c3aed' : '#f59e0b');
-                        const tag = typeLabel[p.type] || p.type;
-                        return `<div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;margin-bottom:3px;">
-                            <span>${icon}</span>
-                            <span style="color:${color};">${p.name}</span>
-                            <span style="color:#9ca3af;font-size:0.68rem;">(${tag})</span>
-                        </div>`;
-                    }).join('');
-                    prereqTooltipHtml = `
-                        <div class="prereq-tooltip-wrap" style="position:relative; display:inline-block;" onmousedown="event.stopPropagation()">
-                            <button type="button" title="Tiên quyết"
-                                    onmouseenter="this.nextElementSibling.style.display='block'"
-                                    onmouseleave="this.nextElementSibling.style.display='none'"
-                                    style="border:none; background:transparent; padding:2px 4px; cursor:pointer; color:var(--muted); font-size:0.75rem; display:flex; align-items:center; gap:3px;">
-                                🔗 <span style="text-decoration:underline dotted;">Tiên quyết (${prereqInfo.length})</span>
-                            </button>
-                            <div style="display:none; position:absolute; bottom:calc(100% + 6px); left:0; background:var(--surface); border:1px solid var(--hairline); border-radius:8px; padding:8px 10px; min-width:200px; box-shadow:0 4px 12px rgba(0,0,0,0.12); z-index:50;">
-                                <div style="font-size:0.7rem; font-weight:600; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em;">Tiên quyết</div>
-                                ${items}
-                            </div>
-                        </div>`;
-                }
+            html += `
+                <div class="study-plan-subject ${highlyRecommendedClass}"
+                     id="plan-subject-${sub.id}-${ss.id}"
+                     ${draggableAttr}
+                     style="padding:12px; ${retakePadTop} border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top:100px;">
 
-                // Nút cascade chỉ hiển thị khi môn bị rớt
-                const cascadeBtn = isFailed
-                    ? `<button type="button" title="Xem ảnh hưởng chuỗi"
-                               style="border:1px solid #fca5a5; background:#fef2f2; color:#ef4444; border-radius:6px; padding:3px 8px; font-size:0.72rem; cursor:pointer; margin-top:6px; display:flex; align-items:center; gap:4px;"
-                               onmousedown="event.stopPropagation()"
-                               onclick="openCascadeModal(${sub.id}, ${JSON.stringify(sub.name).replace(/'/g, "&#39;")})">
-                             ⚠ Xem ảnh hưởng
-                           </button>`
-                    : '';
+                    ${retakeBadge}
 
-                // Badge cho retake — phân biệt "lần thử đã qua" vs "lần tới"
-                let retakeBadge = '';
-                if (ss.is_retake) {
-                    if (hasGrade && isFailed) {
-                        retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fef3c7; color:#92400e; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
-                            📌 Đã thử – Rớt lại (điểm ${grade}) — lịch sử lần học này</div>`;
-                    } else if (!hasGrade) {
-                        retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fee2e2; color:#991b1b; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
-                            🔄 Cần học lại kỳ này</div>`;
+                    <button type="button" class="icon-btn"
+                            style="position:absolute; top:${retakeBadge ? '30px' : '8px'}; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
+                            onclick='openPrereqModal(${JSON.stringify(sub).replace(/'/g, "&#39;")})'
+                            title="Xem chi tiết môn"
+                            onmousedown="event.stopPropagation()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                        </svg>
+                    </button>
+
+                    <div style="font-weight:600; font-size:0.95rem; margin-bottom:4px; padding-right:24px;">${sub.name}</div>
+                    <div style="font-size:0.8rem; color:var(--muted); margin-bottom:6px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
+                    ${sub.is_elective === false
+                        ? `<span style="display:inline-block;font-size:0.68rem;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:4px;padding:1px 6px;margin-bottom:6px;">✔ Bắt buộc</span>`
+                        : ''
                     }
+
+                    ${prereqTooltipHtml}
+
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:8px;" onmousedown="event.stopPropagation()">
+                        <input type="number"
+                               class="ob-grade-input"
+                               placeholder="Điểm..."
+                               min="0" max="10" step="0.1"
+                               value="${hasGrade ? grade : ''}"
+                               data-plan-subject-id="${ss.id}"
+                               style="width:80px; height:32px; font-size:0.85rem;"
+                               onchange="updatePlanGrade(${plan.id}, ${sub.id}, this)">
+                        ${statusHtml}
+                    </div>
+                    ${cascadeBtn}
+                </div>
+            `;
+        });
+
+        // ── Elective group frames ────────────────────────────────────────────
+        // ── Elective group frames (card-based) ─────────────────────────────
+        (sem.elective_groups || []).forEach(group => {
+            const frameId    = `eg-frame-${plan.id}-${sem.semester_index}-${group.id}`;
+            const needCr     = group.required_credits;
+
+            // Map plan subjects (selected=true) by id for grade data
+            const planSsMap  = {};
+            sem.subjects.forEach(ss => {
+                if (ss.subject && group.options.some(o => o.id === ss.subject.id)) {
+                    planSsMap[ss.subject.id] = ss;
                 }
-                const retakePadTop = retakeBadge ? 'padding-top:28px;' : '';
+            });
 
-                html += `
-                    <div class="study-plan-subject ${highlyRecommendedClass}"
-                         id="plan-subject-${sub.id}-${ss.id}"
-                         ${draggableAttr}
-                         style="padding:12px; ${retakePadTop} border:1px solid ${borderColor}; border-radius:8px; background:${cardBg}; position:relative; scroll-margin-top:100px;">
+            // How many TC selected (in plan) and how many graded
+            let selectedCr = 0;
+            let gradedCr   = 0;
+            group.options.forEach(opt => {
+                const ss = planSsMap[opt.id];
+                if (ss && opt.selected) {
+                    selectedCr += opt.credits;
+                    const g = ss.subject_grade ?? ss.grade;
+                    if (g !== null && g !== undefined) gradedCr += opt.credits;
+                }
+            });
 
-                        ${retakeBadge}
+            // Plan subject ids (for group drag header)
+            const planIds = group.options.filter(o => o.selected).map(o => o.id);
 
-                        <button type="button" class="icon-btn"
-                                style="position:absolute; top:${retakeBadge ? '30px' : '8px'}; right:8px; padding:4px; border:none; background:transparent; color:var(--muted); cursor:pointer; z-index:2;"
-                                onclick='openPrereqModal(${JSON.stringify(sub).replace(/'/g, "&#39;")})'
-                                title="Xem chi tiết môn"
-                                onmousedown="event.stopPropagation()">
+            let cardsHtml = '';
+            group.options.forEach(opt => {
+                const ss        = planSsMap[opt.id];
+                const isInPlan  = !!ss && opt.selected;
+
+                if (isInPlan) {
+                    const grade       = ss.subject_grade ?? ss.grade;
+                    const hasGrade    = grade !== null && grade !== undefined;
+                    const isCompleted = hasGrade && grade > 5.0;
+                    const isFailed    = hasGrade && grade <= 5.0;
+                    const cardBg      = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
+                    const borderColor = isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : '#93c5fd');
+                    const limitReached = !hasGrade && gradedCr >= needCr; // gradedCr: already-graded TC
+                    let statusHtml = '';
+                    if (isCompleted) statusHtml = '<span style="color:#10b981;font-size:0.85rem;font-weight:600;">✓ Pass</span>';
+                    else if (isFailed) statusHtml = '<span style="color:#ef4444;font-size:0.85rem;font-weight:600;">✗ Rớt</span>';
+
+                    const subJson = JSON.stringify(ss.subject ?? {}).replace(/'/g, "&#39;");
+                    const canDeselect = !hasGrade && !isPast;
+
+                    cardsHtml += `
+                    <div class="study-plan-subject"
+                         id="plan-subject-${opt.id}-${ss.id}"
+                         style="padding:12px;border:1.5px solid ${borderColor};border-radius:8px;background:${cardBg};position:relative;scroll-margin-top:100px;">
+                        <button type="button" style="position:absolute;top:8px;right:8px;padding:4px;border:none;background:transparent;color:var(--muted);cursor:pointer;z-index:2;"
+                                onclick='openPrereqModal(${subJson})' title="Xem chi tiết" onmousedown="event.stopPropagation()">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:20px;height:20px;">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                             </svg>
                         </button>
-
-                        <div style="font-weight:600; font-size:0.95rem; margin-bottom:4px; padding-right:24px;">${sub.name}</div>
-                        <div style="font-size:0.8rem; color:var(--muted); margin-bottom:6px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
-                        ${sub.elective_group_name
-                            ? `<span style="display:inline-block;font-size:0.68rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;margin-bottom:6px;">📚 Tự chọn · ${sub.elective_group_name}</span>`
-                            : sub.is_elective
-                                ? `<span style="display:inline-block;font-size:0.68rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;margin-bottom:6px;">📝 Tự chọn</span>`
-                                : sub.is_elective === false
-                                    ? `<span style="display:inline-block;font-size:0.68rem;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:4px;padding:1px 6px;margin-bottom:6px;">✔ Bắt buộc</span>`
-                                    : ''
-                        }
-
-                        ${prereqTooltipHtml}
-
-                        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;" onmousedown="event.stopPropagation()">
-                            <input type="number"
-                                   class="ob-grade-input"
+                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:4px;font-weight:700;">Đang học</span>
+                        <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;padding-top:18px;padding-right:24px;">${opt.name}</div>
+                        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px;">${opt.credits} TC | ${opt.code || 'Chung'}</div>
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;" onmousedown="event.stopPropagation()">
+                            <input type="number" class="ob-grade-input"
                                    placeholder="Điểm..."
                                    min="0" max="10" step="0.1"
                                    value="${hasGrade ? grade : ''}"
                                    data-plan-subject-id="${ss.id}"
-                                   style="width:80px; height:32px; font-size:0.85rem;"
-                                   onchange="updatePlanGrade(${plan.id}, ${sub.id}, this)">
+                                   data-eg-frame="${frameId}"
+                                   data-eg-credits="${opt.credits}"
+                                   data-eg-need="${needCr}"
+                                   style="width:80px;height:32px;font-size:0.85rem;${limitReached ? 'opacity:0.45;cursor:not-allowed;' : ''}"
+                                   ${limitReached ? 'disabled title="Đã đủ số tín chỉ yêu cầu của nhóm"' : ''}
+                                   onchange="updatePlanGrade(${plan.id}, ${opt.id}, this)">
                             ${statusHtml}
+                            ${canDeselect ? `<button type="button"
+                                onclick="toggleElectiveSubject(${plan.id},${opt.id},${sem.semester_index},'remove')"
+                                style="margin-left:auto;font-size:0.72rem;padding:3px 9px;border-radius:6px;border:1px solid #fca5a5;color:#ef4444;background:transparent;cursor:pointer;"
+                                title="Bỏ chọn môn này">Bỏ chọn</button>` : ''}
                         </div>
-                        ${cascadeBtn}
-                    </div>
-                `;
-            }
-        });
+                    </div>`;
+                } else {
+                    // Alternative — same card look, dashed border, "Chọn học" button
+                    const atLimit = selectedCr >= needCr;
+                    const canSelect = !isPast && !atLimit;
+                    cardsHtml += `
+                    <div class="study-plan-subject"
+                         style="padding:12px;border:1.5px dashed ${atLimit ? '#d1d5db' : '#93c5fd'};border-radius:8px;background:${atLimit ? 'var(--surface-soft,#f9fafb)' : '#f0f7ff'};position:relative;opacity:${atLimit ? '0.5' : '0.85'};">
+                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:#f1f5f9;color:#64748b;padding:1px 7px;border-radius:4px;font-weight:700;">Phương án</span>
+                        <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;padding-top:18px;padding-right:8px;">${opt.name}</div>
+                        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">${opt.credits} TC | ${opt.code || 'Chung'}</div>
+                        ${canSelect
+                            ? `<button type="button"
+                                onclick="toggleElectiveSubject(${plan.id},${opt.id},${sem.semester_index},'add')"
+                                style="font-size:0.75rem;padding:4px 12px;border-radius:6px;border:1.5px solid #2563eb;color:#2563eb;background:transparent;cursor:pointer;font-weight:600;">
+                                + Chọn học môn này
+                              </button>`
+                            : `<div style="font-size:0.75rem;color:var(--muted);font-style:italic;">${atLimit ? 'Nhóm đã đủ TC' : 'Chưa được chọn'}</div>`
+                        }
+                    </div>`;
+                }
+            });
 
+            html += `
+            <div class="eg-group-frame" id="${frameId}"
+                 style="grid-column:1/-1;border:2px solid #93c5fd;border-radius:12px;overflow:hidden;background:#eef5ff;">
+                <div draggable="${!isPast}"
+                     ondragstart="handleGroupDragStart(event,[${planIds.join(',')}],${sem.semester_index})"
+                     ondragend="handleDragEnd(event)"
+                     style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#1d4ed8;color:#fff;cursor:${isPast ? 'default' : 'grab'};user-select:none;">
+                    <span style="font-size:1rem;">📚</span>
+                    <div style="flex:1;">
+                        <div style="font-weight:700;font-size:0.85rem;">Nhóm tự chọn "${group.name}"</div>
+                        <div style="font-size:0.72rem;opacity:0.85;">Chọn đủ ${needCr} TC · ${isPast ? '' : 'Kéo tiêu đề để di chuyển cả nhóm · '}${group.options.length} môn phương án</div>
+                    </div>
+                    <span id="eg-counter-${frameId}"
+                          style="font-weight:700;font-size:0.88rem;background:rgba(255,255,255,0.18);padding:3px 12px;border-radius:6px;color:${selectedCr >= needCr ? '#86efac' : '#fde68a'};">
+                        ${selectedCr}/${needCr} TC
+                    </span>
+                </div>
+                <div style="padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">
+                    ${cardsHtml}
+                </div>
+            </div>`;
+        });
 
         html += '</div></div>';
     });
@@ -2294,20 +2429,29 @@ function renderStudyPlan(plan) {
 }
 
 // ─── Drag and Drop Handlers ───
-let draggedSubjectId = null;
+let draggedSubjectId      = null;
+let draggedGroupSubjectIds = null;
 let draggedSourceSemester = null;
 
 function handleDragStart(event, subjectId, semesterIndex) {
+    draggedGroupSubjectIds = null;
     draggedSubjectId = subjectId;
     draggedSourceSemester = semesterIndex;
     event.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => {
-        event.target.classList.add('is-dragging');
-    }, 0);
+    setTimeout(() => event.target.classList.add('is-dragging'), 0);
+}
+
+function handleGroupDragStart(event, subjectIds, semesterIndex) {
+    draggedSubjectId = null;
+    draggedGroupSubjectIds = subjectIds;
+    draggedSourceSemester = semesterIndex;
+    event.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => event.target.closest('.eg-group-frame')?.classList.add('is-dragging'), 0);
 }
 
 function handleDragEnd(event) {
     event.target.classList.remove('is-dragging');
+    event.target.closest('.eg-group-frame')?.classList.remove('is-dragging');
     document.querySelectorAll('.study-plan-semester').forEach(el => el.classList.remove('drag-over'));
 }
 
@@ -2330,19 +2474,26 @@ function handleDragLeave(event) {
 async function handleDrop(event, planId, targetSemesterIndex) {
     event.preventDefault();
     event.target.closest('.study-plan-semester')?.classList.remove('drag-over');
-    if (!draggedSubjectId || draggedSourceSemester === targetSemesterIndex) return;
-    await executeSubjectMove(planId, targetSemesterIndex);
+    if (draggedSourceSemester === targetSemesterIndex) return;
+
+    if (draggedGroupSubjectIds && draggedGroupSubjectIds.length > 0) {
+        await executeGroupMove(planId, targetSemesterIndex);
+    } else if (draggedSubjectId) {
+        await executeSubjectMove(planId, targetSemesterIndex);
+    }
 }
 
 // Drop vào kỳ đã hoàn thành → hiển thị cảnh báo trước khi thực hiện
 function handleDropToPast(event, planId, targetSemesterIndex) {
     event.preventDefault();
     event.target.closest('.study-plan-semester')?.classList.remove('drag-over');
-    if (!draggedSubjectId || draggedSourceSemester === targetSemesterIndex) return;
+    if (draggedSourceSemester === targetSemesterIndex) return;
+    if (!draggedSubjectId && (!draggedGroupSubjectIds || !draggedGroupSubjectIds.length)) return;
 
     // Lưu lại thông tin drag vì user cần thời gian xác nhận
-    const subjectId = draggedSubjectId;
-    const sourceSem = draggedSourceSemester;
+    const subjectId   = draggedSubjectId;
+    const groupIds    = draggedGroupSubjectIds ? [...draggedGroupSubjectIds] : null;
+    const sourceSem   = draggedSourceSemester;
 
     document.getElementById('past-drop-confirm-modal')?.remove();
     const modal = document.createElement('div');
@@ -2376,15 +2527,22 @@ function handleDropToPast(event, planId, targetSemesterIndex) {
 
     modal.querySelector('#past-drop-cancel').onclick = () => {
         modal.remove();
-        draggedSubjectId = null;
+        draggedSubjectId      = null;
+        draggedGroupSubjectIds = null;
         draggedSourceSemester = null;
     };
     modal.querySelector('#past-drop-confirm').onclick = async () => {
         modal.remove();
-        // Khôi phục lại drag state vì đã bị clear khi handleDragEnd
-        draggedSubjectId = subjectId;
         draggedSourceSemester = sourceSem;
-        await executeSubjectMove(planId, targetSemesterIndex);
+        if (groupIds && groupIds.length) {
+            draggedGroupSubjectIds = groupIds;
+            draggedSubjectId = null;
+            await executeGroupMove(planId, targetSemesterIndex);
+        } else {
+            draggedSubjectId = subjectId;
+            draggedGroupSubjectIds = null;
+            await executeSubjectMove(planId, targetSemesterIndex);
+        }
     };
 }
 
@@ -2431,6 +2589,86 @@ async function executeSubjectMove(planId, targetSemesterIndex) {
     }
 }
 
+async function executeGroupMove(planId, targetSemesterIndex) {
+    const loader = document.getElementById('planner-loader');
+    const container = document.getElementById('study-plan-results');
+    loader.style.display = 'block';
+    container.style.opacity = '0.3';
+
+    const ids = [...draggedGroupSubjectIds];
+    let lastData = null;
+
+    try {
+        for (const subjectId of ids) {
+            draggedSubjectId = subjectId;
+            const res = await fetch('/api/v1/study-plans/move-subject', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF_TOKEN,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    study_plan_id: planId,
+                    subject_id: subjectId,
+                    target_semester_index: targetSemesterIndex
+                })
+            });
+            const resData = await res.json();
+            if (!res.ok) throw new Error(resData.error || 'Lỗi khi di chuyển nhóm');
+            if (resData.success && resData.data) lastData = resData.data;
+        }
+        if (lastData) renderStudyPlan(lastData);
+        showToast('Đã di chuyển cả nhóm tự chọn!', 'success');
+    } catch (e) {
+        showToast(e.message || 'Lỗi khi di chuyển nhóm môn học', 'error');
+    } finally {
+        loader.style.display = 'none';
+        container.style.opacity = '1';
+        draggedSubjectId = null;
+        draggedGroupSubjectIds = null;
+        draggedSourceSemester = null;
+    }
+}
+
+async function toggleElectiveSubject(planId, subjectId, semesterIndex, action) {
+    const loader = document.getElementById('planner-loader');
+    const container = document.getElementById('study-plan-results');
+    loader.style.display = 'block';
+    container.style.opacity = '0.3';
+
+    try {
+        const res = await fetch('/api/v1/study-plans/toggle-elective', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                study_plan_id:  planId,
+                subject_id:     subjectId,
+                semester_index: semesterIndex,
+                action:         action,
+            })
+        });
+        const resData = await res.json();
+        if (!res.ok) {
+            showToast(resData.error || 'Lỗi hệ thống', 'error');
+            return;
+        }
+        if (resData.success && resData.data) {
+            renderStudyPlan(resData.data);
+            showToast(action === 'add' ? 'Đã thêm môn vào kế hoạch!' : 'Đã bỏ chọn môn.', 'success');
+        }
+    } catch (e) {
+        showToast('Lỗi kết nối', 'error');
+    } finally {
+        loader.style.display = 'none';
+        container.style.opacity = '1';
+    }
+}
+
 async function updatePlanGrade(planId, subjectId, inputEl) {
     let grade = null;
     let status = null;
@@ -2442,6 +2680,26 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
             return;
         }
         status = grade >= 5.0 ? 'passed' : 'failed';
+
+        // TC constraint for elective group frames
+        const egFrameId = inputEl.dataset.egFrame;
+        if (egFrameId) {
+            const egFrame = document.getElementById(egFrameId);
+            if (egFrame) {
+                const needCr  = parseInt(inputEl.dataset.egNeed  || 0);
+                const thisCr  = parseInt(inputEl.dataset.egCredits || 0);
+                let otherGradedCr = 0;
+                egFrame.querySelectorAll('.ob-grade-input[data-eg-frame]').forEach(inp => {
+                    if (inp === inputEl) return;
+                    if (inp.value.trim() !== '') otherGradedCr += parseInt(inp.dataset.egCredits || 0);
+                });
+                if (otherGradedCr + thisCr > needCr) {
+                    showToast(`Nhóm tự chọn chỉ cần ${needCr} TC. Hãy xóa điểm một môn khác trước.`, 'error');
+                    inputEl.value = '';
+                    return;
+                }
+            }
+        }
     }
 
     inputEl.disabled = true;

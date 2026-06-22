@@ -173,6 +173,26 @@
         flex-shrink: 0;
     }
     .select-all-bar label { text-transform: none; font-weight:500; letter-spacing:0; margin:0; cursor:pointer; }
+
+    /* Elective groups in modal */
+    .eg-group-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 20px;
+        background: #f0f9ff;
+        border-top: 2px solid #bae6fd;
+        border-bottom: 1px solid #bae6fd;
+        cursor: default;
+    }
+    .eg-group-header + .eg-group-header { border-top: 2px solid #bae6fd; margin-top: 4px; }
+    .eg-subject {
+        padding-left: 40px;
+        border-left: 3px solid #bfdbfe;
+        background: #fafcff;
+    }
+    .eg-subject:hover { background: #eff6ff !important; }
+    .eg-subject.selected { background: #dbeafe !important; }
 </style>
 @endpush
 
@@ -219,16 +239,36 @@
 {{-- Semester cards grid --}}
 <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap:20px;">
     @foreach($semestersWithSubjects as $semester)
-    @php $assignedIds = $semester->assignedSubjects->pluck('subject.id')->filter()->values(); @endphp
+    @php
+        $assignedIds  = $semester->assignedSubjects->pluck('subject.id')->filter()->values();
+        $totalTc      = $semester->assignedSubjects->sum(fn($cs) => $cs->subject->credits ?? 0);
+        $mandatoryTc  = $semester->assignedSubjects->filter(fn($cs) => !($cs->subject->is_elective ?? false))->sum(fn($cs) => $cs->subject->credits ?? 0);
+        $electiveTc   = $totalTc - $mandatoryTc;
+    @endphp
     <div class="card">
         <div class="card-header" style="background: var(--surface-soft);">
             <div class="card-title">
                 📅 Học kỳ {{ $semester->name }}
                 <span class="badge badge-{{ $semester->assignedSubjects->count() > 0 ? 'teal' : 'muted' }}" style="margin-left:8px;">
                     {{ $semester->assignedSubjects->count() }} môn
-                    @php $totalTc = $semester->assignedSubjects->sum(fn($cs) => $cs->subject->credits ?? 0); @endphp
                     @if($totalTc > 0) · {{ $totalTc }} TC @endif
                 </span>
+                @if($totalTc > 0)
+                <span style="margin-left:6px;font-size:0.72rem;font-weight:500;color:var(--muted);display:inline-flex;align-items:center;gap:8px;">
+                    @if($mandatoryTc > 0)
+                    <span style="display:inline-flex;align-items:center;gap:3px;">
+                        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;"></span>
+                        {{ $mandatoryTc }} TC bắt buộc
+                    </span>
+                    @endif
+                    @if($electiveTc > 0)
+                    <span style="display:inline-flex;align-items:center;gap:3px;">
+                        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#3b82f6;"></span>
+                        {{ $electiveTc }} TC tự chọn
+                    </span>
+                    @endif
+                </span>
+                @endif
             </div>
             {{-- Actions --}}
             <div style="display: flex; gap: 8px;">
@@ -411,13 +451,40 @@ function filterSubjects() {
     document.getElementById('select-all-cb').checked = false;
 }
 
+function renderSubjectItem(s, egId) {
+    const isAssigned = assignedIds.includes(s.id);
+    const isChecked  = selectedIds.has(s.id);
+    const egAttr     = egId != null ? `data-eg-id="${egId}"` : '';
+    const egClass    = egId != null ? ' eg-subject' : '';
+    const egArg      = egId != null ? `, ${egId}` : '';
+    return `
+    <label class="subject-item${egClass}${isAssigned ? ' already-assigned' : ''}${isChecked ? ' selected' : ''}"
+           data-id="${s.id}" ${egAttr} ${isAssigned ? 'title="Đã được phân công"' : ''}>
+        <input type="checkbox"
+               value="${s.id}"
+               ${isChecked  ? 'checked' : ''}
+               ${isAssigned ? 'disabled' : ''}
+               onchange="toggleSubject(${s.id}, this${egArg})">
+        <div style="flex:1;">
+            ${s.code ? `<span class="subject-item-code">${s.code}</span>` : ''}
+            <span class="subject-item-name">${s.name}</span>
+            ${s.pg ? `<span style="font-size:10px; color:var(--muted); display:block; margin-top:1px;">📂 ${s.pg}</span>` : ''}
+        </div>
+        <div class="subject-item-meta">
+            ${s.credits ? `<span class="badge badge-mint">${s.credits} TC</span>` : ''}
+            ${isAssigned ? '<span class="badge badge-muted" style="margin-left:4px;">Đã có</span>' : ''}
+        </div>
+    </label>`;
+}
+
 function renderList(query, pgId) {
     const list = document.getElementById('subject-list');
     const filtered = ALL_SUBJECTS.filter(s => {
         const matchText = !query ||
             s.name.toLowerCase().includes(query) ||
             s.code.toLowerCase().includes(query) ||
-            s.sg.toLowerCase().includes(query);
+            s.sg.toLowerCase().includes(query) ||
+            (s.eg_name || '').toLowerCase().includes(query);
         const matchPg = !pgId || s.pg_id === pgId;
         return matchText && matchPg;
     });
@@ -430,37 +497,84 @@ function renderList(query, pgId) {
 
     document.getElementById('visible-count').textContent = filtered.length + ' môn';
 
-    list.innerHTML = filtered.map(s => {
-        const isAssigned = assignedIds.includes(s.id);
-        const isChecked  = selectedIds.has(s.id);
-        return `
-        <label class="subject-item${isAssigned ? ' already-assigned' : ''}${isChecked ? ' selected' : ''}"
-               data-id="${s.id}" ${isAssigned ? 'title="Đã được phân công"' : ''}>
+    // Separate grouped (elective) vs standalone subjects
+    const groups    = {};   // eg_id → { name, credits, subjects[] }
+    const standalone = [];
+    for (const s of filtered) {
+        if (s.eg_id) {
+            if (!groups[s.eg_id]) groups[s.eg_id] = { name: s.eg_name, credits: s.eg_credits, subjects: [] };
+            groups[s.eg_id].subjects.push(s);
+        } else {
+            standalone.push(s);
+        }
+    }
+
+    let html = standalone.map(s => renderSubjectItem(s, null)).join('');
+
+    for (const [egId, group] of Object.entries(groups)) {
+        const egIdNum = parseInt(egId);
+        const ids     = group.subjects.map(s => s.id);
+        const allAssigned = ids.every(id => assignedIds.includes(id));
+        const allChecked  = ids.every(id => selectedIds.has(id));
+        const totalCr = group.subjects.reduce((sum, s) => sum + (parseInt(s.credits) || 0), 0);
+
+        html += `
+        <div class="eg-group-header">
             <input type="checkbox"
-                   value="${s.id}"
-                   ${isChecked  ? 'checked' : ''}
-                   ${isAssigned ? 'disabled' : ''}
-                   onchange="toggleSubject(${s.id}, this)">
+                   id="eg-cb-${egIdNum}"
+                   ${allChecked  ? 'checked' : ''}
+                   ${allAssigned ? 'disabled' : ''}
+                   style="width:16px;height:16px;accent-color:var(--ink);cursor:pointer;flex-shrink:0;"
+                   onchange="toggleGroupSubjects(${egIdNum}, this)">
             <div style="flex:1;">
-                ${s.code ? `<span class="subject-item-code">${s.code}</span>` : ''}
-                <span class="subject-item-name">${s.name}</span>
-                ${s.pg ? `<span style="font-size:10px; color:var(--muted); display:block; margin-top:1px;">📂 ${s.pg}</span>` : ''}
+                <div style="font-weight:700;font-size:13px;color:var(--ink);">📚 ${group.name}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+                    Nhóm tự chọn · Cần ${group.credits} TC · ${group.subjects.length} môn
+                </div>
             </div>
-            <div class="subject-item-meta">
-                ${s.credits ? `<span class="badge badge-mint">${s.credits} TC</span>` : ''}
-                ${isAssigned ? '<span class="badge badge-muted" style="margin-left:4px;">Đã có</span>' : ''}
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-mint">${totalCr} TC</span>
+                ${allAssigned ? '<span class="badge badge-muted">Đã có</span>' : ''}
             </div>
-        </label>`;
-    }).join('');
+        </div>`;
+        html += group.subjects.map(s => renderSubjectItem(s, egIdNum)).join('');
+    }
+
+    list.innerHTML = html;
+
+    // Set indeterminate state on group checkboxes
+    for (const [egId, group] of Object.entries(groups)) {
+        const cb = document.getElementById(`eg-cb-${egId}`);
+        if (!cb) continue;
+        const ids       = group.subjects.map(s => s.id);
+        const allChecked = ids.every(id => selectedIds.has(id));
+        const someChecked = ids.some(id => selectedIds.has(id));
+        cb.indeterminate = someChecked && !allChecked;
+    }
 }
 
-function toggleSubject(id, cb) {
-    if (cb.checked) {
-        selectedIds.add(id);
-        cb.closest('.subject-item').classList.add('selected');
-    } else {
-        selectedIds.delete(id);
-        cb.closest('.subject-item').classList.remove('selected');
+function toggleGroupSubjects(egId, cb) {
+    document.querySelectorAll(`#subject-list .eg-subject[data-eg-id="${egId}"]`).forEach(item => {
+        const input = item.querySelector('input[type=checkbox]');
+        if (!input || input.disabled) return;
+        const id = parseInt(input.value);
+        if (cb.checked) { input.checked = true;  selectedIds.add(id);    item.classList.add('selected'); }
+        else            { input.checked = false; selectedIds.delete(id); item.classList.remove('selected'); }
+    });
+    updateSelCount();
+}
+
+function toggleSubject(id, cb, egId) {
+    if (cb.checked) { selectedIds.add(id);    cb.closest('.subject-item').classList.add('selected'); }
+    else            { selectedIds.delete(id); cb.closest('.subject-item').classList.remove('selected'); }
+
+    if (egId != null) {
+        const inputs = Array.from(document.querySelectorAll(
+            `#subject-list .eg-subject[data-eg-id="${egId}"] input[type=checkbox]:not(:disabled)`));
+        const allChecked  = inputs.length > 0 && inputs.every(c => c.checked);
+        const someChecked = inputs.some(c => c.checked);
+        const groupCb = document.getElementById(`eg-cb-${egId}`);
+        if (groupCb) { groupCb.checked = allChecked; groupCb.indeterminate = someChecked && !allChecked; }
     }
     updateSelCount();
 }
@@ -469,15 +583,12 @@ function toggleSelectAll(cb) {
     const visibleCbs = document.querySelectorAll('#subject-list .subject-item:not(.already-assigned) input[type=checkbox]');
     visibleCbs.forEach(input => {
         const id = parseInt(input.value);
-        if (cb.checked) {
-            input.checked = true;
-            selectedIds.add(id);
-            input.closest('.subject-item').classList.add('selected');
-        } else {
-            input.checked = false;
-            selectedIds.delete(id);
-            input.closest('.subject-item').classList.remove('selected');
-        }
+        if (cb.checked) { input.checked = true;  selectedIds.add(id);    input.closest('.subject-item').classList.add('selected'); }
+        else            { input.checked = false; selectedIds.delete(id); input.closest('.subject-item').classList.remove('selected'); }
+    });
+    // Sync group header checkboxes
+    document.querySelectorAll('[id^="eg-cb-"]').forEach(groupCb => {
+        if (!groupCb.disabled) { groupCb.checked = cb.checked; groupCb.indeterminate = false; }
     });
     updateSelCount();
 }

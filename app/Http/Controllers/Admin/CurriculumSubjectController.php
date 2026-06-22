@@ -42,20 +42,39 @@ class CurriculumSubjectController extends Controller
             return $semester;
         });
 
+        // Elective group membership for this framework
+        $egSubjectMap = [];
+        \App\Models\ElectiveGroup::where('curriculum_framework_id', $curriculumFramework->id)
+            ->with('subjects:id')
+            ->each(function ($eg) use (&$egSubjectMap) {
+                foreach ($eg->subjects as $sub) {
+                    $egSubjectMap[$sub->id] = [
+                        'eg_id'      => $eg->id,
+                        'eg_name'    => $eg->name,
+                        'eg_credits' => $eg->required_credits,
+                    ];
+                }
+            });
+
         // Tất cả môn học — map thành mảng phẳng để truyền JSON an toàn vào Blade
         $allSubjects = Subject::with(['skillGroup', 'programGroup'])
             ->orderBy('name')
-            ->get(['id', 'subject_code', 'name', 'credits', 'skill_group_id', 'program_group_id']);
+            ->get(['id', 'subject_code', 'name', 'credits', 'skill_group_id', 'program_group_id', 'is_elective']);
 
-        $subjectsJson = $allSubjects->map(function ($s) {
+        $subjectsJson = $allSubjects->map(function ($s) use ($egSubjectMap) {
+            $eg = $egSubjectMap[$s->id] ?? null;
             return [
-                'id'      => $s->id,
-                'name'    => $s->name,
-                'code'    => $s->subject_code ?? '',
-                'credits' => $s->credits ?? '',
-                'sg'      => $s->skillGroup->name ?? '',
-                'pg'      => $s->programGroup->name ?? '',
-                'pg_id'   => $s->program_group_id ?? null,
+                'id'          => $s->id,
+                'name'        => $s->name,
+                'code'        => $s->subject_code ?? '',
+                'credits'     => $s->credits ?? '',
+                'sg'          => $s->skillGroup->name ?? '',
+                'pg'          => $s->programGroup->name ?? '',
+                'pg_id'       => $s->program_group_id ?? null,
+                'is_elective' => (bool) ($s->is_elective ?? false),
+                'eg_id'       => $eg['eg_id'] ?? null,
+                'eg_name'     => $eg['eg_name'] ?? null,
+                'eg_credits'  => $eg['eg_credits'] ?? null,
             ];
         })->values()->toJson();
 
@@ -89,6 +108,16 @@ class CurriculumSubjectController extends Controller
             return back()->with('error', 'Học kỳ không thuộc chương trình này.');
         }
 
+        // Pre-load elective group membership for this framework
+        $egMap = [];
+        \App\Models\ElectiveGroup::where('curriculum_framework_id', $curriculumFramework->id)
+            ->with('subjects:id')
+            ->each(function ($eg) use (&$egMap) {
+                foreach ($eg->subjects as $sub) {
+                    $egMap[$sub->id] = $eg->id;
+                }
+            });
+
         $added = 0;
         foreach ($validated['subject_ids'] as $subjectId) {
             $exists = CurriculumSubject::where([
@@ -102,6 +131,7 @@ class CurriculumSubjectController extends Controller
                     'curriculum_framework_id' => $curriculumFramework->id,
                     'semester_id'             => $validated['semester_id'],
                     'subject_id'              => $subjectId,
+                    'elective_group_id'       => $egMap[$subjectId] ?? null,
                 ]);
                 $added++;
             }

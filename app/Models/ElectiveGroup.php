@@ -17,4 +17,9 @@ class ElectiveGroup extends Model
     {
         return $this->hasMany(CurriculumSubject::class);
     }
+
+    public function subjects()
+    {
+        return $this->belongsToMany(Subject::class, 'elective_group_subjects');
+    }
 }

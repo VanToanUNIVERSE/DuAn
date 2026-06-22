@@ -1758,6 +1758,11 @@
             transform: scale(0.95);
         }
 
+        .eg-group-frame.is-dragging {
+            opacity: 0.45;
+            outline: 3px dashed #93c5fd;
+        }
+
         /* ── Highly Recommended Effect ── */
         .highly-recommended {
             position: relative;

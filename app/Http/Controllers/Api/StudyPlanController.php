@@ -526,6 +526,92 @@ class StudyPlanController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // POST /api/v1/study-plans/toggle-elective
+    // Thêm hoặc xóa môn tự chọn khỏi plan semester (do sinh viên tự chọn)
+    // ──────────────────────────────────────────────────────────────────────
+    public function toggleElective(Request $request)
+    {
+        $userId = Auth::id();
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $request->validate([
+            'study_plan_id'  => 'required|exists:study_plans,id',
+            'subject_id'     => 'required|integer|exists:subjects,id',
+            'semester_index' => 'required|integer|min:1',
+            'action'         => 'required|in:add,remove',
+        ]);
+
+        $plan = StudyPlan::with('semesters.subjects.subject')
+            ->where('id', $request->study_plan_id)
+            ->where('user_id', $userId)
+            ->firstOrFail();
+
+        $subjectId   = (int) $request->subject_id;
+        $semesterIdx = (int) $request->semester_index;
+
+        $sem = $plan->semesters->firstWhere('semester_index', $semesterIdx);
+        if (!$sem) {
+            return response()->json(['error' => 'Không tìm thấy học kỳ.'], 404);
+        }
+
+        if ($request->action === 'remove') {
+            StudyPlanSubject::where('study_plan_semester_id', $sem->id)
+                ->where('subject_id', $subjectId)
+                ->delete();
+        } else {
+            // Kiểm tra môn đã có chưa
+            $already = StudyPlanSubject::where('study_plan_semester_id', $sem->id)
+                ->where('subject_id', $subjectId)->exists();
+            if ($already) {
+                return response()->json(['error' => 'Môn này đã có trong học kỳ.'], 422);
+            }
+
+            // Kiểm tra giới hạn TC của nhóm tự chọn
+            $subject = Subject::findOrFail($subjectId);
+            $user    = User::find($userId);
+            $frameworkId = null;
+            if ($user?->pref_academic_year && $user?->pref_program_type) {
+                $program = TrainingProgram::where('academic_year', $user->pref_academic_year)
+                    ->where('program_type', $user->pref_program_type)->first();
+                $frameworkId = $program?->curriculumFrameworks()->first()?->id;
+            }
+
+            $eg = null;
+            if ($frameworkId) {
+                $eg = \App\Models\ElectiveGroup::where('curriculum_framework_id', $frameworkId)
+                    ->whereHas('subjects', fn($q) => $q->where('subjects.id', $subjectId))
+                    ->first();
+            }
+
+            if ($eg) {
+                $groupSubjectIds = $eg->subjects()->pluck('subjects.id')->toArray();
+                $currentCr = StudyPlanSubject::where('study_plan_semester_id', $sem->id)
+                    ->whereIn('subject_id', $groupSubjectIds)
+                    ->join('subjects', 'subjects.id', '=', 'study_plan_subjects.subject_id')
+                    ->sum('subjects.credits');
+                if ($currentCr + $subject->credits > $eg->required_credits) {
+                    return response()->json([
+                        'error' => "Nhóm tự chọn này chỉ cần {$eg->required_credits} TC. Bỏ chọn một môn trước khi thêm."
+                    ], 422);
+                }
+            }
+
+            StudyPlanSubject::create([
+                'study_plan_semester_id' => $sem->id,
+                'subject_id'             => $subjectId,
+                'is_completed'           => false,
+                'is_retake'              => false,
+            ]);
+        }
+
+        $plan->load('semesters.subjects.subject');
+        return response()->json([
+            'success' => true,
+            'data'    => $this->attachGrades($plan, $userId),
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // PRIVATE HELPERS
     // ──────────────────────────────────────────────────────────────────────
 
@@ -545,6 +631,8 @@ class StudyPlanController extends Controller
 
         // Load elective group info từ curriculum_subject (1 query cho toàn plan)
         $electiveGroupMap = $this->loadElectiveGroupMap($userId, $plan);
+        // Load tất cả members của mỗi elective group (cho group frame ở frontend)
+        $allElectiveGroups = $this->loadAllElectiveGroupSubjects($userId);
 
         foreach ($plan->semesters as $sem) {
             foreach ($sem->subjects as $ss) {
@@ -566,6 +654,38 @@ class StudyPlanController extends Controller
                 $ss->subject->elective_group_name       = $eg?->electiveGroup?->name;
                 $ss->subject->elective_required_credits = $eg?->electiveGroup?->required_credits;
             }
+
+            // Build elective_groups: nhóm đầy đủ (các môn được chọn + phương án thay thế)
+            $semGroupPlanIds = []; // group_id → [subject_ids in plan]
+            foreach ($sem->subjects as $ss) {
+                $eg = $electiveGroupMap[$ss->subject_id] ?? null;
+                if ($eg?->elective_group_id) {
+                    $semGroupPlanIds[$eg->elective_group_id][] = $ss->subject_id;
+                }
+            }
+
+            $semElectiveGroups = [];
+            foreach ($semGroupPlanIds as $gid => $planSubjectIds) {
+                $groupData = $allElectiveGroups[$gid] ?? null;
+                if (!$groupData) continue;
+
+                $options = array_map(fn($m) => [
+                    'id'       => $m->id,
+                    'name'     => $m->name,
+                    'code'     => $m->subject_code ?? '',
+                    'credits'  => (int) ($m->credits ?? 0),
+                    'selected' => in_array($m->id, $planSubjectIds),
+                ], $groupData['subjects']);
+
+                $semElectiveGroups[] = [
+                    'id'               => $gid,
+                    'name'             => $groupData['name'],
+                    'required_credits' => $groupData['required_credits'],
+                    'options'          => $options,
+                ];
+            }
+
+            $sem->setAttribute('elective_groups', $semElectiveGroups);
         }
 
         return $plan;
@@ -593,6 +713,37 @@ class StudyPlanController extends Controller
             ->get()
             ->keyBy('subject_id')
             ->all();
+    }
+
+    /**
+     * Load tất cả subjects của mỗi ElectiveGroup cho framework của user.
+     * Trả về: [group_id => ['id', 'name', 'required_credits', 'subjects'[]]]
+     */
+    private function loadAllElectiveGroupSubjects(int $userId): array
+    {
+        $user = User::find($userId);
+        if (!$user?->pref_academic_year || !$user?->pref_program_type) return [];
+
+        $program = TrainingProgram::where('academic_year', $user->pref_academic_year)
+            ->where('program_type', $user->pref_program_type)->first();
+        if (!$program) return [];
+
+        $frameworkId = $program->curriculumFrameworks()->first()?->id;
+        if (!$frameworkId) return [];
+
+        $groups = [];
+        \App\Models\ElectiveGroup::where('curriculum_framework_id', $frameworkId)
+            ->with('subjects:id,name,subject_code,credits')
+            ->each(function ($eg) use (&$groups) {
+                $groups[$eg->id] = [
+                    'id'               => $eg->id,
+                    'name'             => $eg->name,
+                    'required_credits' => $eg->required_credits,
+                    'subjects'         => $eg->subjects->all(),
+                ];
+            });
+
+        return $groups;
     }
 
     /**

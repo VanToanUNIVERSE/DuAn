@@ -142,42 +142,44 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
         }
 
-        // Pass 3: Gắn nhóm tự chọn vào curriculum_subject (chỉ khi có framework duy nhất)
+        // Pass 3: Tạo nhóm tự chọn cho tất cả framework
         if (!empty($this->pendingElectiveGroups)) {
-            $frameworks = \App\Models\CurriculumFramework::with('trainingProgram')->get();
-            // Chỉ xử lý nếu hệ thống có đúng 1 framework (tránh gắn nhầm)
-            if ($frameworks->count() === 1) {
-                $frameworkId = $frameworks->first()->id;
-                // Cache nhóm đã tạo trong session import này [name => ElectiveGroup]
-                $createdGroups = [];
+            $frameworks = \App\Models\CurriculumFramework::all();
+
+            // Build subject_id lookup
+            $subjectIds = [];
+            foreach ($this->pendingElectiveGroups as $eg) {
+                $sid = Subject::where('subject_code', $eg['subject_code'])->value('id');
+                $subjectIds[$eg['subject_code']] = $sid;
+            }
+
+            // Per-framework: firstOrCreate groups and link curriculum_subject
+            foreach ($frameworks as $fw) {
+                $createdGroups = []; // groupName => ElectiveGroup (for this framework)
 
                 foreach ($this->pendingElectiveGroups as $eg) {
-                    $subjectId = Subject::where('subject_code', $eg['subject_code'])->value('id');
+                    $subjectId = $subjectIds[$eg['subject_code']] ?? null;
                     if (!$subjectId) continue;
 
                     $groupName = $eg['group_name'];
                     if (!isset($createdGroups[$groupName])) {
                         $group = ElectiveGroup::firstOrCreate(
-                            ['curriculum_framework_id' => $frameworkId, 'name' => $groupName],
+                            ['curriculum_framework_id' => $fw->id, 'name' => $groupName],
                             ['required_credits' => $eg['required_credits'] ?? 3]
                         );
-                        // Cập nhật required_credits nếu được cung cấp rõ ràng
                         if ($eg['required_credits'] && $eg['required_credits'] != $group->required_credits) {
                             $group->update(['required_credits' => $eg['required_credits']]);
                         }
                         $createdGroups[$groupName] = $group;
                     }
 
-                    $electiveGroupId = $createdGroups[$groupName]->id;
-                    // Cập nhật curriculum_subject nếu đã có, hoặc tạo mới
-                    $cs = CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+                    $group = $createdGroups[$groupName];
+                    // Gắn vào pivot (framework-agnostic subject membership)
+                    $group->subjects()->syncWithoutDetaching([$subjectId]);
+                    // Cập nhật curriculum_subject nếu đã có trong framework này
+                    CurriculumSubject::where('curriculum_framework_id', $fw->id)
                         ->where('subject_id', $subjectId)
-                        ->first();
-                    if ($cs) {
-                        $cs->update(['elective_group_id' => $electiveGroupId]);
-                    }
-                    // Nếu chưa có curriculum_subject cho môn này, bỏ qua
-                    // (việc gán vào học kỳ cụ thể cần làm riêng)
+                        ->update(['elective_group_id' => $group->id]);
                 }
             }
         }

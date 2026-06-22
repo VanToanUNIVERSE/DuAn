@@ -34,7 +34,8 @@ Route::prefix('v1')->middleware('web')->group(function () {
         Route::post('/generate',     [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
         Route::post('/update-grade', [\App\Http\Controllers\Api\StudyPlanController::class, 'updateGrade']);
         Route::post('/adjust',       [\App\Http\Controllers\Api\StudyPlanController::class, 'adjust']);
-        Route::post('/move-subject', [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
+        Route::post('/move-subject',    [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
+        Route::post('/toggle-elective', [\App\Http\Controllers\Api\StudyPlanController::class, 'toggleElective']);
         Route::post('/apply-suggestions', [\App\Http\Controllers\Api\StudyPlanController::class, 'applySuggestions']);
         Route::post('/add-retake',        [\App\Http\Controllers\Api\StudyPlanController::class, 'addRetake']);
 
