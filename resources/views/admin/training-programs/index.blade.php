@@ -75,6 +75,28 @@
             <div class="card-body">
                 <form method="POST" action="{{ route('admin.training-programs.store') }}">
                     @csrf
+
+                    {{-- Clone from existing program --}}
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:6px;">
+                            <span>📋 Sao chép môn học từ chương trình</span>
+                            <span style="font-size:0.72rem;color:var(--muted);font-weight:400;">(không bắt buộc)</span>
+                        </label>
+                        <select name="clone_from" id="clone-from-select" style="width:100%;">
+                            <option value="">— Tạo mới trống —</option>
+                            @foreach($trainingPrograms as $src)
+                            <option value="{{ $src->id }}" {{ old('clone_from') == $src->id ? 'selected' : '' }}>
+                                {{ $src->program_name }} ({{ $src->academic_year }})
+                            </option>
+                            @endforeach
+                        </select>
+                        <div id="clone-hint" style="display:none;margin-top:5px;padding:8px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:0.78rem;color:#1d4ed8;line-height:1.5;">
+                            ✅ Toàn bộ học kỳ, môn học đã phân công và nhóm tự chọn sẽ được sao chép sang chương trình mới.
+                        </div>
+                    </div>
+
+                    <div style="border-top:1px solid var(--hairline);margin:12px 0 14px;"></div>
+
                     <div class="form-group">
                         <label>Tên Chương trình</label>
                         <input type="text" name="program_name" value="{{ old('program_name') }}" placeholder="VD: Kỹ thuật phần mềm" required>
@@ -113,7 +135,7 @@
                         @error('program_duration')<div class="field-error">{{ $message }}</div>@enderror
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">💾 Thêm mới</button>
+                    <button type="submit" id="clone-submit-btn" class="btn btn-primary" style="width:100%; justify-content:center;">💾 Thêm mới</button>
                 </form>
             </div>
         </div>
@@ -170,6 +192,21 @@
 
 @push('scripts')
 <script>
+// Clone-from dropdown
+(function () {
+    const sel  = document.getElementById('clone-from-select');
+    const hint = document.getElementById('clone-hint');
+    const btn  = document.getElementById('clone-submit-btn');
+    if (!sel) return;
+    function sync() {
+        const hasSource = sel.value !== '';
+        hint.style.display = hasSource ? 'block' : 'none';
+        btn.textContent    = hasSource ? '📋 Thêm & Sao chép' : '💾 Thêm mới';
+    }
+    sel.addEventListener('change', sync);
+    sync(); // run on page load in case old() value is set
+})();
+
 function openEditModal(id, name, code, level, type, duration, year) {
     document.getElementById('edit-modal').style.display = 'block';
     

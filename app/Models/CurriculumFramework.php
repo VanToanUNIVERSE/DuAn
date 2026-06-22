@@ -22,6 +22,11 @@ class CurriculumFramework extends Model
         return $this->hasMany(Semester::class);
     }
 
+    public function electiveGroups()
+    {
+        return $this->hasMany(ElectiveGroup::class);
+    }
+
     // Môn học được phân công trong chương trình này
     public function subjects()
     {
