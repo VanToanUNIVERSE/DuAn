@@ -34,6 +34,10 @@ class SubjectController extends Controller
             $query->where('skill_group_id', $request->skill_group_id);
         }
 
+        if ($request->has('is_elective') && $request->input('is_elective') !== '') {
+            $query->where('is_elective', (bool) $request->input('is_elective'));
+        }
+
         $subjects      = $query->orderBy('name')->paginate(20)->withQueryString();
         $programGroups = ProgramGroup::orderBy('name')->get();
         $skillGroups   = SkillGroup::orderBy('name')->get();

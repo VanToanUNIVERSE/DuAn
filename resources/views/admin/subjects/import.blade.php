@@ -128,6 +128,24 @@
                             <td>Điều kiện đăng ký: <code>none</code> / <code>completed_basic</code> / <code>completed_major</code> / <code>completed_all</code> / <code>min_credits</code></td>
                             <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
                         </tr>
+                        <tr style="background:#eff6ff;">
+                            <td style="text-align:center; font-weight:700; color:#1d4ed8;">I</td>
+                            <td><code style="background:#dbeafe; padding:2px 6px; font-weight:700; color:#1d4ed8;">is_elective</code></td>
+                            <td>Loại môn học: <code>required</code> (bắt buộc) hoặc <code>elective</code> (tự chọn)</td>
+                            <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
+                        </tr>
+                        <tr style="background:#eff6ff;">
+                            <td style="text-align:center; color:#1d4ed8;">J</td>
+                            <td><code style="background:#dbeafe; padding:2px 6px; color:#1d4ed8;">elective_group</code></td>
+                            <td>Tên nhóm tự chọn (ví dụ: <code>Web Electives</code>). Chỉ điền khi <code>is_elective = elective</code>. Các môn cùng tên nhóm sẽ được gộp vào một nhóm.</td>
+                            <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
+                        </tr>
+                        <tr style="background:#eff6ff;">
+                            <td style="text-align:center; color:#1d4ed8;">K</td>
+                            <td><code style="background:#dbeafe; padding:2px 6px; color:#1d4ed8;">required_credits</code></td>
+                            <td>Số TC cần tích lũy để thỏa nhóm tự chọn (ví dụ: <code>4</code>). Chỉ cần điền trên 1 dòng của nhóm, các dòng còn lại để trống.</td>
+                            <td style="text-align:center;"><span class="badge badge-muted">Không</span></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

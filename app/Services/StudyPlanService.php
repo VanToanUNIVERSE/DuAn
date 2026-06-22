@@ -81,6 +81,7 @@ class StudyPlanService
             $toSchedule = $allSubjects->reject(fn($s) =>
                 in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds)
             );
+            $toSchedule = $this->pruneElectiveSubjects($toSchedule, $passedIds);
 
             $passedHistoryIds = array_diff($historySubjectIds, $failedIds);
             $alreadyPlanned   = array_unique(array_merge($passedIds, $passedHistoryIds));
@@ -275,6 +276,7 @@ class StudyPlanService
             $toSchedule = $allSubjects->reject(fn($s) =>
                 in_array($s->id, $alreadyPlanned) && !in_array($s->id, $failedIds)
             );
+            $toSchedule = $this->pruneElectiveSubjects($toSchedule, $passedIds);
 
             $startSem = $fromSem;
 
@@ -602,12 +604,16 @@ class StudyPlanService
         }
 
         return CurriculumSubject::where('curriculum_framework_id', $frameworkId)
-            ->with(['subject.prerequisites', 'subject.corequisites', 'subject.relatedRelations', 'subject.skillGroup', 'semester'])
+            ->with(['subject.prerequisites', 'subject.corequisites', 'subject.relatedRelations', 'subject.skillGroup', 'semester', 'electiveGroup'])
             ->get()
             ->filter(fn($cs) => $cs->subject !== null)
             ->map(function ($cs) {
-                $cs->subject->assigned_semester_index = (int)($cs->semester?->name ?? $cs->subject->semester_id ?? 1);
-                return $cs->subject;
+                $subject = $cs->subject;
+                $subject->assigned_semester_index    = (int)($cs->semester?->name ?? $subject->semester_id ?? 1);
+                $subject->elective_group_id          = $cs->elective_group_id;
+                $subject->elective_required_credits  = $cs->electiveGroup?->required_credits;
+                $subject->elective_group_name        = $cs->electiveGroup?->name;
+                return $subject;
             })
             ->unique('id')
             ->values();
@@ -654,6 +660,8 @@ class StudyPlanService
      */
     private function cloneCurriculumFramework(StudyPlan $plan, Collection $allSubjects): void
     {
+        // Cho sinh viên mới (chưa có passedIds), prune nhóm tự chọn → chỉ giữ đủ TC cần thiết
+        $allSubjects = $this->pruneElectiveSubjects($allSubjects, []);
         $grouped = $allSubjects->groupBy('assigned_semester_index')->sortKeys();
         $maxSem  = 0;
 
@@ -777,5 +785,48 @@ class StudyPlanService
     private function defaultTargetSems(string $mode): int
     {
         return match ($mode) { 'fast' => 6, 'slow' => 10, default => 8 };
+    }
+
+    /**
+     * Lọc danh sách môn học để chỉ giữ đúng số tín chỉ cần thiết cho mỗi nhóm tự chọn.
+     * Môn bắt buộc (elective_group_id = null) luôn được giữ lại.
+     * Trong mỗi nhóm tự chọn, chỉ giữ đủ môn cho đến khi đạt required_credits.
+     *
+     * @param Collection $subjects    Toàn bộ môn (có thể gồm cả đã pass và chưa pass)
+     * @param int[]      $passedIds   Môn đã pass để tính tiến độ nhóm tự chọn đã đạt được
+     */
+    private function pruneElectiveSubjects(Collection $subjects, array $passedIds): Collection
+    {
+        // Tính số TC đã tích lũy trong mỗi nhóm tự chọn từ môn đã pass
+        $groupProgress = [];
+        foreach ($subjects as $subject) {
+            if ($subject->elective_group_id && in_array($subject->id, $passedIds)) {
+                $gid = $subject->elective_group_id;
+                $groupProgress[$gid] = ($groupProgress[$gid] ?? 0) + (int)($subject->credits ?? 3);
+            }
+        }
+
+        // Trong mỗi nhóm tự chọn chưa đủ TC: chọn môn theo thứ tự kỳ chuẩn (sớm nhất trước)
+        $groupPicked = $groupProgress;
+
+        return $subjects
+            ->sortBy('assigned_semester_index')
+            ->filter(function ($subject) use (&$groupPicked) {
+                if (!$subject->elective_group_id) {
+                    return true; // môn bắt buộc — luôn giữ
+                }
+
+                $gid      = $subject->elective_group_id;
+                $required = $subject->elective_required_credits ?? PHP_INT_MAX;
+                $current  = $groupPicked[$gid] ?? 0;
+
+                if ($current >= $required) {
+                    return false; // nhóm đã đủ TC
+                }
+
+                $groupPicked[$gid] = $current + (int)($subject->credits ?? 3);
+                return true;
+            })
+            ->values();
     }
 }

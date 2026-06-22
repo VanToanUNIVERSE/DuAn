@@ -843,7 +843,17 @@ function renderSuggestions(subjects, targetSemester) {
             priorityLabel = `<span class="pill" style="background:#f3f4f6;color:#6b7280;border:none;">Ít Ưu tiên</span>`;
         }
 
-        let tagHtml = `<span class="pill pill-cream" style="background:#e8f8f3;color:#1a3a3a;border:none;">${subject.credits} TC</span> ${priorityLabel}`;
+        // Badge bắt buộc / tự chọn
+        let electiveBadge = '';
+        if (subject.elective_group_name) {
+            electiveBadge = `<span class="pill" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:0.68rem;padding:2px 7px;">📚 Tự chọn · ${subject.elective_group_name}</span>`;
+        } else if (subject.is_elective) {
+            electiveBadge = `<span class="pill" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:0.68rem;padding:2px 7px;">📝 Tự chọn</span>`;
+        } else if (subject.is_elective === false) {
+            electiveBadge = `<span class="pill" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;font-size:0.68rem;padding:2px 7px;">✔ Bắt buộc</span>`;
+        }
+
+        let tagHtml = `<span class="pill pill-cream" style="background:#e8f8f3;color:#1a3a3a;border:none;">${subject.credits} TC</span> ${priorityLabel} ${electiveBadge}`;
         if (subject.skill_evaluation && !isFailed) {
             let evalColor = subject.skill_evaluation.includes('+') ? '#10b981' : '#f59e0b';
             if (subject.skill_evaluation.includes('-15')) evalColor = '#ef4444';
@@ -2244,7 +2254,15 @@ function renderStudyPlan(plan) {
                         </button>
 
                         <div style="font-weight:600; font-size:0.95rem; margin-bottom:4px; padding-right:24px;">${sub.name}</div>
-                        <div style="font-size:0.8rem; color:var(--muted); margin-bottom:8px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
+                        <div style="font-size:0.8rem; color:var(--muted); margin-bottom:6px;">${sub.credits} TC | Nhóm: ${sub.skill_group_id || 'Chung'}</div>
+                        ${sub.elective_group_name
+                            ? `<span style="display:inline-block;font-size:0.68rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;margin-bottom:6px;">📚 Tự chọn · ${sub.elective_group_name}</span>`
+                            : sub.is_elective
+                                ? `<span style="display:inline-block;font-size:0.68rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;margin-bottom:6px;">📝 Tự chọn</span>`
+                                : sub.is_elective === false
+                                    ? `<span style="display:inline-block;font-size:0.68rem;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:4px;padding:1px 6px;margin-bottom:6px;">✔ Bắt buộc</span>`
+                                    : ''
+                        }
 
                         ${prereqTooltipHtml}
 

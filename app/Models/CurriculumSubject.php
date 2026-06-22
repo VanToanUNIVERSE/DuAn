@@ -14,6 +14,7 @@ class CurriculumSubject extends Pivot
         'curriculum_framework_id',
         'semester_id',
         'subject_id',
+        'elective_group_id',
     ];
 
     public function subject()
@@ -29,5 +30,10 @@ class CurriculumSubject extends Pivot
     public function curriculumFramework()
     {
         return $this->belongsTo(CurriculumFramework::class);
+    }
+
+    public function electiveGroup()
+    {
+        return $this->belongsTo(ElectiveGroup::class);
     }
 }

@@ -6,6 +6,9 @@ use App\Models\Subject;
 use App\Models\SkillGroup;
 use App\Models\ProgramGroup;
 use App\Models\SubjectRelation;
+use App\Models\ElectiveGroup;
+use App\Models\CurriculumSubject;
+use App\Models\TrainingProgram;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
@@ -17,9 +20,8 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 {
     private int $rowCount = 0;
     private array $errors = [];
-
-    // Relations cần xử lý sau khi tất cả subjects đã được tạo
-    private array $pendingRelations = [];
+    private array $pendingRelations      = [];
+    private array $pendingElectiveGroups = [];
 
     public function collection(Collection $rows)
     {
@@ -56,12 +58,14 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $reqType = trim($row['requirement_type'] ?? 'none');
             if (!in_array($reqType, $validTypes)) $reqType = 'none';
 
+            // Loại môn: chấp nhận cả tiếng Anh lẫn tiếng Việt
+            $loaiMon  = mb_strtolower(trim($row['is_elective'] ?? $row['loai_mon'] ?? $row['loại_môn'] ?? $row['type'] ?? ''));
+            $isElective = in_array($loaiMon, ['elective', 'tự chọn', 'tu chon', 'tự_chọn', '1', 'true', 'yes', 'x', 'có', 'co']);
+
             // Upsert: nếu có subject_code thì match theo code, không thì theo tên
             $matchKey = $subjectCode ? ['subject_code' => $subjectCode] : ['name' => $name];
 
-            // Kiểm tra trùng code nếu upsert theo tên (tránh tạo trùng code)
             if (!$subjectCode) {
-                // Không có code trong file → bỏ qua, không thể upsert an toàn
                 $this->errors[] = "Dòng " . ($index + 2) . ": Môn \"{$name}\" thiếu mã môn, bỏ qua.";
                 continue;
             }
@@ -74,8 +78,20 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     'skill_group_id'   => $skillGroupId,
                     'program_group_id' => $programGroupId,
                     'requirement_type' => $reqType,
+                    'is_elective'      => $isElective,
                 ]
             );
+
+            // Xử lý nhóm tự chọn (elective_group): gắn vào curriculum_subject nếu có
+            $electiveGroupName    = trim($row['elective_group'] ?? $row['nhom_tu_chon'] ?? '');
+            $electiveRequiredCred = (int) ($row['required_credits'] ?? $row['tc_yeu_cau'] ?? 0);
+            if ($isElective && $electiveGroupName) {
+                $this->pendingElectiveGroups[] = [
+                    'subject_code'     => $subjectCode,
+                    'group_name'       => $electiveGroupName,
+                    'required_credits' => $electiveRequiredCred ?: null,
+                ];
+            }
 
             $this->rowCount++;
 
@@ -114,8 +130,6 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                         'type'               => $rel['type'],
                     ]
                 );
-                
-                // Nếu là song hành, tạo luôn chiều ngược lại
                 if ($rel['type'] === 'corequisite') {
                     SubjectRelation::updateOrCreate(
                         [
@@ -124,6 +138,46 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                             'type'               => 'corequisite',
                         ]
                     );
+                }
+            }
+        }
+
+        // Pass 3: Gắn nhóm tự chọn vào curriculum_subject (chỉ khi có framework duy nhất)
+        if (!empty($this->pendingElectiveGroups)) {
+            $frameworks = \App\Models\CurriculumFramework::with('trainingProgram')->get();
+            // Chỉ xử lý nếu hệ thống có đúng 1 framework (tránh gắn nhầm)
+            if ($frameworks->count() === 1) {
+                $frameworkId = $frameworks->first()->id;
+                // Cache nhóm đã tạo trong session import này [name => ElectiveGroup]
+                $createdGroups = [];
+
+                foreach ($this->pendingElectiveGroups as $eg) {
+                    $subjectId = Subject::where('subject_code', $eg['subject_code'])->value('id');
+                    if (!$subjectId) continue;
+
+                    $groupName = $eg['group_name'];
+                    if (!isset($createdGroups[$groupName])) {
+                        $group = ElectiveGroup::firstOrCreate(
+                            ['curriculum_framework_id' => $frameworkId, 'name' => $groupName],
+                            ['required_credits' => $eg['required_credits'] ?? 3]
+                        );
+                        // Cập nhật required_credits nếu được cung cấp rõ ràng
+                        if ($eg['required_credits'] && $eg['required_credits'] != $group->required_credits) {
+                            $group->update(['required_credits' => $eg['required_credits']]);
+                        }
+                        $createdGroups[$groupName] = $group;
+                    }
+
+                    $electiveGroupId = $createdGroups[$groupName]->id;
+                    // Cập nhật curriculum_subject nếu đã có, hoặc tạo mới
+                    $cs = CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+                        ->where('subject_id', $subjectId)
+                        ->first();
+                    if ($cs) {
+                        $cs->update(['elective_group_id' => $electiveGroupId]);
+                    }
+                    // Nếu chưa có curriculum_subject cho môn này, bỏ qua
+                    // (việc gán vào học kỳ cụ thể cần làm riêng)
                 }
             }
         }

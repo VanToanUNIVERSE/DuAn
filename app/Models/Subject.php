@@ -25,6 +25,7 @@ class Subject extends Model
         'note',
         'requirement_type',
         'offered_in',
+        'is_elective',
     ];
 
 

@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CurriculumSubject;
 use App\Models\StudyPlan;
 use App\Models\StudyPlanSemester;
 use App\Models\StudyPlanSubject;
 use App\Models\Subject;
+use App\Models\TrainingProgram;
+use App\Models\User;
 use App\Models\UserGrade;
 use App\Services\AcademicEvaluationService;
 use App\Services\ProgressService;
@@ -538,8 +541,10 @@ class StudyPlanController extends Controller
         $passedSet      = array_filter($userGrades, fn($g) => $g !== null && $g > 5.0);
         $passedIds      = array_keys($passedSet);
 
-        // Cache tất cả Subject một lần cho implicit prerequisites
         $allSubjectsMap = Subject::all()->keyBy('id');
+
+        // Load elective group info từ curriculum_subject (1 query cho toàn plan)
+        $electiveGroupMap = $this->loadElectiveGroupMap($userId, $plan);
 
         foreach ($plan->semesters as $sem) {
             foreach ($sem->subjects as $ss) {
@@ -549,17 +554,45 @@ class StudyPlanController extends Controller
                 $ss->is_completed = $ss->grade !== null && $ss->grade > 5.0;
                 $ss->is_failed    = $ss->grade !== null && $ss->grade <= 5.0;
 
-                // Danh sách tiên quyết chi tiết (để hiển thị trên card)
                 $ss->subject->prerequisites_info = $this->buildPrereqDetails($ss->subject, $passedIds, $allSubjectsMap);
 
-                // Môn có nhiều môn phụ thuộc vào nó → ưu tiên cao
                 $dependentCount = $ss->subject->relatedRelations->where('type', 'prerequisite')->count();
                 $ss->is_highly_recommended = $dependentCount >= 2
                     || in_array($ss->subject->requirement_type, ['completed_basic', 'completed_major']);
+
+                // Attach elective group info
+                $eg = $electiveGroupMap[$ss->subject_id] ?? null;
+                $ss->subject->elective_group_id         = $eg?->elective_group_id;
+                $ss->subject->elective_group_name       = $eg?->electiveGroup?->name;
+                $ss->subject->elective_required_credits = $eg?->electiveGroup?->required_credits;
             }
         }
 
         return $plan;
+    }
+
+    private function loadElectiveGroupMap(int $userId, StudyPlan $plan): array
+    {
+        $user = User::find($userId);
+        if (!$user?->pref_academic_year || !$user?->pref_program_type) return [];
+
+        $program = TrainingProgram::where('academic_year', $user->pref_academic_year)
+            ->where('program_type', $user->pref_program_type)
+            ->first();
+        if (!$program) return [];
+
+        $frameworkId = $program->curriculumFrameworks()->first()?->id;
+        if (!$frameworkId) return [];
+
+        $subjectIds = $plan->semesters->flatMap(fn($s) => $s->subjects->pluck('subject_id'))->unique()->toArray();
+
+        return CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereNotNull('elective_group_id')
+            ->with('electiveGroup')
+            ->get()
+            ->keyBy('subject_id')
+            ->all();
     }
 
     /**

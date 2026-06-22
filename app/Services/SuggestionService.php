@@ -86,18 +86,40 @@ class SuggestionService
 
         if ($frameworkId) {
             $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
-                ->with(['subject', 'semester'])
+                ->with(['subject', 'semester', 'electiveGroup'])
                 ->get();
-            
+
             $allFrameworkSubjects = $curriculumSubjects->pluck('subject')->filter();
 
+            // Tính tiến độ TC đã đạt trong mỗi nhóm tự chọn (từ môn đã pass)
+            $electiveGroupProgress = [];
+            $electiveGroupLimits   = [];
             foreach ($curriculumSubjects as $cs) {
-                if ($cs->subject && !in_array($cs->subject_id, $passedSubjects)) {
-                    $subject = $cs->subject;
-                    // Gán tạm học kỳ vào để tương thích với logic cũ
-                    $subject->setRelation('semester', $cs->semester);
-                    $subjects->push($subject);
+                if (!$cs->elective_group_id) continue;
+                $gid = $cs->elective_group_id;
+                $electiveGroupLimits[$gid] = $cs->electiveGroup?->required_credits ?? PHP_INT_MAX;
+                if (in_array($cs->subject_id, $passedSubjects)) {
+                    $electiveGroupProgress[$gid] = ($electiveGroupProgress[$gid] ?? 0) + (int)($cs->subject?->credits ?? 3);
                 }
+            }
+
+            foreach ($curriculumSubjects as $cs) {
+                if (!$cs->subject || in_array($cs->subject_id, $passedSubjects)) continue;
+
+                // Bỏ qua môn tự chọn nếu nhóm của nó đã đủ TC
+                if ($cs->elective_group_id) {
+                    $gid = $cs->elective_group_id;
+                    if (($electiveGroupProgress[$gid] ?? 0) >= ($electiveGroupLimits[$gid] ?? PHP_INT_MAX)) {
+                        continue;
+                    }
+                }
+
+                $subject = $cs->subject;
+                $subject->setRelation('semester', $cs->semester);
+                $subject->elective_group_id         = $cs->elective_group_id;
+                $subject->elective_group_name       = $cs->electiveGroup?->name;
+                $subject->elective_required_credits = $cs->electiveGroup?->required_credits;
+                $subjects->push($subject);
             }
         } else {
             // Fallback nếu không có CTĐT

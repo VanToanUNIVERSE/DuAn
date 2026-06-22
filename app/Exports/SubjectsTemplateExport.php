@@ -21,26 +21,30 @@ class SubjectsTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
     public function headings(): array
     {
         return [
-            'subject_code',   // A — BẮT BUỘC, dùng làm khoá upsert
-            'subjects',       // B — BẮT BUỘC, tên môn học
-            'credits',        // C
-            'program_groups', // D
-            'skill_groups',   // E
-            'prerequisite',   // F
-            'corequisite',    // G
-            'requirement_type', // H
+            'subject_code',    // A — BẮT BUỘC, dùng làm khoá upsert
+            'subjects',        // B — BẮT BUỘC, tên môn học
+            'credits',         // C
+            'program_groups',  // D
+            'skill_groups',    // E
+            'prerequisite',    // F
+            'corequisite',     // G
+            'requirement_type',// H
+            'is_elective',     // I — required / elective
+            'elective_group',  // J — Tên nhóm tự chọn (chỉ điền khi is_elective = elective)
+            'required_credits',// K — Số TC cần tích lũy trong nhóm
         ];
     }
 
     public function array(): array
     {
-        // Dữ liệu mẫu minh hoạ
         return [
-            ['IT001', 'Nhập môn lập trình',         1,  'Đại cương',     'Lập trình',            '',      '',       'none'],
-            ['IT002', 'Lập trình căn bản',           3,  'Đại cương',     'Lập trình',            'IT001', '',       'completed_basic'],
-            ['IT002L','Lập trình căn bản - Thực hành',2, 'Đại cương',     'Lập trình',            'IT001', 'IT002',  'completed_basic'],
-            ['MATH01','Toán rời rạc 1',              3,  'Cơ sở ngành',   'Toán – Khoa học',      '',      '',       'none'],
-            ['MATH02','Toán rời rạc 2',              3,  'Cơ sở ngành',   'Toán – Khoa học',      'MATH01','',       'none'],
+            ['IT001', 'Nhập môn lập trình',          1,  'Đại cương',   'Lập trình',       '',      '',      'none',             'required', '',              ''],
+            ['IT002', 'Lập trình căn bản',            3,  'Đại cương',   'Lập trình',       'IT001', '',      'completed_basic',  'required', '',              ''],
+            ['IT002L','Lập trình căn bản - TH',       2,  'Đại cương',   'Lập trình',       'IT001', 'IT002', 'completed_basic',  'required', '',              ''],
+            ['MATH01','Toán rời rạc 1',               3,  'Cơ sở ngành', 'Toán – Khoa học', '',      '',      'none',             'required', '',              ''],
+            ['CN001', 'Lập trình Web',                2,  'Chuyên ngành','Lập trình',       'IT002', '',      'completed_major',  'elective', 'Web Electives',  4],
+            ['CN002', 'Lập trình Di động',            2,  'Chuyên ngành','Lập trình',       'IT002', '',      'completed_major',  'elective', 'Web Electives',  ''],
+            ['CN003', 'Thiết kế UI/UX',               2,  'Chuyên ngành','Lập trình',       '',      '',      'completed_major',  'elective', 'Web Electives',  ''],
         ];
     }
 
@@ -66,6 +70,14 @@ class SubjectsTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
             'F' => ['font' => ['italic' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFF3CD']]],
             'G' => ['font' => ['italic' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD1F5E0']]],
             'H' => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
+            // Cột loai_mon — highlight xanh lam nhẹ
+            'I' => [
+                'font'      => ['bold' => true],
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFE0F0FF']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ],
+            'J' => ['fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFEFF6FF']]],
+            'K' => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
         ];
     }
 
@@ -80,6 +92,9 @@ class SubjectsTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
             'F' => 28,
             'G' => 28,
             'H' => 20,
+            'I' => 14,
+            'J' => 28,
+            'K' => 14,
         ];
     }
 }
