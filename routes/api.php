@@ -29,23 +29,29 @@ Route::prefix('v1')->middleware(['web', 'auth'])->group(function () {
     Route::get('/graduation-forecast', [\App\Http\Controllers\Api\GraduationForecastController::class, 'index']);
 
     Route::prefix('study-plans')->group(function () {
-        Route::get('/',              [\App\Http\Controllers\Api\StudyPlanController::class, 'index']);
-        Route::get('/active',        [\App\Http\Controllers\Api\StudyPlanController::class, 'getActivePlan']);  // ← PHẢI trước /{id}
-        Route::post('/generate',     [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
-        Route::post('/update-grade', [\App\Http\Controllers\Api\StudyPlanController::class, 'updateGrade']);
-        Route::post('/move-subject',    [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
-        Route::post('/toggle-elective', [\App\Http\Controllers\Api\StudyPlanController::class, 'toggleElective']);
-        Route::post('/apply-suggestions', [\App\Http\Controllers\Api\StudyPlanController::class, 'applySuggestions']);
-        Route::post('/add-retake',        [\App\Http\Controllers\Api\StudyPlanController::class, 'addRetake']);
+        // CRUD
+        Route::get('/',       [\App\Http\Controllers\Api\StudyPlan\StudyPlanController::class, 'index']);
+        Route::get('/active', [\App\Http\Controllers\Api\StudyPlan\StudyPlanController::class, 'getActivePlan']);
+        Route::get('/saved',  [\App\Http\Controllers\Api\StudyPlan\StudyPlanController::class, 'getSavedPlans']);
+        Route::post('/generate', [\App\Http\Controllers\Api\StudyPlan\StudyPlanController::class, 'generate']);
+        Route::post('/{id}/save',   [\App\Http\Controllers\Api\StudyPlan\StudyPlanController::class, 'savePlan']);
+        Route::get('/{id}/load',    [\App\Http\Controllers\Api\StudyPlan\StudyPlanController::class, 'loadPlan']);
+        Route::delete('/{id}',      [\App\Http\Controllers\Api\StudyPlan\StudyPlanController::class, 'destroy']);
 
-        Route::get('/saved',         [\App\Http\Controllers\Api\StudyPlanController::class, 'getSavedPlans']);
-        Route::post('/{id}/dedup-retakes',   [\App\Http\Controllers\Api\StudyPlanController::class, 'dedupRetakes']);
-        Route::post('/{id}/adjust-target',  [\App\Http\Controllers\Api\StudyPlanController::class, 'adjustTarget']);
-        Route::get('/{id}/advisory',         [\App\Http\Controllers\Api\StudyPlanController::class, 'advisory']);
-        Route::post('/{id}/apply-advisory',  [\App\Http\Controllers\Api\StudyPlanController::class, 'applyAdvisory']);
-        Route::post('/{id}/save',    [\App\Http\Controllers\Api\StudyPlanController::class, 'savePlan']);
-        Route::get('/{id}/load',     [\App\Http\Controllers\Api\StudyPlanController::class, 'loadPlan']);
-        Route::delete('/{id}',       [\App\Http\Controllers\Api\StudyPlanController::class, 'destroy']);
+        // Điểm số
+        Route::post('/update-grade', [\App\Http\Controllers\Api\StudyPlan\StudyPlanGradeController::class, 'updateGrade']);
+
+        // Thao tác môn học
+        Route::post('/move-subject',      [\App\Http\Controllers\Api\StudyPlan\StudyPlanSubjectController::class, 'moveSubject']);
+        Route::post('/toggle-elective',   [\App\Http\Controllers\Api\StudyPlan\StudyPlanSubjectController::class, 'toggleElective']);
+        Route::post('/apply-suggestions', [\App\Http\Controllers\Api\StudyPlan\StudyPlanSubjectController::class, 'applySuggestions']);
+        Route::post('/add-retake',        [\App\Http\Controllers\Api\StudyPlan\StudyPlanSubjectController::class, 'addRetake']);
+        Route::post('/{id}/dedup-retakes', [\App\Http\Controllers\Api\StudyPlan\StudyPlanSubjectController::class, 'dedupRetakes']);
+
+        // Advisory & mục tiêu
+        Route::get('/{id}/advisory',        [\App\Http\Controllers\Api\StudyPlan\StudyPlanAdvisoryController::class, 'advisory']);
+        Route::post('/{id}/apply-advisory', [\App\Http\Controllers\Api\StudyPlan\StudyPlanAdvisoryController::class, 'applyAdvisory']);
+        Route::post('/{id}/adjust-target',  [\App\Http\Controllers\Api\StudyPlan\StudyPlanAdvisoryController::class, 'adjustTarget']);
     });
 
 
