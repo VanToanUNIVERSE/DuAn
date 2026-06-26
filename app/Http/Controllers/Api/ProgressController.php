@@ -20,11 +20,7 @@ class ProgressController extends Controller
 
     public function index(Request $request)
     {
-        $userId = $request->input('user_id') ?? Auth::id();
-
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
-        }
+        $userId = Auth::id();
 
         $progress = $this->progressService->evaluateProgress($userId);
         $warnings = $this->progressService->generateWarnings($userId);

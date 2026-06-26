@@ -21,10 +21,10 @@ class RecommendationService
         // 1. Get user's grades
         $userGrades = UserGrade::where('user_id', $userId)->get();
         $passedSubjectIds = $userGrades->filter(function ($grade) {
-            return $grade->grade > 5.0 || in_array($grade->status, ['passed', 'pass']);
+            return $grade->grade >= 5.0 || in_array($grade->status, ['passed', 'pass']);
         })->pluck('subject_id')->toArray();
         $failedSubjectIds = $userGrades->filter(function ($grade) {
-            return ($grade->grade !== null && $grade->grade <= 5.0) || in_array($grade->status, ['failed', 'fail']);
+            return ($grade->grade !== null && $grade->grade < 5.0) || in_array($grade->status, ['failed', 'fail']);
         })->pluck('subject_id')->toArray();
         $gradedSubjectIds = $userGrades->filter(function($grade) {
             return $grade->grade !== null || $grade->status !== null;
@@ -66,6 +66,15 @@ class RecommendationService
             ->toArray();
         }
 
+        // Load nhóm môn học một lần để tránh N+1 khi kiểm tra tiên quyết ngầm định
+        $basicGroupIds       = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
+            ->orWhere('name', 'like', '%Anh văn%')
+            ->pluck('id')->toArray();
+        $majorGroupIds       = \App\Models\ProgramGroup::where('name', 'like', '%Cơ sở ngành%')
+            ->pluck('id')->toArray();
+        $specializedGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Chuyên ngành%')
+            ->pluck('id')->toArray();
+
         $recommendations = [];
 
         foreach ($allSubjects as $subject) {
@@ -94,16 +103,6 @@ class RecommendationService
             // 2. Implicit prerequisites (from requirement_type)
             $reqType = $subject->requirement_type;
             if ($reqType && $reqType !== 'none') {
-                // ── Dùng DB query động thay vì hardcode IDs ──────────────────
-                // Đảm bảo hoạt động đúng khi DB thay đổi thứ tự hoặc tên nhóm
-                $basicGroupIds       = \App\Models\ProgramGroup::where('name', 'like', '%Đại cương%')
-                    ->orWhere('name', 'like', '%Anh văn%')
-                    ->pluck('id')->toArray();
-                $majorGroupIds       = \App\Models\ProgramGroup::where('name', 'like', '%Cơ sở ngành%')
-                    ->pluck('id')->toArray();
-                $specializedGroupIds = \App\Models\ProgramGroup::where('name', 'like', '%Chuyên ngành%')
-                    ->pluck('id')->toArray();
-
                 $implicitPrereqSubjects = collect();
                 
                 if ($reqType === 'completed_basic') {

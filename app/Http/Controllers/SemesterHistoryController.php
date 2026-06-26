@@ -58,7 +58,7 @@ class SemesterHistoryController extends Controller
         foreach ($validated['courses'] as $course) {
             $credits = $subjectMap[$course['subject_id']] ?? 0;
             $grade   = isset($course['grade']) ? (float) $course['grade'] : null;
-            $status  = $grade !== null ? ($grade > 5.0 ? 'pass' : 'fail') : null;
+            $status  = $grade !== null ? ($grade >= 5.0 ? 'pass' : 'fail') : null;
 
             $totalCredits += $credits;
             if ($status === 'pass') {
@@ -93,7 +93,7 @@ class SemesterHistoryController extends Controller
 
             foreach ($validated['courses'] as $course) {
                 $grade  = isset($course['grade']) ? (float) $course['grade'] : null;
-                $status = $grade !== null ? ($grade > 5.0 ? 'pass' : 'fail') : null;
+                $status = $grade !== null ? ($grade >= 5.0 ? 'pass' : 'fail') : null;
 
                 SemesterHistoryItem::create([
                     'semester_history_id' => $history->id,

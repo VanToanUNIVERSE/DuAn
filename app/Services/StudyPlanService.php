@@ -350,17 +350,18 @@ class StudyPlanService
         $failedSet = array_flip(
             UserGrade::where('user_id', $user->id)
                 ->get()
-                ->filter(fn($g) => $g->grade !== null && $g->grade <= 5.0
+                ->filter(fn($g) => $g->grade !== null && $g->grade < 5.0
                     && !in_array($g->status, ['pass', 'passed']))
                 ->pluck('subject_id')
                 ->toArray()
         );
 
-        $modeLimit     = $tcPerSem;        // giới hạn TC/kỳ = input trực tiếp
-        $targetSemsCap = $targetSemesters; // cố định theo mục tiêu, không adaptive
-        $semIndex      = $startSem;
-        $maxIterations = $startSem + 24; // safety guard
-        $schedule      = [];
+        $modeLimit        = $tcPerSem;        // giới hạn TC/kỳ = input trực tiếp
+        $targetSemsCap    = $targetSemesters; // cố định theo mục tiêu, không adaptive
+        $semIndex         = $startSem;
+        $maxIterations    = $startSem + 24; // safety guard
+        $consecutiveEmpty = 0;              // đếm số kỳ liên tiếp không xếp được môn nào
+        $schedule         = [];
 
         while (!empty($remaining) && $semIndex <= $maxIterations) {
             $isOdd = ($semIndex % 2) !== 0;
@@ -379,8 +380,13 @@ class StudyPlanService
 
             if (empty($available)) {
                 Log::warning("[Planner] Deadlock sem={$semIndex} user={$user->id}, " . count($remaining) . " môn không thể xếp lịch.");
-                break;
+                $consecutiveEmpty++;
+                $semIndex++;
+                // Sau 2 kỳ liên tiếp (1 lẻ + 1 chẵn) vẫn không xếp được → thực sự deadlock
+                if ($consecutiveEmpty >= 2) break;
+                continue;
             }
+            $consecutiveEmpty = 0;
 
             // Sắp xếp theo priority giảm dần
             usort($available, fn($a, $b) =>
@@ -560,11 +566,11 @@ class StudyPlanService
             ->map(fn($g) => $g->sortByDesc('grade')->first());
 
         $passedIds = $allUserGrades
-            ->filter(fn($g) => $g->grade > 5.0 || in_array($g->status, ['pass', 'passed']))
+            ->filter(fn($g) => $g->grade >= 5.0 || in_array($g->status, ['pass', 'passed']))
             ->pluck('subject_id')->toArray();
 
         $failedIds = $allUserGrades
-            ->filter(fn($g) => $g->grade !== null && $g->grade <= 5.0
+            ->filter(fn($g) => $g->grade !== null && $g->grade < 5.0
                 && !in_array($g->status, ['pass', 'passed']))
             ->pluck('subject_id')->toArray();
 

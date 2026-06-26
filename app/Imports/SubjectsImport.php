@@ -142,16 +142,25 @@ class SubjectsImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             }
         }
 
-        // Pass 3: Tạo nhóm tự chọn cho tất cả framework
+        // Pass 3: Tạo nhóm tự chọn chỉ cho framework đang chứa các môn được import
         if (!empty($this->pendingElectiveGroups)) {
-            $frameworks = \App\Models\CurriculumFramework::all();
-
             // Build subject_id lookup
             $subjectIds = [];
             foreach ($this->pendingElectiveGroups as $eg) {
                 $sid = Subject::where('subject_code', $eg['subject_code'])->value('id');
                 $subjectIds[$eg['subject_code']] = $sid;
             }
+
+            // Chỉ xử lý framework nào thực sự chứa ít nhất 1 môn được import
+            $relevantSubjectIds = array_values(array_filter($subjectIds));
+            $relevantFrameworkIds = \App\Models\CurriculumSubject::whereIn('subject_id', $relevantSubjectIds)
+                ->pluck('curriculum_framework_id')
+                ->unique()
+                ->toArray();
+
+            $frameworks = $relevantFrameworkIds
+                ? \App\Models\CurriculumFramework::whereIn('id', $relevantFrameworkIds)->get()
+                : collect();
 
             // Per-framework: firstOrCreate groups and link curriculum_subject
             foreach ($frameworks as $fw) {

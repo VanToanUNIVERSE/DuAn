@@ -187,8 +187,13 @@ class SubjectController extends Controller
             ->with('success', 'Đã xóa môn học.');
     }
 
-    public function deleteAll()
+    public function deleteAll(Request $request)
     {
+        if ($request->input('confirm') !== 'DELETE_ALL') {
+            return redirect()->route('admin.subjects.index')
+                ->with('error', 'Xác nhận không hợp lệ. Hành động bị hủy.');
+        }
+
         Subject::query()->delete();
         return redirect()->route('admin.subjects.index')
             ->with('success', 'Đã xóa toàn bộ môn học.');

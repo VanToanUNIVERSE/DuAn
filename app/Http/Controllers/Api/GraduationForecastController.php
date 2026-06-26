@@ -68,9 +68,12 @@ class GraduationForecastController extends Controller
         // Rủi ro: giảm 20% (rớt môn, bệnh, nghỉ học...)
         $pessimisticPerSem = max(8, $avgPerSem * 0.80);
 
-        $optimistic  = $this->buildScenario('optimistic', $remainingCredits, $optimisticPerSem, $completedSems, $gpa, $gpaTrend);
-        $average     = $this->buildScenario('average',    $remainingCredits, $averagePerSem,    $completedSems, $gpa, $gpaTrend);
-        $pessimistic = $this->buildScenario('pessimistic', $remainingCredits, $pessimisticPerSem, $completedSems, $gpa, $gpaTrend);
+        $earnedCredits = $progress['earned_credits'];
+        $totalCredits  = $progress['total_required_credits'];
+
+        $optimistic  = $this->buildScenario('optimistic',  $remainingCredits, $optimisticPerSem,  $completedSems, $gpa, $gpaTrend, $earnedCredits, $totalCredits);
+        $average     = $this->buildScenario('average',     $remainingCredits, $averagePerSem,     $completedSems, $gpa, $gpaTrend, $earnedCredits, $totalCredits);
+        $pessimistic = $this->buildScenario('pessimistic', $remainingCredits, $pessimisticPerSem, $completedSems, $gpa, $gpaTrend, $earnedCredits, $totalCredits);
 
         // ── Trạng thái hiện tại ─────────────────────────────────────────────
         $remainingSems        = max(1, $targetSems - $completedSems);
@@ -134,7 +137,9 @@ class GraduationForecastController extends Controller
         float $perSem,
         int $completedSems,
         float $gpa,
-        string $gpaTrend
+        string $gpaTrend,
+        int $earnedCredits = 0,
+        int $totalCredits  = 140
     ): array {
         $semsNeeded  = $remainingCredits > 0 ? (int) ceil($remainingCredits / max(1, $perSem)) : 0;
         $gradSem     = $completedSems + $semsNeeded;
@@ -160,8 +165,8 @@ class GraduationForecastController extends Controller
             'pessimistic' => '#ef4444',
         ];
 
-        // Dự báo GPA cuối khoá dựa trên xu hướng
-        $projectedGpa = $this->projectGpa($gpa, $type, $gpaTrend);
+        // Dự báo GPA cuối khoá dựa trên weighted average (đã học × GPA hiện tại + còn lại × GPA dự kiến)
+        $projectedGpa = $this->projectGpa($gpa, $type, $gpaTrend, $earnedCredits, $remainingCredits, $totalCredits);
 
         return [
             'type'             => $type,
@@ -179,17 +184,21 @@ class GraduationForecastController extends Controller
     /**
      * Dự báo GPA cuối khoá theo kịch bản
      */
-    private function projectGpa(float $currentGpa, string $type, string $trend): float
+    private function projectGpa(float $currentGpa, string $type, string $trend, int $earnedCredits = 0, int $remainingCredits = 0, int $totalCredits = 140): float
     {
-        if ($currentGpa <= 0) return 0;
+        if ($currentGpa <= 0 || $totalCredits <= 0) return 0;
 
-        $delta = match ($type) {
-            'optimistic'  => ($trend === 'improving') ? 0.5 : 0.2,
-            'pessimistic' => ($trend === 'declining') ? -0.5 : -0.2,
-            default       => ($trend === 'improving') ? 0.1 : (($trend === 'declining') ? -0.1 : 0),
+        // GPA kỳ vọng cho phần học còn lại, dựa trên kịch bản và xu hướng
+        $futureDelta = match ($type) {
+            'optimistic'  => ($trend === 'improving') ? 1.5 : 1.0,
+            'pessimistic' => ($trend === 'declining') ? -1.5 : -1.0,
+            default       => ($trend === 'improving') ? 0.3 : (($trend === 'declining') ? -0.3 : 0),
         };
+        $futureGpa = max(0, min(10, $currentGpa + $futureDelta));
 
-        return round(max(0, min(10, $currentGpa + $delta)), 2);
+        // Weighted average: (đã học × GPA hiện tại + còn lại × GPA dự kiến) / tổng TC
+        $projected = ($earnedCredits * $currentGpa + $remainingCredits * $futureGpa) / $totalCredits;
+        return round(max(0, min(10, $projected)), 2);
     }
 
     /**

@@ -70,7 +70,7 @@ class GradeController extends Controller
             // Xác định status dựa theo ngưỡng điểm 5.0
             $status = null;
             if ($grade !== null) {
-                $status = $grade > 5.0 ? 'pass' : 'fail';
+                $status = $grade >= 5.0 ? 'pass' : 'fail';
             }
 
             // updateOrCreate: tìm theo (user_id + subject_id), cập nhật grade + status

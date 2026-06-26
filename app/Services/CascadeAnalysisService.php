@@ -41,7 +41,7 @@ class CascadeAnalysisService
         $passedIds = UserGrade::where('user_id', $userId)
             ->where('subject_id', '!=', $subjectId)
             ->get()
-            ->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade > 5.0))
+            ->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade >= 5.0))
             ->pluck('subject_id')
             ->toArray();
 
@@ -124,7 +124,7 @@ class CascadeAnalysisService
         $passedIds = UserGrade::where('user_id', $userId)
             ->whereNotIn('subject_id', $failedSubjectIds)
             ->get()
-            ->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade > 5.0))
+            ->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade >= 5.0))
             ->pluck('subject_id')
             ->toArray();
 

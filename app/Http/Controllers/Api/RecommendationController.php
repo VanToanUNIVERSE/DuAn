@@ -18,12 +18,7 @@ class RecommendationController extends Controller
 
     public function index(Request $request)
     {
-        // For testing, user_id can be passed, otherwise get logged in user
-        $userId = $request->input('user_id') ?? Auth::id();
-
-        if (!$userId) {
-            return response()->json(['error' => 'Unauthorized or missing user_id'], 401);
-        }
+        $userId = Auth::id();
 
         // Get current semester and study plan context (optional)
         $currentSemester = $request->input('current_semester');

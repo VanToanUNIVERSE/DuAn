@@ -24,7 +24,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::get('/suggestions', [SuggestionController::class, 'index']);
 
 // ─── LuanVan New API Routes ───────────────────────────────────────────────
-Route::prefix('v1')->middleware('web')->group(function () {
+Route::prefix('v1')->middleware(['web', 'auth'])->group(function () {
     Route::get('/recommendations', [\App\Http\Controllers\Api\RecommendationController::class, 'index']);
     Route::get('/graduation-forecast', [\App\Http\Controllers\Api\GraduationForecastController::class, 'index']);
 

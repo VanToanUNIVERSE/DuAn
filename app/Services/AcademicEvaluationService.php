@@ -201,7 +201,7 @@ class AcademicEvaluationService
             ->whereIn('subject_id', $focusSubjectIds)
             ->get();
 
-        $passed   = $grades->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade > 5.0))->count();
+        $passed   = $grades->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade >= 5.0))->count();
         $avgGrade = $grades->whereNotNull('grade')->avg('grade') ?? 0;
 
         return [

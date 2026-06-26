@@ -31,8 +31,8 @@ class ProgressService
         })->values();
         
         // Hỗ trợ cả 'pass'/'passed' và 'fail'/'failed' để nhất quán với phần còn lại của hệ thống
-        $passedGrades = $userGrades->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade > 5.0));
-        $failedGrades = $userGrades->filter(fn($g) => in_array($g->status, ['fail', 'failed']) || ($g->grade !== null && $g->grade <= 5.0 && !in_array($g->status, ['pass', 'passed'])));
+        $passedGrades = $userGrades->filter(fn($g) => in_array($g->status, ['pass', 'passed']) || ($g->grade !== null && $g->grade >= 5.0));
+        $failedGrades = $userGrades->filter(fn($g) => in_array($g->status, ['fail', 'failed']) || ($g->grade !== null && $g->grade < 5.0 && !in_array($g->status, ['pass', 'passed'])));
         
         $earnedCredits = $passedGrades->sum(function ($grade) {
             return $grade->subject->credits ?? 0;
@@ -53,7 +53,10 @@ class ProgressService
             if ($program && $program->curriculumFrameworks->isNotEmpty()) {
                 $totalRequiredCredits = $program->curriculumFrameworks->first()->total_credits ?? 140;
             }
-        } 
+        }
+        // Guard tránh division by zero nếu total_credits = 0 trong DB
+        if (!$totalRequiredCredits) $totalRequiredCredits = 140;
+
         $completionPercentage = round(($earnedCredits / $totalRequiredCredits) * 100, 2);
         $gradedCreditsPercentage = round((($earnedCredits + $failedCredits) / $totalRequiredCredits) * 100, 2);
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Subject;
 use Illuminate\Http\Request;
 use App\Services\SuggestionService;
 
@@ -29,6 +30,11 @@ class SuggestionController extends Controller
             $passedSubjects = array_filter(explode(',', $passedSubjects));
         }
         $passedSubjects = array_map('intval', (array)$passedSubjects);
+
+        // Chỉ giữ lại các subject_id thực sự tồn tại trong DB, tránh bypass điều kiện tiên quyết
+        if (!empty($passedSubjects)) {
+            $passedSubjects = Subject::whereIn('id', $passedSubjects)->pluck('id')->map(fn($id) => (int)$id)->toArray();
+        }
 
         $userId = auth()->id(); // Lấy ID nếu có đăng nhập, null nếu là khách
 

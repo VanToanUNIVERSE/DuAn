@@ -346,7 +346,7 @@ class StudyPlanController extends Controller
             if ($prereqSem === null) {
                 $passed = UserGrade::where('user_id', $userId)
                     ->where('subject_id', $prereq->id)
-                    ->where('grade', '>', 5.0)->exists();
+                    ->where('grade', '>=', 5.0)->exists();
                 if (!$passed) {
                     return response()->json([
                         'error' => "Chưa hoàn thành tiên quyết: «{$prereq->name}»."
@@ -624,7 +624,7 @@ class StudyPlanController extends Controller
         $plan->loadMissing('semesters.subjects.subject.prerequisites', 'semesters.subjects.subject.corequisites', 'semesters.subjects.subject.relatedRelations');
 
         $userGrades     = UserGrade::where('user_id', $userId)->pluck('grade', 'subject_id')->toArray();
-        $passedSet      = array_filter($userGrades, fn($g) => $g !== null && $g > 5.0);
+        $passedSet      = array_filter($userGrades, fn($g) => $g !== null && $g >= 5.0);
         $passedIds      = array_keys($passedSet);
 
         $allSubjectsMap = Subject::all()->keyBy('id');
@@ -639,8 +639,8 @@ class StudyPlanController extends Controller
                 if (!$ss->subject) continue;
 
                 $ss->grade        = $ss->subject_grade;
-                $ss->is_completed = $ss->grade !== null && $ss->grade > 5.0;
-                $ss->is_failed    = $ss->grade !== null && $ss->grade <= 5.0;
+                $ss->is_completed = $ss->grade !== null && $ss->grade >= 5.0;
+                $ss->is_failed    = $ss->grade !== null && $ss->grade < 5.0;
 
                 $ss->subject->prerequisites_info = $this->buildPrereqDetails($ss->subject, $passedIds, $allSubjectsMap);
 

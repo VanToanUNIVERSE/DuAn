@@ -131,12 +131,35 @@ class SuggestionService
         $majorSubjects = $allFrameworkSubjects->whereIn('program_group_id', $majorGroupIds);
         $specializedSubjects = $allFrameworkSubjects->whereIn('program_group_id', $specializedGroupIds);
 
+        // Load tất cả relations một lần để tránh N+1
+        $subjectIds = $subjects->pluck('id')->toArray();
+
+        $allPrerequisites = SubjectRelation::where('type', 'prerequisite')
+            ->whereIn('subject_id', $subjectIds)
+            ->with('relatedSubject')
+            ->get()
+            ->groupBy('subject_id');
+
+        $rawCorequisites = SubjectRelation::where('type', 'corequisite')
+            ->where(function ($q) use ($subjectIds) {
+                $q->whereIn('subject_id', $subjectIds)
+                  ->orWhereIn('related_subject_id', $subjectIds);
+            })
+            ->with(['subject', 'relatedSubject'])
+            ->get();
+
+        // Build lookup hai chiều: subject_id → [relations]
+        $coreqBySubject = [];
+        foreach ($rawCorequisites as $r) {
+            $coreqBySubject[$r->subject_id][] = $r;
+            if ($r->related_subject_id !== $r->subject_id) {
+                $coreqBySubject[$r->related_subject_id][] = $r;
+            }
+        }
+
         $suggestions = [];
         foreach ($subjects as $subject) {
-            $prerequisites = SubjectRelation::where('subject_id', $subject->id)
-                ->where('type', 'prerequisite')
-                ->with('relatedSubject')
-                ->get();
+            $prerequisites = $allPrerequisites->get($subject->id, collect());
 
             $canStudy = true;
             $prereqDetails = [];
@@ -197,13 +220,7 @@ class SuggestionService
             $subject->is_retake  = $isRetake;
             $subject->prerequisites_info = $prereqDetails;
 
-            $corequisites = SubjectRelation::where('type', 'corequisite')
-                ->where(function($query) use ($subject) {
-                    $query->where('subject_id', $subject->id)
-                          ->orWhere('related_subject_id', $subject->id);
-                })
-                ->with(['subject', 'relatedSubject'])
-                ->get();
+            $corequisites = collect($coreqBySubject[$subject->id] ?? []);
             $coreqDetails = [];
             foreach ($corequisites as $coreq) {
                 $related = ($coreq->subject_id == $subject->id) ? $coreq->relatedSubject : $coreq->subject;
