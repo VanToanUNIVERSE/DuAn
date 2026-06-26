@@ -33,7 +33,6 @@ Route::prefix('v1')->middleware(['web', 'auth'])->group(function () {
         Route::get('/active',        [\App\Http\Controllers\Api\StudyPlanController::class, 'getActivePlan']);  // ← PHẢI trước /{id}
         Route::post('/generate',     [\App\Http\Controllers\Api\StudyPlanController::class, 'generate']);
         Route::post('/update-grade', [\App\Http\Controllers\Api\StudyPlanController::class, 'updateGrade']);
-        Route::post('/adjust',       [\App\Http\Controllers\Api\StudyPlanController::class, 'adjust']);
         Route::post('/move-subject',    [\App\Http\Controllers\Api\StudyPlanController::class, 'moveSubject']);
         Route::post('/toggle-elective', [\App\Http\Controllers\Api\StudyPlanController::class, 'toggleElective']);
         Route::post('/apply-suggestions', [\App\Http\Controllers\Api\StudyPlanController::class, 'applySuggestions']);

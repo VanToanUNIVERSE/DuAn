@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Subject;
 use App\Models\SkillGroup;
 use App\Models\ProgramGroup;
-use App\Models\Semester;
 use App\Imports\SubjectsImport;
 use App\Exports\SubjectsTemplateExport;
 use Maatwebsite\Excel\Facades\Excel;
