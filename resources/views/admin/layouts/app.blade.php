@@ -484,6 +484,11 @@
             <span class="nav-icon">📅</span> Phân công môn học
         </a>
 
+        <div class="nav-section-label">Báo cáo</div>
+        <a href="{{ route('admin.enrollment-stats.index') }}" class="nav-item {{ request()->routeIs('admin.enrollment-stats.*') ? 'active' : '' }}">
+            <span class="nav-icon">📈</span> Thống kê đăng ký HP
+        </a>
+
         <div class="nav-section-label">Hệ thống</div>
         <a href="{{ route('suggest') }}" class="nav-item">
             <span class="nav-icon">↩️</span> Về trang chính

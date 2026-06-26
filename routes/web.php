@@ -123,6 +123,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::delete('/curriculum/{curriculumFramework}/remove/{assignment}', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'remove'])->name('curriculum.remove');
     Route::delete('/curriculum/{curriculumFramework}/semester/{semester}/clear', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'clearSemester'])->name('curriculum.clear-semester');
     Route::delete('/curriculum/{curriculumFramework}/clear-all', [App\Http\Controllers\Admin\CurriculumSubjectController::class, 'clearAll'])->name('curriculum.clear-all');
+
+    // Thống kê đăng ký học phần từ kế hoạch học tập của sinh viên
+    Route::get('/enrollment-stats',        [App\Http\Controllers\Admin\EnrollmentStatsController::class, 'index'])->name('enrollment-stats.index');
+    Route::get('/enrollment-stats/export', [App\Http\Controllers\Admin\EnrollmentStatsController::class, 'export'])->name('enrollment-stats.export');
 });
 
 
