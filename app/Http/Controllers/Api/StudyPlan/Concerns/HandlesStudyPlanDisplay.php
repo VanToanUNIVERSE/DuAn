@@ -27,6 +27,8 @@ trait HandlesStudyPlanDisplay
 
         $electiveGroupMap  = $this->loadElectiveGroupMap($userId, $plan);
         $allElectiveGroups = $this->loadAllElectiveGroupSubjects($userId);
+        $homeSemesters     = $this->loadElectiveGroupHomeSemesters($userId);
+        $emittedGroupIds   = [];
 
         foreach ($plan->semesters as $sem) {
             foreach ($sem->subjects as $ss) {
@@ -53,6 +55,7 @@ trait HandlesStudyPlanDisplay
                 $eg = $electiveGroupMap[$ss->subject_id] ?? null;
                 if ($eg?->elective_group_id) {
                     $semGroupPlanIds[$eg->elective_group_id][] = $ss->subject_id;
+                    $emittedGroupIds[$eg->elective_group_id]   = true;
                 }
             }
 
@@ -76,6 +79,37 @@ trait HandlesStudyPlanDisplay
             }
 
             $sem->setAttribute('elective_groups', $semElectiveGroups);
+        }
+
+        // ── Nhóm tự chọn đã bị BỎ CHỌN HẾT (0 môn trong kế hoạch) ───────────────
+        // Vẫn phát ra khung nhóm tại "học kỳ nhà" (theo khung chương trình) để nhóm
+        // không biến mất khỏi lịch và sinh viên có thể chọn lại. Nhóm tự chọn là
+        // yêu cầu tốt nghiệp bắt buộc nên không được phép ẩn đi khi trống.
+        $currentSem = $this->detectCurrentSemester($plan, $userId);
+        foreach ($allElectiveGroups as $gid => $groupData) {
+            if (isset($emittedGroupIds[$gid])) continue;
+
+            // Kẹp về ít nhất học kỳ hiện tại để khung nhóm không rơi vào kỳ đã qua
+            // (kỳ đã qua bị khóa, không bấm chọn lại được).
+            $homeSem   = max($homeSemesters[$gid] ?? $currentSem, $currentSem);
+            $targetSem = $plan->semesters->firstWhere('semester_index', $homeSem)
+                ?? $plan->semesters->sortByDesc('semester_index')->first();
+            if (!$targetSem) continue;
+
+            $groups   = $targetSem->elective_groups ?? [];
+            $groups[] = [
+                'id'               => $gid,
+                'name'             => $groupData['name'],
+                'required_credits' => $groupData['required_credits'],
+                'options'          => array_map(fn($m) => [
+                    'id'       => $m->id,
+                    'name'     => $m->name,
+                    'code'     => $m->subject_code ?? '',
+                    'credits'  => (int) ($m->credits ?? 0),
+                    'selected' => false,
+                ], $groupData['subjects']),
+            ];
+            $targetSem->setAttribute('elective_groups', $groups);
         }
 
         return $plan;
@@ -117,6 +151,33 @@ trait HandlesStudyPlanDisplay
             });
 
         return $groups;
+    }
+
+    /**
+     * Học kỳ "nhà" của mỗi nhóm tự chọn theo khung chương trình (semester nhỏ nhất
+     * mà nhóm được gán). Dùng để hiển thị lại nhóm khi nó đã bị bỏ chọn hết môn.
+     *
+     * @return array<int,int>  [elective_group_id => semester_index]
+     */
+    private function loadElectiveGroupHomeSemesters(int $userId): array
+    {
+        $frameworkId = $this->resolveFrameworkId($userId);
+        if (!$frameworkId) return [];
+
+        $home = [];
+        CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+            ->whereNotNull('elective_group_id')
+            ->with('semester')
+            ->get()
+            ->each(function ($cs) use (&$home) {
+                $semIdx = (int) ($cs->semester?->name ?? 0);
+                $gid    = $cs->elective_group_id;
+                if ($semIdx > 0 && (!isset($home[$gid]) || $semIdx < $home[$gid])) {
+                    $home[$gid] = $semIdx;
+                }
+            });
+
+        return $home;
     }
 
     private function resolveFrameworkId(int $userId): ?int
