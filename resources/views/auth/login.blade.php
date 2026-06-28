@@ -302,7 +302,7 @@
         <h1>Chào mừng trở lại</h1>
         <p class="subtitle">Đăng nhập để quản lý kế hoạch học tập của bạn</p>
 
-        {{-- Thông báo thành công (sau logout, sau đăng ký redirect) --}}
+        {{-- Thông báo thành công (sau logout) --}}
         @if(session('success'))
             <div class="alert alert-success">
                 <span>✅</span> {{ session('success') }}
@@ -372,10 +372,10 @@
             </button>
         </form>
 
-        <div class="divider">hoặc</div>
+        <div class="divider">lưu ý</div>
 
         <div class="switch-link">
-            Chưa có tài khoản? <a href="{{ route('register') }}">Đăng ký ngay</a>
+            Chưa có tài khoản? Vui lòng liên hệ <strong>quản trị viên</strong> để được cấp.
         </div>
     </div>
 

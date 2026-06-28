@@ -23,12 +23,10 @@ Route::get('/', function () {
 });
 
 // ─── Auth Routes (chỉ cho guest - chưa đăng nhập) ──────────────────────────
+// Hệ thống không cho tự đăng ký. Tài khoản do quản trị viên cấp sẵn (qua seeder).
 Route::middleware('guest')->group(function () {
     Route::get('/login',    [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login',   [AuthController::class, 'login']);
-
-    Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/register',[AuthController::class, 'register']);
 });
 
 // ─── Đăng xuất ──────────────────────────────────────────────────────────────
