@@ -2195,12 +2195,16 @@ function renderStudyPlan(plan) {
             const cardBg     = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
             const borderColor= isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
 
-            const draggableAttr = (!isCompleted && !isPast)
+            // Môn ĐÃ CÓ ĐIỂM (đậu hoặc rớt) là lịch sử của lần học đó → KHÓA kéo.
+            // Muốn đổi kỳ cho môn rớt thì kéo dòng "Học lại" (chưa có điểm), không kéo bản gốc.
+            const draggableAttr = (!hasGrade && !isPast)
                 ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
                 : '';
 
             const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
-            const highlyRecommendedClass = (!isCompleted && isSuggested) ? 'highly-recommended' : '';
+            // Chỉ gợi ý môn CHƯA có điểm (môn cần học/ học lại). Bản gốc đã rớt là lịch sử
+            // → không gắn "Gợi ý cho bạn" (tránh hiện badge ở cả 2 bản rớt và học lại).
+            const highlyRecommendedClass = (!hasGrade && isSuggested) ? 'highly-recommended' : '';
 
             let statusHtml = '';
             if (isCompleted) {
@@ -2249,12 +2253,16 @@ function renderStudyPlan(plan) {
 
             let retakeBadge = '';
             if (ss.is_retake) {
+                // Ngữ cảnh lần rớt trước (để sinh viên luôn biết đây là môn từng rớt)
+                const origin = ss.original_grade != null
+                    ? `đã rớt${ss.original_attempt_sem ? ' HK ' + ss.original_attempt_sem : ''} · điểm ${ss.original_grade}`
+                    : 'đã rớt trước đó';
                 if (hasGrade && isFailed) {
-                    retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fef3c7; color:#92400e; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
-                        📌 Đã thử – Rớt lại (điểm ${grade}) — lịch sử lần học này</div>`;
+                    retakeBadge = `<div title="Môn học lại — ${origin}" style="position:absolute; top:0; left:0; right:0; background:#fef3c7; color:#92400e; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
+                        📌 Học lại – Rớt lại (điểm ${grade}) · ${origin}</div>`;
                 } else if (!hasGrade) {
-                    retakeBadge = `<div style="position:absolute; top:0; left:0; right:0; background:#fee2e2; color:#991b1b; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
-                        🔄 Cần học lại kỳ này</div>`;
+                    retakeBadge = `<div title="Môn học lại — ${origin}" style="position:absolute; top:0; left:0; right:0; background:#fee2e2; color:#991b1b; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:8px 8px 0 0; display:flex; align-items:center; gap:4px;">
+                        🔄 Học lại — ${origin}</div>`;
                 }
             }
             const retakePadTop = retakeBadge ? 'padding-top:28px;' : '';
@@ -2741,6 +2749,11 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
         if (resData.data) {
             window.currentActivePlan = resData.data;
             renderStudyPlan(resData.data);
+        }
+
+        // Thông báo rõ khi hệ thống TỰ ĐỘNG xếp học lại cho môn vừa rớt
+        if (resData.retake_semester) {
+            showToast(`🔄 Môn vừa rớt đã được tự động xếp HỌC LẠI vào Học kỳ ${resData.retake_semester}. Điểm sẽ lấy cao hơn giữa 2 lần thi.`, 'success');
         }
 
         if (grade === null) {

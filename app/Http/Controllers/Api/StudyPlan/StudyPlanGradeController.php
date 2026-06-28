@@ -7,13 +7,17 @@ use App\Http\Controllers\Api\StudyPlan\Concerns\HandlesStudyPlanDisplay;
 use App\Http\Requests\StudyPlan\UpdateGradeRequest;
 use App\Models\StudyPlan;
 use App\Services\AcademicEvaluationService;
+use App\Services\StudyPlanService;
 use Illuminate\Support\Facades\Auth;
 
 class StudyPlanGradeController extends Controller
 {
     use HandlesStudyPlanDisplay;
 
-    public function __construct(protected AcademicEvaluationService $evaluationService) {}
+    public function __construct(
+        protected AcademicEvaluationService $evaluationService,
+        protected StudyPlanService $planService
+    ) {}
 
     // POST /api/v1/study-plans/update-grade
     public function updateGrade(UpdateGradeRequest $request)
@@ -28,14 +32,15 @@ class StudyPlanGradeController extends Controller
             ->where('user_id', $userId)
             ->firstOrFail();
 
-        $targetRow = null;
+        $targetRow      = null;
+        $targetSemIndex = 1;
         foreach ($studyPlan->semesters as $sem) {
             foreach ($sem->subjects as $ss) {
                 if ($planSubjectId && $ss->id == $planSubjectId) {
-                    $targetRow = $ss; break 2;
+                    $targetRow = $ss; $targetSemIndex = (int) $sem->semester_index; break 2;
                 }
                 if (!$planSubjectId && $ss->subject_id == $subjectId && !$ss->is_retake) {
-                    $targetRow = $ss;
+                    $targetRow = $ss; $targetSemIndex = (int) $sem->semester_index;
                 }
             }
         }
@@ -52,6 +57,16 @@ class StudyPlanGradeController extends Controller
         $studyPlan->load('semesters.subjects');
         $this->syncUserGrade($userId, $subjectId, $studyPlan);
 
+        // ── Tự động xếp / gỡ HỌC LẠI theo kết quả ─────────────────────────────
+        $retakeSemester = null;
+        if ($grade !== null && $grade < 5.0) {
+            // Rớt → tự xếp học lại ở học kỳ kế tiếp hợp lệ (giữ điểm cũ + kỳ rớt để hiển thị)
+            $retakeSemester = $this->planService->scheduleRetake($studyPlan, $subjectId, $targetSemIndex, (float) $grade);
+        } else {
+            // Đạt hoặc xóa điểm → gỡ học lại chưa chấm (nếu trước đó từng rớt rồi nay sửa lại)
+            $this->planService->removeUngradedRetake($studyPlan, $subjectId);
+        }
+
         $updatedPlan = $this->attachGrades($studyPlan->load('semesters.subjects'), $userId);
         $currentSem  = $this->detectCurrentSemester($updatedPlan, $userId);
         $evaluation  = $this->evaluationService->evaluate(
@@ -61,6 +76,11 @@ class StudyPlanGradeController extends Controller
             $currentSem
         );
 
-        return response()->json(['success' => true, 'data' => $updatedPlan, 'evaluation' => $evaluation]);
+        return response()->json([
+            'success'         => true,
+            'data'            => $updatedPlan,
+            'evaluation'      => $evaluation,
+            'retake_semester' => $retakeSemester,
+        ]);
     }
 }

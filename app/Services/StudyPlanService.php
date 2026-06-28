@@ -8,6 +8,7 @@ use App\Models\StudyPlanSemester;
 use App\Models\StudyPlanSubject;
 use App\Models\Subject;
 use App\Models\User;
+use App\Models\UserGrade;
 use App\Services\Plan\PlanDataService;
 use App\Services\Plan\SchedulerService;
 use Illuminate\Support\Collection;
@@ -79,7 +80,7 @@ class StudyPlanService
             $startSem         = max(1, $lastHistorySem + 1);
 
             $schedule  = $this->scheduler->schedule($toSchedule, $alreadyPlanned, $failedIds, $startSem, $tcPerSem, $targetSemesters, $user, $groupIds);
-            $totalSems = $this->persistSchedule($plan, $schedule, $passedIds);
+            $totalSems = $this->persistSchedule($plan, $schedule, $passedIds, $failedIds);
             $plan->update(['target_semester_count' => max($totalSems, $targetSemesters)]);
 
             $maxSemInPlan = empty($schedule) ? 0 : max(array_keys($schedule));
@@ -253,7 +254,7 @@ class StudyPlanService
             }
 
             $rest      = $this->scheduler->schedule($toSchedule, $alreadyPlanned, $failedIds, $startSem, $tcPerSem, $targetSemesters, $user, $groupIds);
-            $totalSems = $this->persistSchedule($plan, $rest, $passedIds);
+            $totalSems = $this->persistSchedule($plan, $rest, $passedIds, $failedIds);
             $plan->update(['target_semester_count' => max($totalSems, $fromSem)]);
 
             return $plan->load('semesters.subjects.subject');
@@ -352,13 +353,89 @@ class StudyPlanService
         $plan->update(['target_semester_count' => $maxSem]);
     }
 
-    private function persistSchedule(StudyPlan $plan, array $schedule, array $passedIds): int
+    /**
+     * Tự động xếp một dòng HỌC LẠI cho môn vừa rớt vào học kỳ kế tiếp hợp lệ
+     * (tôn trọng học kỳ chẵn/lẻ theo offered_in). Idempotent: nếu đã có học lại
+     * chưa chấm điểm cho môn này thì bỏ qua. Lưu lại điểm cũ + kỳ rớt để hiển thị.
+     *
+     * @return int|null  semester_index của học kỳ chứa học lại, null nếu đã có sẵn
+     */
+    public function scheduleRetake(StudyPlan $plan, int $subjectId, int $fromSem, ?float $originalGrade): ?int
+    {
+        $plan->loadMissing('semesters.subjects');
+        $semIds = $plan->semesters->pluck('id');
+
+        // Đã có học lại chưa chấm điểm cho môn này → không tạo trùng
+        $hasPending = StudyPlanSubject::whereIn('study_plan_semester_id', $semIds)
+            ->where('subject_id', $subjectId)
+            ->where('is_retake', true)
+            ->whereNull('subject_grade')
+            ->exists();
+        if ($hasPending) return null;
+
+        $offeredIn = Subject::find($subjectId)?->offered_in; // '1' lẻ, '2' chẵn, null = cả hai
+        $fitsParity = function (int $semIdx) use ($offeredIn): bool {
+            $isOdd = $semIdx % 2 !== 0;
+            if ($offeredIn === '1' && !$isOdd) return false;
+            if ($offeredIn === '2' && $isOdd)  return false;
+            return true;
+        };
+
+        // Tìm học kỳ kế tiếp (> kỳ rớt) có parity phù hợp
+        $targetSem = $plan->semesters
+            ->where('semester_index', '>', $fromSem)
+            ->sortBy('semester_index')
+            ->first(fn($s) => $fitsParity($s->semester_index));
+
+        // Không có → tạo học kỳ mới ở cuối với parity đúng
+        if (!$targetSem) {
+            $next = ($plan->semesters->max('semester_index') ?? $fromSem) + 1;
+            while (!$fitsParity($next)) $next++;
+            $targetSem = StudyPlanSemester::create([
+                'study_plan_id'    => $plan->id,
+                'semester_index'   => $next,
+                'expected_credits' => 0,
+            ]);
+        }
+
+        StudyPlanSubject::create([
+            'study_plan_semester_id' => $targetSem->id,
+            'subject_id'             => $subjectId,
+            'is_completed'           => false,
+            'is_retake'              => true,
+            'original_attempt_sem'   => $fromSem,
+            'original_grade'         => $originalGrade,
+        ]);
+
+        return $targetSem->semester_index;
+    }
+
+    /**
+     * Gỡ các dòng học lại CHƯA chấm điểm của một môn (khi môn chuyển từ rớt → đạt,
+     * hoặc xóa điểm). Giữ lại học lại đã có điểm vì đó là lịch sử thật.
+     */
+    public function removeUngradedRetake(StudyPlan $plan, int $subjectId): void
+    {
+        $plan->loadMissing('semesters');
+        StudyPlanSubject::whereIn('study_plan_semester_id', $plan->semesters->pluck('id'))
+            ->where('subject_id', $subjectId)
+            ->where('is_retake', true)
+            ->whereNull('subject_grade')
+            ->delete();
+    }
+
+    private function persistSchedule(StudyPlan $plan, array $schedule, array $passedIds, array $failedIds = []): int
     {
         if (empty($schedule)) return $plan->semesters()->max('semester_index') ?? 0;
 
         $allSubjectIds = array_unique(array_merge(...array_values($schedule)));
         $creditMap     = Subject::whereIn('id', $allSubjectIds)->pluck('credits', 'id')->toArray();
         $passedSet     = array_flip($passedIds);
+        $failedSet     = array_flip($failedIds);
+
+        // Điểm rớt cũ (để dòng học lại hiển thị "đã rớt, điểm Y") — giữ dấu qua mỗi lần rải lại
+        $failedGradeMap = empty($failedIds) ? [] : UserGrade::where('user_id', $plan->user_id)
+            ->whereIn('subject_id', $failedIds)->pluck('grade', 'subject_id')->toArray();
 
         $maxSem = 0;
         foreach ($schedule as $semIndex => $subjectIds) {
@@ -369,10 +446,13 @@ class StudyPlanService
                 'expected_credits' => $credits,
             ]);
             foreach ($subjectIds as $subjectId) {
+                $isRetake = isset($failedSet[$subjectId]);
                 StudyPlanSubject::create([
                     'study_plan_semester_id' => $sem->id,
                     'subject_id'             => $subjectId,
                     'is_completed'           => isset($passedSet[$subjectId]),
+                    'is_retake'              => $isRetake,
+                    'original_grade'         => $isRetake ? ($failedGradeMap[$subjectId] ?? null) : null,
                 ]);
             }
             $maxSem = max($maxSem, (int)$semIndex);

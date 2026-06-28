@@ -54,8 +54,12 @@ class StudyPlanSubjectController extends Controller
         if (!$sourcePlanSubject) {
             return response()->json(['error' => 'Môn không tồn tại trong kế hoạch.'], 404);
         }
-        if ($sourcePlanSubject->is_completed) {
-            return response()->json(['error' => 'Không thể di chuyển môn đã hoàn thành.'], 422);
+        // Môn đã có điểm (đậu HOẶC rớt) là lịch sử lần học đó — không cho di chuyển.
+        // Muốn đổi kỳ cho môn rớt: kéo dòng "Học lại" (chưa có điểm) thay vì bản gốc.
+        if ($sourcePlanSubject->subject_grade !== null) {
+            return response()->json([
+                'error' => 'Không thể di chuyển môn đã có điểm — đây là lịch sử lần học. Hãy kéo dòng "Học lại" nếu muốn đổi học kỳ.'
+            ], 422);
         }
 
         foreach ($sourcePlanSubject->subject->prerequisites ?? [] as $prereq) {
