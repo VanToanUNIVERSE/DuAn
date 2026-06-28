@@ -210,47 +210,69 @@ class StudyPlanSubjectController extends Controller
             return response()->json(['error' => 'Không tìm thấy học kỳ.'], 404);
         }
 
-        if ($request->input('action') === 'remove') {
-            StudyPlanSubject::where('study_plan_semester_id', $sem->id)
-                ->where('subject_id', $subjectId)->delete();
-        } else {
-            $already = StudyPlanSubject::where('study_plan_semester_id', $sem->id)
-                ->where('subject_id', $subjectId)->exists();
+        $subject = Subject::with('corequisites')->findOrFail($subjectId);
 
-            if ($already) {
+        // Nhóm tự chọn chứa môn này + danh sách id các môn trong nhóm
+        $eg              = null;
+        $groupSubjectIds = [];
+        $frameworkId     = $this->resolveFrameworkId($userId);
+        if ($frameworkId) {
+            $eg = ElectiveGroup::where('curriculum_framework_id', $frameworkId)
+                ->whereHas('subjects', fn($q) => $q->where('subjects.id', $subjectId))
+                ->first();
+            if ($eg) {
+                $groupSubjectIds = $eg->subjects()->pluck('subjects.id')->toArray();
+            }
+        }
+
+        // Môn song hành (corequisite) CÙNG NHÓM — luôn đi kèm với môn chính.
+        // VD: "Khoa học dữ liệu" (2 TC) bắt buộc kèm "Khoa học dữ liệu - TH" (1 TC).
+        $coreqInGroup = $subject->corequisites
+            ->whereIn('id', $groupSubjectIds)
+            ->pluck('id')->toArray();
+
+        if ($request->input('action') === 'remove') {
+            // Bỏ chọn môn chính → bỏ luôn môn song hành cùng nhóm (tránh để mồ côi)
+            StudyPlanSubject::where('study_plan_semester_id', $sem->id)
+                ->whereIn('subject_id', array_merge([$subjectId], $coreqInGroup))
+                ->delete();
+        } else {
+            // Chọn môn chính → tự động thêm cả môn song hành cùng nhóm
+            $existingIds = StudyPlanSubject::where('study_plan_semester_id', $sem->id)
+                ->pluck('subject_id')->toArray();
+
+            $addIds = array_values(array_diff(
+                array_merge([$subjectId], $coreqInGroup),
+                $existingIds
+            ));
+
+            if (empty($addIds)) {
                 return response()->json(['error' => 'Môn này đã có trong học kỳ.'], 422);
             }
 
-            $subject     = Subject::findOrFail($subjectId);
-            $frameworkId = $this->resolveFrameworkId($userId);
-            $eg          = null;
-
-            if ($frameworkId) {
-                $eg = ElectiveGroup::where('curriculum_framework_id', $frameworkId)
-                    ->whereHas('subjects', fn($q) => $q->where('subjects.id', $subjectId))
-                    ->first();
-            }
-
+            // Giới hạn tín chỉ của nhóm — tính cả tín chỉ môn song hành sẽ thêm
             if ($eg) {
-                $groupSubjectIds = $eg->subjects()->pluck('subjects.id')->toArray();
                 $currentCr = StudyPlanSubject::where('study_plan_semester_id', $sem->id)
                     ->whereIn('subject_id', $groupSubjectIds)
                     ->join('subjects', 'subjects.id', '=', 'study_plan_subjects.subject_id')
                     ->sum('subjects.credits');
+                $addCr = Subject::whereIn('id', $addIds)->sum('credits');
 
-                if ($currentCr + $subject->credits > $eg->required_credits) {
+                if ($currentCr + $addCr > $eg->required_credits) {
                     return response()->json([
                         'error' => "Nhóm tự chọn này chỉ cần {$eg->required_credits} TC. Bỏ chọn một môn trước khi thêm."
                     ], 422);
                 }
             }
 
-            StudyPlanSubject::create([
-                'study_plan_semester_id' => $sem->id,
-                'subject_id'             => $subjectId,
-                'is_completed'           => false,
-                'is_retake'              => false,
-            ]);
+            foreach ($addIds as $sid) {
+                StudyPlanSubject::create([
+                    'study_plan_semester_id' => $sem->id,
+                    'subject_id'             => $sid,
+                    'is_completed'           => false,
+                    'is_retake'              => false,
+                ]);
+            }
         }
 
         $plan->load('semesters.subjects.subject');
