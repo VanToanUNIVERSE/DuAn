@@ -58,8 +58,14 @@ class StudyPlanAdvisoryController extends Controller
         $plan   = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
 
         $newTarget = (int) $request->input('target_semesters', $plan->target_semesters ?? 8);
-        $newTc     = (int) $request->input('tc_per_sem', $plan->tc_per_sem ?? 18);
-        $newMode   = $newTc >= 20 ? 'fast' : ($newTc <= 14 ? 'slow' : 'normal');
+
+        // Khi client chỉ đổi mục tiêu (không gửi tc_per_sem), tính lại TC/kỳ theo
+        // mục tiêu mới — nếu không số học kỳ sẽ không co/giãn theo target.
+        $newTc = $request->filled('tc_per_sem')
+            ? (int) $request->input('tc_per_sem')
+            : $this->planService->recommendTcPerSem($userId, $newTarget);
+
+        $newMode = $newTc >= 20 ? 'fast' : ($newTc <= 14 ? 'slow' : 'normal');
 
         $plan->update([
             'target_semesters' => $newTarget,

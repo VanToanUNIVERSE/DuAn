@@ -41,12 +41,7 @@ class StudyPlanService
             [$allSubjects, $passedIds, $failedIds, $historySubjectIds] = $this->dataService->loadPlanningData($userId);
             $groupIds = $this->dataService->resolveGroupIds();
 
-            $completedSems    = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
-            $remainingSems    = max(1, $targetSemesters - $completedSems);
-            $remainingCredits = $allSubjects
-                ->reject(fn($s) => in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds))
-                ->sum(fn($s) => (int)($s->credits ?? 3));
-            $tcPerSem = max(12, min(22, (int) ceil($remainingCredits / $remainingSems)));
+            $tcPerSem = $this->recommendTcPerSem($userId, $targetSemesters, $allSubjects, $passedIds, $historySubjectIds);
             $mode     = $tcPerSem >= 20 ? 'fast' : ($tcPerSem <= 14 ? 'slow' : 'normal');
 
             $plan = StudyPlan::create([
@@ -116,6 +111,33 @@ class StudyPlanService
                 'over_semesters_notice' => $overNotice,
             ];
         });
+    }
+
+    /**
+     * Tính TC/kỳ khuyến nghị để hoàn tất số tín chỉ còn lại trong $targetSemesters kỳ.
+     * Dùng khi tạo kế hoạch (generatePlan) và khi đổi mục tiêu tốt nghiệp (adjustTarget),
+     * đảm bảo số học kỳ thực sự co/giãn theo mục tiêu.
+     *
+     * Có thể truyền sẵn dữ liệu đã nạp để tránh truy vấn lại; nếu không sẽ tự nạp.
+     */
+    public function recommendTcPerSem(
+        int $userId,
+        int $targetSemesters,
+        ?Collection $allSubjects = null,
+        ?array $passedIds = null,
+        ?array $historySubjectIds = null
+    ): int {
+        if ($allSubjects === null) {
+            [$allSubjects, $passedIds, , $historySubjectIds] = $this->dataService->loadPlanningData($userId);
+        }
+
+        $completedSems    = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
+        $remainingSems    = max(1, $targetSemesters - $completedSems);
+        $remainingCredits = $allSubjects
+            ->reject(fn($s) => in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds))
+            ->sum(fn($s) => (int)($s->credits ?? 3));
+
+        return max(12, min(22, (int) ceil($remainingCredits / $remainingSems)));
     }
 
     /**
