@@ -4,13 +4,15 @@ namespace App\Services\Plan;
 
 use App\Models\SemesterHistory;
 use App\Models\StudyPlan;
+use App\Services\ProgressService;
 use App\Services\StudyPlanService;
 
 class AdvisoryService
 {
     public function __construct(
         protected PlanDataService $dataService,
-        protected StudyPlanService $planService
+        protected StudyPlanService $planService,
+        protected ProgressService $progressService
     ) {}
 
     /**
@@ -40,16 +42,15 @@ class AdvisoryService
             ->reject(fn($s) => in_array($s->id, $passedIds))
             ->sum(fn($s) => (int)($s->credits ?? 3));
 
-        // GPA: kỳ gần nhất (60%) + trung bình tích lũy (40%) → phản ánh xu hướng mà không bỏ qua lịch sử
-        $avgGpa       = round($histories->avg('gpa'), 2);
-        $lastGpa      = round((float) $histories->last()->gpa, 2);
-        $effectiveGpa = round($lastGpa * 0.6 + $avgGpa * 0.4, 2);
+        // GPA tích lũy chuẩn (cùng nguồn ProgressService với modal kết quả học kỳ →
+        // tránh hiện 2 con số GPA khác nhau ở 2 thông báo).
+        $progress     = $this->progressService->evaluateProgress($userId);
+        $gpa          = round((float) $progress['current_gpa'], 2);
+        $effectiveGpa = $gpa;
         $currentTc    = $plan->tc_per_sem;
 
-        $neededTc  = $remainingSems > 0 ? (int) ceil($remainingCredits / $remainingSems) : $currentTc;
-        $gpaContext = $completedSems > 1
-            ? "GPA kỳ gần nhất {$lastGpa} (trung bình tích lũy {$avgGpa})"
-            : "GPA {$lastGpa}";
+        $neededTc   = $remainingSems > 0 ? (int) ceil($remainingCredits / $remainingSems) : $currentTc;
+        $gpaContext = "GPA {$gpa}";
 
         if ($effectiveGpa >= 7.0 && $currentTc < 22) {
             $newTc   = min(22, $currentTc + max(2, (int)($currentTc * 0.15)));
