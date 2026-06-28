@@ -45,6 +45,15 @@ class SchedulerService
         while (!empty($remaining) && $semIndex <= $maxIterations) {
             $isOdd = ($semIndex % 2) !== 0;
 
+            // ── Trần động: rải đều TC còn lại trên số học kỳ còn lại trong mục tiêu ──
+            // Tránh dồn tải vào các kỳ đầu (đầy trần) rồi để kỳ cuối quá ít TC.
+            // Khi còn dư công suất → cap thấp hơn tcPerSem để chia đều;
+            // khi tổng TC vượt khả năng của mục tiêu → balancedCap ≥ tcPerSem nên vẫn nhồi tới trần.
+            $remainingCredits = array_sum(array_map(fn($s) => (int)($s->credits ?? 3), $remaining));
+            $semestersLeft    = max(1, $targetSemesters - $semIndex + 1);
+            $balancedCap      = (int) ceil($remainingCredits / $semestersLeft);
+            $effectiveCap     = min($tcPerSem, max(1, $balancedCap));
+
             $available = [];
             foreach ($remaining as $id => $subject) {
                 if ($this->canPlace($subject, $plannedSet, $isOdd, $groupIds, $subjects)) {
@@ -79,7 +88,7 @@ class SchedulerService
                     }
                 }
 
-                if ($semCredits + $credits + $coreqEstimate <= $tcPerSem) {
+                if ($semCredits + $credits + $coreqEstimate <= $effectiveCap) {
                     $semSubjectIds[]          = $subject->id;
                     $semCredits              += $credits;
                     $plannedSet[$subject->id] = true;

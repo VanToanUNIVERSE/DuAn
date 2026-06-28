@@ -131,13 +131,44 @@ class StudyPlanService
             [$allSubjects, $passedIds, , $historySubjectIds] = $this->dataService->loadPlanningData($userId);
         }
 
-        $completedSems    = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
-        $remainingSems    = max(1, $targetSemesters - $completedSems);
-        $remainingCredits = $allSubjects
-            ->reject(fn($s) => in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds))
+        $completedSems = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
+        $remainingSems = max(1, $targetSemesters - $completedSems);
+
+        // Đếm đúng số TC sẽ thực sự học: bỏ môn đã qua và CẮT BỚT môn tự chọn
+        // dư thừa (chỉ giữ đủ required_credits mỗi nhóm) — giống hệt tập mà
+        // scheduler rải. Nếu đếm cả môn tự chọn chưa cắt, trần TC/kỳ sẽ bị thổi
+        // phồng → kỳ đầu ôm quá nhiều, kỳ cuối bị đói.
+        $toSchedule = $allSubjects->reject(fn($s) =>
+            in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds)
+        );
+        $remainingCredits = $this->pruneElectiveSubjects($toSchedule, $passedIds)
             ->sum(fn($s) => (int)($s->credits ?? 3));
 
         return max(12, min(22, (int) ceil($remainingCredits / $remainingSems)));
+    }
+
+    /**
+     * Tính TC/kỳ khuyến nghị từ CHÍNH số tín chỉ đang có trong kế hoạch — chính xác
+     * hơn recommendTcPerSem khi đổi mục tiêu, vì dùng đúng tập môn sẽ được rải lại
+     * (đã chốt môn tự chọn) thay vì dựng lại ước lượng. Nhờ vậy các kỳ cân bằng đều.
+     *
+     * @param int $fromSem          Học kỳ bắt đầu rải lại (các kỳ trước giữ nguyên)
+     * @param int $targetSemesters  Số kỳ mục tiêu
+     */
+    public function recommendTcPerSemForPlan(StudyPlan $plan, int $fromSem, int $targetSemesters): int
+    {
+        $plan->loadMissing('semesters.subjects.subject');
+
+        $window  = max(1, $targetSemesters - $fromSem + 1);
+        $credits = 0;
+        foreach ($plan->semesters as $sem) {
+            if ($sem->semester_index < $fromSem) continue;
+            foreach ($sem->subjects as $ss) {
+                $credits += (int) ($ss->subject->credits ?? 3);
+            }
+        }
+
+        return max(12, min(22, (int) ceil($credits / $window)));
     }
 
     /**

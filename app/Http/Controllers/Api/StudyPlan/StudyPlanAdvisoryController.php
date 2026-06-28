@@ -56,14 +56,17 @@ class StudyPlanAdvisoryController extends Controller
     {
         $userId = Auth::id();
         $plan   = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
+        $plan->load('semesters.subjects.subject');
 
-        $newTarget = (int) $request->input('target_semesters', $plan->target_semesters ?? 8);
+        $newTarget  = (int) $request->input('target_semesters', $plan->target_semesters ?? 8);
+        $currentSem = $this->detectCurrentSemester($plan, $userId);
 
-        // Khi client chỉ đổi mục tiêu (không gửi tc_per_sem), tính lại TC/kỳ theo
-        // mục tiêu mới — nếu không số học kỳ sẽ không co/giãn theo target.
+        // Khi client chỉ đổi mục tiêu (không gửi tc_per_sem), tính lại TC/kỳ từ chính
+        // số tín chỉ còn lại trong kế hoạch chia đều cho số kỳ còn lại trong mục tiêu.
+        // Nếu không: số kỳ không co/giãn theo target, hoặc trần quá cao làm kỳ cuối bị đói.
         $newTc = $request->filled('tc_per_sem')
             ? (int) $request->input('tc_per_sem')
-            : $this->planService->recommendTcPerSem($userId, $newTarget);
+            : $this->planService->recommendTcPerSemForPlan($plan, $currentSem, $newTarget);
 
         $newMode = $newTc >= 20 ? 'fast' : ($newTc <= 14 ? 'slow' : 'normal');
 
@@ -73,9 +76,7 @@ class StudyPlanAdvisoryController extends Controller
             'mode'             => $newMode,
         ]);
 
-        $plan->load('semesters.subjects');
-        $currentSem = $this->detectCurrentSemester($plan, $userId);
-        $updated    = $this->planService->redistributeFrom($plan->fresh(), $currentSem);
+        $updated = $this->planService->redistributeFrom($plan->fresh(), $currentSem);
 
         return response()->json([
             'success'          => true,
