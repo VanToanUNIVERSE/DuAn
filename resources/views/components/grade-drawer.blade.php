@@ -3,7 +3,7 @@
     <div class="drawer-header">
         <div>
             <div class="drawer-title">📝 Nhập Điểm Môn Học</div>
-            <div class="drawer-subtitle">Điểm > 5.0 được tính là Pass ✅</div>
+            <div class="drawer-subtitle">Điểm từ 5.0 trở lên được tính là Pass ✅</div>
         </div>
         <button class="drawer-close" onclick="closeGradeDrawer()">✕</button>
     </div>

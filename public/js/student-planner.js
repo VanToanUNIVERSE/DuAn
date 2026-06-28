@@ -225,7 +225,7 @@ function filterGradeSearch(query) {
 
 function updateDrawerStats() {
     let pass = 0, fail = 0, empty = 0;
-    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (input.value === '' || isNaN(val)) empty++; else if (val > 5.0) pass++; else fail++; });
+    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (input.value === '' || isNaN(val)) empty++; else if (val >= 5.0) pass++; else fail++; });
     const passEl = document.getElementById('drawer-pass-count'); const failEl = document.getElementById('drawer-fail-count'); const emptyEl = document.getElementById('drawer-empty-count');
     if (passEl) passEl.textContent = pass; if (failEl) failEl.textContent = fail; if (emptyEl) emptyEl.textContent = empty;
     const badge = document.getElementById('grade-count-badge');
@@ -279,7 +279,7 @@ function autoSaveGrade(subjectId, grade) {
             fetchWarnings(); // Cập nhật cảnh báo sau khi lưu điểm
 
             // Nếu rớt môn → phân tích hiệu ứng dây chuyền
-            if (grade !== null && grade <= 5.0) {
+            if (grade !== null && grade < 5.0) {
                 const card = document.getElementById(`lbl-sub-${subjectId}`);
                 const nameEl = card?.querySelector('.drawer-subject-name');
                 const subjectName = nameEl?.textContent?.trim() || `Môn #${subjectId}`;
@@ -336,8 +336,8 @@ function updateCreditStats() {
 
 function updateEarnedCredits() {
     let earned = 0;
-    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 5.0) earned += parseInt(input.dataset.credits || 0); });
-    currentCourses.forEach(c => { if (c.grade !== null && c.grade > 5.0) earned += (c.credits || 0); });
+    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val >= 5.0) earned += parseInt(input.dataset.credits || 0); });
+    currentCourses.forEach(c => { if (c.grade !== null && c.grade >= 5.0) earned += (c.credits || 0); });
     document.getElementById('stat-earned-credits').textContent = earned;
 
     const totalSem = 8;
@@ -389,13 +389,13 @@ function onGradeChange(id, input, skipSave = false) {
     const val = parseFloat(input.value);
     const isInDrawer = input.classList.contains('drawer-grade-input');
 
-    if (card) { card.classList.remove('pass', 'fail'); if (!isNaN(val) && val > 5.0) card.classList.add('pass'); else if (!isNaN(val) && val <= 5.0 && input.value !== '') card.classList.add('fail'); }
+    if (card) { card.classList.remove('pass', 'fail'); if (!isNaN(val) && val >= 5.0) card.classList.add('pass'); else if (!isNaN(val) && val < 5.0 && input.value !== '') card.classList.add('fail'); }
     input.classList.remove('is-pass', 'is-fail');
 
     if (status) {
         status.classList.remove('pass', 'fail', 'empty');
         if (input.value === '' || isNaN(val)) { status.textContent = isInDrawer ? '—' : 'Chưa nhập'; status.classList.add('empty'); }
-        else if (val > 5.0) { input.classList.add('is-pass'); status.textContent = '✓ Pass'; status.classList.add('pass'); }
+        else if (val >= 5.0) { input.classList.add('is-pass'); status.textContent = '✓ Pass'; status.classList.add('pass'); }
         else { input.classList.add('is-fail'); status.textContent = '✗ Fail'; status.classList.add('fail'); }
     }
 
@@ -413,7 +413,7 @@ function onCCGradeChange(id, input) {
     item.classList.remove('cc-pass', 'cc-fail'); input.classList.remove('is-pass', 'is-fail'); status.classList.remove('pass', 'fail', 'empty');
     const course = currentCourses.find(c => c.id == id); if (course) course.grade = isNaN(val) ? null : val;
     if (input.value === '' || isNaN(val)) { status.textContent = '—'; status.classList.add('empty'); }
-    else if (val > 5.0) { item.classList.add('cc-pass'); input.classList.add('is-pass'); status.textContent = 'Pass'; status.classList.add('pass'); }
+    else if (val >= 5.0) { item.classList.add('cc-pass'); input.classList.add('is-pass'); status.textContent = 'Pass'; status.classList.add('pass'); }
     else { item.classList.add('cc-fail'); input.classList.add('is-fail'); status.textContent = 'Fail'; status.classList.add('fail'); }
     localStorage.setItem('current_courses', JSON.stringify(currentCourses));
     savePreferences();
@@ -513,17 +513,17 @@ function renderCurrentCourses() {
     updateCompleteButton();
     if (currentCourses.length === 0) { container.innerHTML = '<div class="current-courses-empty">Chưa có môn nào — vào <strong>Đề Xuất Môn Học</strong> và nhấn <strong>+ Thêm</strong>.</div>'; return; }
     container.innerHTML = currentCourses.map(c => `
-            <div class="course-item${c.grade !== null && c.grade > 5 ? ' cc-pass' : c.grade !== null ? ' cc-fail' : ''}" id="cc-item-${c.id}">
+            <div class="course-item${c.grade !== null && c.grade >= 5 ? ' cc-pass' : c.grade !== null ? ' cc-fail' : ''}" id="cc-item-${c.id}">
                 <div class="course-info">
                     <span class="course-name">${c.name}</span>
                     <span class="course-meta">${c.credits} tín chỉ · Học kỳ chuẩn ${c.semesterName}</span>
                 </div>
                 <div class="course-right">
-                    <input type="number" class="grade-input-clay${c.grade !== null && c.grade > 5 ? ' is-pass' : c.grade !== null ? ' is-fail' : ''}"
+                    <input type="number" class="grade-input-clay${c.grade !== null && c.grade >= 5 ? ' is-pass' : c.grade !== null ? ' is-fail' : ''}"
                            id="cc-grade-${c.id}" min="0" max="10" step="0.1" placeholder="Điểm"
                            value="${c.grade !== null ? c.grade : ''}"
                            oninput="onCCGradeChange(${c.id},this)">
-                    <span class="grade-status-clay ${c.grade !== null && c.grade > 5 ? 'pass' : c.grade !== null ? 'fail' : 'empty'}" id="cc-status-${c.id}">${c.grade !== null && c.grade > 5 ? 'Pass' : c.grade !== null ? 'Fail' : '—'}</span>
+                    <span class="grade-status-clay ${c.grade !== null && c.grade >= 5 ? 'pass' : c.grade !== null ? 'fail' : 'empty'}" id="cc-status-${c.id}">${c.grade !== null && c.grade >= 5 ? 'Pass' : c.grade !== null ? 'Fail' : '—'}</span>
                     <button class="btn-remove-clay" onclick="removeCourse(${c.id})" title="Xóa">✕</button>
                 </div>
             </div>`).join('');
@@ -534,15 +534,15 @@ function renderCurrentCourses() {
 // ═══════════════════════════════════════════════════════════════
 function getPassedSubjectIds() {
     const passed = new Set();
-    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 5.0) passed.add(input.dataset.subjectId); });
-    currentCourses.forEach(c => { if (c.grade !== null && c.grade > 5.0) passed.add(String(c.id)); });
+    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val >= 5.0) passed.add(input.dataset.subjectId); });
+    currentCourses.forEach(c => { if (c.grade !== null && c.grade >= 5.0) passed.add(String(c.id)); });
     return [...passed].join(',');
 }
 
 function getFailedSubjectIds() {
     const failed = new Set();
-    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 0 && val <= 5.0) failed.add(parseInt(input.dataset.subjectId)); });
-    currentCourses.forEach(c => { if (c.grade !== null && c.grade > 0 && c.grade <= 5.0) failed.add(c.id); });
+    document.querySelectorAll('.grade-input').forEach(input => { const val = parseFloat(input.value); if (!isNaN(val) && val > 0 && val < 5.0) failed.add(parseInt(input.dataset.subjectId)); });
+    currentCourses.forEach(c => { if (c.grade !== null && c.grade > 0 && c.grade < 5.0) failed.add(c.id); });
     return failed;
 }
 
@@ -935,8 +935,8 @@ let _semEvaluation = null;
 
 function showSemResultModal(semNumber, snapshot) {
     const graded = snapshot.filter(c => c.grade !== null && c.grade !== undefined);
-    const passSubjects = graded.filter(c => c.grade > 5.0);
-    const failSubjects = graded.filter(c => c.grade <= 5.0);
+    const passSubjects = graded.filter(c => c.grade >= 5.0);
+    const failSubjects = graded.filter(c => c.grade < 5.0);
     const gpa = graded.length > 0 ? Math.round(graded.reduce((s, c) => s + c.grade, 0) / graded.length * 10) / 10 : null;
     const creditsThisSem = snapshot.reduce((s, c) => s + (c.credits || 0), 0);
     const passedCredits = passSubjects.reduce((s, c) => s + (c.credits || 0), 0);
@@ -980,7 +980,7 @@ function showSemResultModal(semNumber, snapshot) {
         window.currentActivePlan.semesters.forEach(sem => {
             if (sem.subjects) {
                 sem.subjects.forEach(ss => {
-                    if (ss.grade !== null && ss.grade > 5.0 && ss.subject) {
+                    if (ss.grade !== null && ss.grade >= 5.0 && ss.subject) {
                         totalEarned += parseInt(ss.subject.credits || 0);
                     }
                 });
@@ -1076,8 +1076,8 @@ function showSemResultModal(semNumber, snapshot) {
     document.getElementById('srm-prog-pace').textContent = `Cần ${neededPerSem} TC/kỳ`;
     const subjEl = document.getElementById('srm-subj-section');
     const subjectData = snapshot.map(c => { const input = document.getElementById(`grade-${c.id}`); const credits = parseInt(input?.dataset.credits || c.credits || 0); return { ...c, credits }; });
-    const passHtml = subjectData.filter(c => c.grade > 5.0).map(c => `<div class="srm-subj-row pass"><span class="srm-subj-name">${c.name}</span><span class="srm-subj-credits">${c.credits} TC</span><span class="srm-subj-grade pass">${c.grade}</span></div>`).join('');
-    const failHtml = subjectData.filter(c => c.grade <= 5.0).map(c => `<div class="srm-subj-row fail"><span class="srm-subj-name">${c.name}</span><span class="srm-subj-credits">${c.credits} TC</span><span class="srm-subj-grade fail">${c.grade}</span></div>`).join('');
+    const passHtml = subjectData.filter(c => c.grade >= 5.0).map(c => `<div class="srm-subj-row pass"><span class="srm-subj-name">${c.name}</span><span class="srm-subj-credits">${c.credits} TC</span><span class="srm-subj-grade pass">${c.grade}</span></div>`).join('');
+    const failHtml = subjectData.filter(c => c.grade < 5.0).map(c => `<div class="srm-subj-row fail"><span class="srm-subj-name">${c.name}</span><span class="srm-subj-credits">${c.credits} TC</span><span class="srm-subj-grade fail">${c.grade}</span></div>`).join('');
     subjEl.innerHTML = `${passHtml ? `<div class="srm-subj-title">✓ Môn đạt (${passSubjects.length})</div><div class="srm-subj-list">${passHtml}</div>` : ''}${failHtml ? `<div class="srm-subj-title" style="color:var(--error);">✗ Môn chưa đạt (${failSubjects.length})</div><div class="srm-subj-list">${failHtml}</div>` : ''}`;
     const applyBtn = document.getElementById('srm-btn-apply');
     const hasModeSuggestion = _semEvaluation && _semEvaluation.status !== 'KEEP' &&
@@ -1238,7 +1238,7 @@ function _updateConfigGoalPreview(sems) {
     let earned = 0;
     if (window.obData && window.obData.grades) {
         earned = Object.values(window.obData.grades)
-            .filter(g => g.grade > 5.0 || ['passed', 'pass'].includes(g.status))
+            .filter(g => g.grade >= 5.0 || ['passed', 'pass'].includes(g.status))
             .reduce((sum, g) => sum + (parseInt((window.subjectMap || {})[g.subject_id]?.credits || 0)), 0);
     }
     const remaining = Math.max(0, (window.TOTAL_CREDITS || 130) - earned);
@@ -1352,8 +1352,8 @@ function renderGradeChart(data, semFilter = 'all') {
         else peerElDetail.innerHTML = '<span style="color:var(--muted-soft);">Chưa có dữ liệu khóa khác</span>';
     }
 
-    const barColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.08)' : v > 5.0 ? 'rgba(10,10,10,0.85)' : 'rgba(239,68,68,0.8)');
-    const borderColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.15)' : v > 5.0 ? '#0a0a0a' : '#ef4444');
+    const barColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.08)' : v >= 5.0 ? 'rgba(10,10,10,0.85)' : 'rgba(239,68,68,0.8)');
+    const borderColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.15)' : v >= 5.0 ? '#0a0a0a' : '#ef4444');
 
     if (gradeChartInstance) { gradeChartInstance.destroy(); gradeChartInstance = null; }
     if (!canvas) return;
@@ -1375,7 +1375,7 @@ function renderGradeChart(data, semFilter = 'all') {
                 tooltip: {
                     backgroundColor: 'rgba(10,10,10,0.92)', titleColor: '#fff', bodyColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(10,10,10,0.15)', borderWidth: 1, padding: 12, callbacks: {
                         title: items => filteredLabels[items[0].dataIndex],
-                        label: item => { if (item.dataset.label === 'Điểm của bạn') { const v = item.raw; return v === null ? '  Chưa nhập' : `  Của bạn: ${v} ${v > 5 ? '✓ Pass' : '✗ Fail'}`; } return item.raw !== null ? `  TB khóa: ${item.raw}` : '  Chưa có dữ liệu TB'; },
+                        label: item => { if (item.dataset.label === 'Điểm của bạn') { const v = item.raw; return v === null ? '  Chưa nhập' : `  Của bạn: ${v} ${v >= 5 ? '✓ Pass' : '✗ Fail'}`; } return item.raw !== null ? `  TB khóa: ${item.raw}` : '  Chưa có dữ liệu TB'; },
                         afterBody: items => { const idx = items[0].dataIndex; const sem = semFilter === 'all' ? semesters[idxs[idx]] : semFilter; return [`  HK chuẩn: ${sem}`]; }
                     }
                 }
@@ -1405,8 +1405,8 @@ function renderGradeChartDetail(data, semFilter = 'all') {
     if (canvas) canvas.style.display = 'block';
     if (legendEl) legendEl.style.display = 'flex';
 
-    const barColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.08)' : v > 5.0 ? 'rgba(10,10,10,0.85)' : 'rgba(239,68,68,0.8)');
-    const borderColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.15)' : v > 5.0 ? '#0a0a0a' : '#ef4444');
+    const barColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.08)' : v >= 5.0 ? 'rgba(10,10,10,0.85)' : 'rgba(239,68,68,0.8)');
+    const borderColors = filteredMy.map(v => v === null ? 'rgba(10,10,10,0.15)' : v >= 5.0 ? '#0a0a0a' : '#ef4444');
 
     if (gradeChartDetailInstance) { gradeChartDetailInstance.destroy(); gradeChartDetailInstance = null; }
     if (!canvas) return;
@@ -1423,7 +1423,7 @@ function renderGradeChartDetail(data, semFilter = 'all') {
         },
         options: {
             responsive: true, maintainAspectRatio: false, animation: { duration: 600, easing: 'easeInOutQuart' },
-            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,10,10,0.92)', padding: 12, callbacks: { title: items => filteredLabels[items[0].dataIndex], label: item => { if (item.dataset.label === 'Điểm của bạn') { const v = item.raw; return v === null ? '  Chưa nhập' : `  Của bạn: ${v} ${v > 5 ? '✓ Pass' : '✗ Fail'}`; } return item.raw !== null ? `  TB khóa: ${item.raw}` : '  Chưa có dữ liệu TB'; } } } },
+            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,10,10,0.92)', padding: 12, callbacks: { title: items => filteredLabels[items[0].dataIndex], label: item => { if (item.dataset.label === 'Điểm của bạn') { const v = item.raw; return v === null ? '  Chưa nhập' : `  Của bạn: ${v} ${v >= 5 ? '✓ Pass' : '✗ Fail'}`; } return item.raw !== null ? `  TB khóa: ${item.raw}` : '  Chưa có dữ liệu TB'; } } } },
             scales: {
                 x: { ticks: { color: 'rgba(10,10,10,0.45)', font: { size: 10 }, maxRotation: 40 }, grid: { color: 'rgba(10,10,10,0.04)' }, border: { color: 'rgba(10,10,10,0.1)' } },
                 y: { min: 0, max: 10, ticks: { color: 'rgba(10,10,10,0.45)', font: { size: 11 }, stepSize: 1, callback: v => v === 5 ? '5 ⚡' : v }, grid: { color: ctx => ctx.tick.value === 5 ? 'rgba(239,68,68,0.4)' : 'rgba(10,10,10,0.04)', lineWidth: ctx => ctx.tick.value === 5 ? 2 : 1 }, border: { color: 'rgba(10,10,10,0.08)' } }
@@ -1630,7 +1630,7 @@ function renderDashboard() {
     document.querySelectorAll('.grade-input').forEach(input => {
         const val = parseFloat(input.value); const credits = parseInt(input.dataset.credits || 0); const sid = parseInt(input.dataset.subjectId);
         if (isNaN(val) || input.value === '') return;
-        totalGraded++; if (val > 5.0) totalEarned += credits; else totalFail++;
+        totalGraded++; if (val >= 5.0) totalEarned += credits; else totalFail++;
         allGrades.push({ id: sid, grade: val, credits });
     });
     const subjectMap = {};
@@ -1702,7 +1702,7 @@ function renderDashboard() {
         if (reasonEl) reasonEl.textContent = 'Nhập điểm các môn để nhận gợi ý.';
     } else {
         const overallGpa = Math.round(allGrades.reduce((s, g) => s + g.grade, 0) / allGrades.length * 10) / 10;
-        const passRate = allGrades.filter(g => g.grade > 5).length / allGrades.length;
+        const passRate = allGrades.filter(g => g.grade >= 5).length / allGrades.length;
         const avgPerSem = thisSemCredits || neededPerSem;
         const savedRec = localStorage.getItem('recommended_credits_per_sem');
         const baseCredits = savedRec ? parseInt(savedRec) : avgPerSem;
@@ -2180,8 +2180,8 @@ function renderStudyPlan(plan) {
             // ── Điểm riêng của row này ──────────────────────────────────────
             const grade     = ss.subject_grade ?? ss.grade;
             const hasGrade  = grade !== undefined && grade !== null;
-            const isCompleted = hasGrade && grade > 5.0;
-            const isFailed    = hasGrade && grade <= 5.0;
+            const isCompleted = hasGrade && grade >= 5.0;
+            const isFailed    = hasGrade && grade < 5.0;
 
             const cardBg     = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
             const borderColor= isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
@@ -2330,8 +2330,8 @@ function renderStudyPlan(plan) {
                 if (isInPlan) {
                     const grade       = ss.subject_grade ?? ss.grade;
                     const hasGrade    = grade !== null && grade !== undefined;
-                    const isCompleted = hasGrade && grade > 5.0;
-                    const isFailed    = hasGrade && grade <= 5.0;
+                    const isCompleted = hasGrade && grade >= 5.0;
+                    const isFailed    = hasGrade && grade < 5.0;
                     const cardBg      = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
                     const borderColor = isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : '#93c5fd');
                     const limitReached = !hasGrade && gradedCr >= needCr; // gradedCr: already-graded TC
