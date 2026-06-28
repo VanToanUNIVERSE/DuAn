@@ -70,6 +70,7 @@ class AcademicEvaluationService
         // Số tín chỉ và học kỳ còn lại
         $remainingSems         = max(1, $currentTargetSemesters - $currentSem + 1);
         $projectedCreditsPerSem = $remainingCredits / $remainingSems;
+        $projectedRounded       = (int) round($projectedCreditsPerSem); // hiển thị (tránh số lẻ 13.125)
 
         // Tỷ lệ pass
         $totalGraded = max(1, $passedCount + $failedCount);
@@ -114,7 +115,7 @@ class AcademicEvaluationService
             // ── CASE 3: GPA trung bình + Đúng tiến độ → Duy trì ──
             ['average', 'ontrack'] => $this->buildResult(
                 'KEEP',
-                "GPA của bạn là {$gpa} (trung bình khá) và tiến độ đúng kế hoạch. Hệ thống khuyến nghị duy trì nhịp học hiện tại ({$projectedCreditsPerSem} TC/kỳ). Tập trung nâng điểm các môn đang học.",
+                "GPA của bạn là {$gpa} (trung bình khá) và tiến độ đúng kế hoạch. Hệ thống khuyến nghị duy trì nhịp học hiện tại ({$projectedRounded} TC/kỳ). Tập trung nâng điểm các môn đang học.",
                 $currentMode,
                 $currentTargetSemesters,
                 false,
@@ -170,6 +171,12 @@ class AcademicEvaluationService
         $result['skill_focus']    = $skillFocus;
         $result['skill_analysis'] = $skillAnalysis;
         $result['skill_message']  = $skillAnalysis ? $this->skillService->buildSkillMessage($skillAnalysis) : null;
+
+        // Số liệu chuẩn để FE hiển thị NHẤT QUÁN với tư vấn (tránh modal hiện 2 con số TC/kỳ mâu thuẫn)
+        $result['earned_credits']         = $earnedCredits;
+        $result['remaining_credits']      = $remainingCredits;
+        $result['total_required_credits'] = $totalRequired;
+        $result['projected_tc_per_sem']   = $projectedRounded;
 
         return $result;
     }
@@ -256,12 +263,13 @@ class AcademicEvaluationService
         // Tính số kỳ cần thiết với 17 TC/kỳ (cân bằng)
         $balancedSems  = (int) ceil($remainingCredits / 17);
         $newTargetSems = $currentSem + $balancedSems - 1;
+        $projDisplay   = (int) round($projectedCreditsPerSem);
 
         if ($newTargetSems > $currentTargetSems) {
             return $this->buildResult(
                 'REPLAN',
                 "GPA {$gpa} (trung bình) và đang chậm tiến độ. "
-                . "Để không quá tải (tránh học {$projectedCreditsPerSem} TC/kỳ), "
+                . "Để không quá tải (tránh học {$projDisplay} TC/kỳ), "
                 . "hệ thống đề xuất kéo dài nhẹ kế hoạch ra {$newTargetSems} học kỳ (~17 TC/kỳ). "
                 . "Vừa đảm bảo GPA, vừa không bị áp lực quá lớn.",
                 'normal',
@@ -400,11 +408,12 @@ class AcademicEvaluationService
         $failNote = $failedCount >= 3
             ? " Đặc biệt nghiêm trọng: bạn đang nợ {$failedCount} môn."
             : '';
+        $projDisplay = (int) round($projectedCreditsPerSem);
 
         return $this->buildResult(
             'REPLAN',
             "⚠️ NGUY CƠ CAO: GPA {$gpa} dưới 5.0 VÀ đang chậm tiến độ nghiêm trọng. "
-            . "Nếu tiếp tục như hiện tại, bạn cần {$projectedCreditsPerSem} TC/kỳ — vượt quá khả năng an toàn. "
+            . "Nếu tiếp tục như hiện tại, bạn cần {$projDisplay} TC/kỳ — vượt quá khả năng an toàn. "
             . "Hệ thống đề xuất kéo dài ra {$newTargetSems} học kỳ với ~12 TC/kỳ để ổn định học lực trước.{$failNote} "
             . "Hãy liên hệ cố vấn học tập ngay lập tức.",
             'slow',

@@ -991,9 +991,17 @@ function showSemResultModal(semNumber, snapshot) {
     const totalSem = planMode === 'fast' ? 6 : (planMode === 'slow' ? 10 : 8);
     const nextSem = Math.min(semNumber + 1, totalSem);
     const remSem = Math.max(1, totalSem - semNumber);
-    const remCredits = Math.max(0, TOTAL_CREDITS - totalEarned);
-    const neededPerSem = remSem > 0 ? Math.ceil(remCredits / remSem) : 0;
-    const progPct = Math.min(100, Math.round((totalEarned / TOTAL_CREDITS) * 100));
+
+    // Ưu tiên số liệu từ đánh giá backend (AcademicEvaluationService) để modal NHẤT QUÁN
+    // với phần "Gợi Ý Cường Độ Học" — tránh hiện 2 con số TC/kỳ mâu thuẫn (vd: tư vấn 13
+    // nhưng nút lại 21). Backend dùng TC chương trình yêu cầu + số kỳ mục tiêu thật;
+    // FE trước đây dùng tổng TC mọi môn (kể cả tự chọn dư) + số kỳ theo mode → lệch.
+    const ev = _semEvaluation || {};
+    if (ev.earned_credits != null) totalEarned = ev.earned_credits;
+    const totalReq     = ev.total_required_credits || TOTAL_CREDITS;
+    const remCredits   = (ev.remaining_credits != null) ? ev.remaining_credits : Math.max(0, totalReq - totalEarned);
+    const neededPerSem = (ev.projected_tc_per_sem != null) ? ev.projected_tc_per_sem : (remSem > 0 ? Math.ceil(remCredits / remSem) : 0);
+    const progPct = Math.min(100, Math.round((totalEarned / totalReq) * 100));
     const passRate = graded.length > 0 ? passSubjects.length / graded.length : 1;
     const avgPerSem = creditsThisSem;
     let recType, recIcon, recTag, recHeadline, recDesc, recDelta;
@@ -1083,15 +1091,16 @@ function showSemResultModal(semNumber, snapshot) {
     const hasModeSuggestion = _semEvaluation && _semEvaluation.status !== 'KEEP' &&
         _semEvaluation.suggested_mode !== (window.currentActivePlan?.mode || 'normal');
 
-    if (hasModeSuggestion) {
-        // Đã có gợi ý đổi mode (tái tạo toàn bộ lộ trình) → ẩn nút TC riêng lẻ tránh chồng chéo
-        applyBtn.style.display = 'none';
-    } else if (recDelta !== 0) {
-        // Chỉ hiện nút TC khi không có gợi ý đổi mode
-        applyBtn.style.display = '';
-        applyBtn.innerHTML = `✨ Áp dụng gợi ý kỳ tiếp (${suggestedCredits} TC)`;
-    } else {
-        applyBtn.style.display = 'none';
+    // Backend đã khuyên GIỮ NGUYÊN (KEEP) hoặc chưa có đánh giá → không hiện nút áp dụng
+    // (sẽ mâu thuẫn với "duy trì nhịp học hiện tại"). Chỉ hiện khi backend thật sự khuyên đổi.
+    const backendRecommendsChange = !!(_semEvaluation && _semEvaluation.status && _semEvaluation.status !== 'KEEP');
+    if (applyBtn) {
+        if (hasModeSuggestion || !backendRecommendsChange || recDelta === 0) {
+            applyBtn.style.display = 'none';
+        } else {
+            applyBtn.style.display = '';
+            applyBtn.innerHTML = `✨ Áp dụng gợi ý kỳ tiếp (${suggestedCredits} TC)`;
+        }
     }
     document.getElementById('sem-result-overlay').classList.add('open');
 }
@@ -2772,17 +2781,7 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                     });
                 }
 
-                // Kiểm tra đã lưu lịch sử kỳ này chưa
-                let alreadySaved = false;
-                try {
-                    const histRes = await fetch('/semester-history', { headers: { 'Accept': 'application/json' } });
-                    if (histRes.ok) {
-                        const histData = await histRes.json();
-                        alreadySaved = histData.some(h => h.semester_number === semIndex);
-                    }
-                } catch (e) { /* bỏ qua */ }
-
-                // Lưu/cập nhật lịch sử học kỳ
+                // Lưu/cập nhật lịch sử học kỳ + lấy đánh giá cường độ học
                 try {
                     const completeRes = await fetch('/semester-history/complete', {
                         method: 'POST',
@@ -2793,7 +2792,8 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                         })
                     });
                     const completeData = await completeRes.json();
-                    const _semEvaluation = completeData.evaluation || null;
+                    // Gán biến GLOBAL (không khai báo lại bằng const) để showSemResultModal đọc được
+                    _semEvaluation = completeData.evaluation || null;
 
                     if (_semEvaluation && _semEvaluation.status !== 'KEEP') {
                         window._pendingModeEvaluation = _semEvaluation;
@@ -2808,15 +2808,12 @@ async function updatePlanGrade(planId, subjectId, inputEl) {
                 updateCreditStats();
                 loadSemesterHistory();
 
-                if (!alreadySaved) {
-                    showSemResultModal(semIndex, snapshot);
-                    // Sau khi lưu kỳ học mới, mở tư vấn điều chỉnh kế hoạch
-                    setTimeout(() => {
-                        if (window.currentActivePlan) fetchAndShowAdvisory(window.currentActivePlan.id);
-                    }, 1800);
-                } else {
-                    showToast(`✅ Đã cập nhật điểm học kỳ ${semIndex}`, 'success');
-                }
+                // Luôn hiện bảng thống kê kết quả học kỳ + tư vấn điều chỉnh kế hoạch
+                // (kể cả khi đã lưu lịch sử trước đó — để sinh viên xem lại sau mỗi lần sửa điểm).
+                showSemResultModal(semIndex, snapshot);
+                setTimeout(() => {
+                    if (window.currentActivePlan) fetchAndShowAdvisory(window.currentActivePlan.id);
+                }, 1800);
             } else if (resData.evaluation) {
                 if (resData.evaluation.status !== 'KEEP') {
                     window._pendingModeEvaluation = resData.evaluation;

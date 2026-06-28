@@ -139,7 +139,11 @@
 
             <div class="srm-subj-section" id="srm-subj-section"></div>
 
-            <div class="srm-footer" style="display: flex; align-items: center; justify-content: flex-end; padding: 14px 24px; border-top: 1px solid var(--hairline);">
+            <div class="srm-footer" style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--hairline);">
+                <button class="srm-btn-apply" id="srm-btn-apply" onclick="applyCreditRecommendation()"
+                        style="display:none; margin-right:auto; padding:8px 16px; font-size:0.85rem; font-weight:600; border:none; border-radius:8px; background:#10b981; color:#fff; cursor:pointer;">
+                    ✨ Áp dụng gợi ý kỳ tiếp
+                </button>
                 <button class="srm-btn-close" onclick="closeSemResultModal()">Đóng</button>
             </div>
         </div>
