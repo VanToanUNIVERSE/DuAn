@@ -241,8 +241,16 @@ class StudyPlanSubjectController extends Controller
                 ->whereIn('subject_id', array_merge([$subjectId], $coreqInGroup))
                 ->delete();
         } else {
+            // Học kỳ ĐÍCH cho môn MỚI: nếu khung nhóm đang neo ở kỳ ĐÃ QUA (trước kỳ hiện
+            // tại) thì môn mới (chưa học) phải xếp vào kỳ TƯƠNG LAI phù hợp — không thể nhét
+            // vào kỳ đã có điểm. Khung ở kỳ hiện tại/tương lai thì giữ nguyên.
+            $currentSem = $this->detectCurrentSemester($plan, $userId);
+            $targetSem  = $sem->semester_index < $currentSem
+                ? $this->planService->findOrCreateFutureSemester($plan, $currentSem, $subject->offered_in)
+                : $sem;
+
             // Chọn môn chính → tự động thêm cả môn song hành cùng nhóm
-            $existingIds = StudyPlanSubject::where('study_plan_semester_id', $sem->id)
+            $existingIds = StudyPlanSubject::where('study_plan_semester_id', $targetSem->id)
                 ->pluck('subject_id')->toArray();
 
             $addIds = array_values(array_diff(
@@ -254,15 +262,23 @@ class StudyPlanSubjectController extends Controller
                 return response()->json(['error' => 'Môn này đã có trong học kỳ.'], 422);
             }
 
-            // Giới hạn tín chỉ của nhóm — tính cả tín chỉ môn song hành sẽ thêm
+            // Giới hạn TC nhóm — đếm XUYÊN học kỳ: chỉ tính TC ĐẬU + ĐANG HỌC (lựa chọn mới);
+            // bỏ qua môn RỚT và môn HỌC LẠI (rớt không chiếm slot → cho đổi sang môn khác).
             if ($eg) {
-                $currentCr = StudyPlanSubject::where('study_plan_semester_id', $sem->id)
+                $creditMap = Subject::whereIn('id', $groupSubjectIds)->pluck('credits', 'id');
+                $rows = StudyPlanSubject::whereIn('study_plan_semester_id', $plan->semesters->pluck('id'))
                     ->whereIn('subject_id', $groupSubjectIds)
-                    ->join('subjects', 'subjects.id', '=', 'study_plan_subjects.subject_id')
-                    ->sum('subjects.credits');
-                $addCr = Subject::whereIn('id', $addIds)->sum('credits');
+                    ->get(['subject_id', 'subject_grade', 'is_retake']);
+                $effIds = [];
+                foreach ($rows as $r) {
+                    $g = $r->subject_grade;
+                    if ($g !== null && $g >= 5.0)          $effIds[$r->subject_id] = true; // đậu
+                    elseif ($g === null && !$r->is_retake) $effIds[$r->subject_id] = true; // đang học (mới)
+                }
+                $currentEffCr = array_sum(array_map(fn($id) => (int) ($creditMap[$id] ?? 0), array_keys($effIds)));
+                $addCr        = Subject::whereIn('id', $addIds)->sum('credits');
 
-                if ($currentCr + $addCr > $eg->required_credits) {
+                if ($currentEffCr + $addCr > $eg->required_credits) {
                     return response()->json([
                         'error' => "Nhóm tự chọn này chỉ cần {$eg->required_credits} TC. Bỏ chọn một môn trước khi thêm."
                     ], 422);
@@ -271,11 +287,27 @@ class StudyPlanSubjectController extends Controller
 
             foreach ($addIds as $sid) {
                 StudyPlanSubject::create([
-                    'study_plan_semester_id' => $sem->id,
+                    'study_plan_semester_id' => $targetSem->id,
                     'subject_id'             => $sid,
                     'is_completed'           => false,
                     'is_retake'              => false,
                 ]);
+            }
+
+            // Chọn phương án MỚI để bù cho nhóm → tự gỡ các "học lại" CHƯA chấm của những
+            // môn ĐÃ RỚT cùng nhóm (đổi môn: môn mới thay cho việc học lại môn rớt, tránh dư).
+            if ($eg) {
+                $allSemIds = $plan->semesters->pluck('id');
+                $failedOptionIds = StudyPlanSubject::whereIn('study_plan_semester_id', $allSemIds)
+                    ->whereIn('subject_id', $groupSubjectIds)
+                    ->whereNotNull('subject_grade')->where('subject_grade', '<', 5.0)
+                    ->pluck('subject_id')->toArray();
+                if (!empty($failedOptionIds)) {
+                    StudyPlanSubject::whereIn('study_plan_semester_id', $allSemIds)
+                        ->whereIn('subject_id', $failedOptionIds)
+                        ->where('is_retake', true)->whereNull('subject_grade')
+                        ->delete();
+                }
             }
         }
 

@@ -2324,20 +2324,23 @@ function renderStudyPlan(plan) {
                 }
             });
 
-            // How many TC selected (in plan) and how many graded
-            let selectedCr = 0;
-            let gradedCr   = 0;
+            // Đếm tín chỉ nhóm theo effective_selected (backend tính XUYÊN học kỳ): một
+            // phương án được tính nếu nó ĐẬU hoặc ĐANG HỌC ở bất kỳ kỳ nào — kể cả môn
+            // học lại nằm ở học kỳ khác. Môn RỚT (không có lần học lại đang chờ) KHÔNG tính
+            // → slot mở lại để chọn môn khác. effectiveCr dùng để xét "đủ nhóm" + mở/khóa.
+            let selectedCr  = 0;
+            let effectiveCr = 0;
+            let passedCr    = 0;
             group.options.forEach(opt => {
+                if (opt.effective_selected) effectiveCr += opt.credits;
+                if (opt.passed)             passedCr    += opt.credits;
                 const ss = planSsMap[opt.id];
-                if (ss && opt.selected) {
-                    selectedCr += opt.credits;
-                    const g = ss.subject_grade ?? ss.grade;
-                    if (g !== null && g !== undefined) gradedCr += opt.credits;
-                }
+                if (ss && opt.selected) selectedCr += opt.credits;
             });
 
             // Plan subject ids (for group drag header)
             const planIds = group.options.filter(o => o.selected).map(o => o.id);
+            const isRetakeGroup = !!group.is_retake_group;
 
             let cardsHtml = '';
             group.options.forEach(opt => {
@@ -2351,13 +2354,14 @@ function renderStudyPlan(plan) {
                     const isFailed    = hasGrade && grade < 5.0;
                     const cardBg      = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
                     const borderColor = isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : '#93c5fd');
-                    const limitReached = !hasGrade && gradedCr >= needCr; // gradedCr: already-graded TC
+                    const limitReached = !hasGrade && passedCr >= needCr; // đã đủ TC ĐẬU → khóa nhập thêm
                     let statusHtml = '';
                     if (isCompleted) statusHtml = '<span style="color:#10b981;font-size:0.85rem;font-weight:600;">✓ Pass</span>';
                     else if (isFailed) statusHtml = '<span style="color:#ef4444;font-size:0.85rem;font-weight:600;">✗ Rớt</span>';
 
                     const subJson = JSON.stringify(ss.subject ?? {}).replace(/'/g, "&#39;");
                     const canDeselect = !hasGrade && !isPast;
+                    const isRetakeRow = !!ss.is_retake; // dòng này là HỌC LẠI môn đã rớt
 
                     cardsHtml += `
                     <div class="study-plan-subject"
@@ -2369,7 +2373,7 @@ function renderStudyPlan(plan) {
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                             </svg>
                         </button>
-                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:4px;font-weight:700;">Đang học</span>
+                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:${isFailed ? '#fee2e2' : (isRetakeRow ? '#fffbeb' : '#dbeafe')};color:${isFailed ? '#991b1b' : (isRetakeRow ? '#b45309' : '#1d4ed8')};padding:1px 7px;border-radius:4px;font-weight:700;">${isFailed ? '✗ Đã rớt' : (isRetakeRow ? '🔄 Học lại' : 'Đang học')}</span>
                         <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;padding-top:18px;padding-right:24px;">${opt.name}</div>
                         <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px;">${opt.credits} TC | ${opt.code || 'Chung'}</div>
                         <div style="display:flex;align-items:center;gap:8px;margin-top:8px;" onmousedown="event.stopPropagation()">
@@ -2389,45 +2393,86 @@ function renderStudyPlan(plan) {
                                 onclick="toggleElectiveSubject(${plan.id},${opt.id},${sem.semester_index},'remove')"
                                 style="margin-left:auto;font-size:0.72rem;padding:3px 9px;border-radius:6px;border:1px solid #fca5a5;color:#ef4444;background:transparent;cursor:pointer;"
                                 title="Bỏ chọn môn này">Bỏ chọn</button>` : ''}
+                            ${isFailed && opt.retake_pending_sem
+                                ? `<span style="margin-left:auto;font-size:0.72rem;padding:3px 9px;border-radius:6px;background:#fffbeb;color:#b45309;border:1px solid #fde68a;" title="Đã xếp học lại ở Học kỳ ${opt.retake_pending_sem}">🔄 Đang học lại (HK ${opt.retake_pending_sem})</span>`
+                                : (isFailed && !isPast
+                                    ? `<button type="button"
+                                        onclick="addRetakeSubject(${plan.id},${opt.id},${sem.semester_index},${grade})"
+                                        style="margin-left:auto;font-size:0.72rem;padding:3px 9px;border-radius:6px;border:1px solid #f59e0b;color:#b45309;background:#fffbeb;cursor:pointer;"
+                                        title="Xếp học lại môn này vào kỳ sau (hoặc chọn môn khác trong nhóm)">🔄 Học lại</button>`
+                                    : '')}
                         </div>
                     </div>`;
+                } else if (opt.effective_selected && opt.selected_sem) {
+                    // Phương án này đang được học ở học kỳ KHÁC (vd môn thay thế cho môn rớt,
+                    // đã xếp sang kỳ tương lai). Hiển thị trạng thái — điểm nhập ở thẻ kỳ đó.
+                    cardsHtml += `
+                    <div class="study-plan-subject" style="padding:12px;border:1.5px solid #93c5fd;border-radius:8px;background:#eff6ff;position:relative;">
+                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:4px;font-weight:700;">Đang học · HK ${opt.selected_sem}</span>
+                        <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;padding-top:18px;">${opt.name}</div>
+                        <div style="font-size:0.8rem;color:var(--muted);">${opt.credits} TC | ${opt.code || 'Chung'}</div>
+                        <div style="font-size:0.72rem;color:#2563eb;margin-top:8px;">📅 Nhập điểm tại thẻ môn ở Học kỳ ${opt.selected_sem}</div>
+                    </div>`;
                 } else {
-                    // Alternative — same card look, dashed border, "Chọn học" button
-                    const atLimit = selectedCr >= needCr;
+                    // Alternative — same card look, dashed border, "Chọn học" button.
+                    // atLimit theo effectiveCr (đậu + đang chờ), KHÔNG tính môn rớt →
+                    // nếu trong nhóm có môn rớt thì phương án khác vẫn chọn được để thay thế.
+                    const atLimit = effectiveCr >= needCr;
                     const canSelect = !isPast && !atLimit;
+                    const isFailedOpt = !!opt.failed; // môn ĐÃ RỚT (hiển thị trong khung học lại)
+                    const tagBg = isFailedOpt ? '#fee2e2' : '#f1f5f9';
+                    const tagColor = isFailedOpt ? '#991b1b' : '#64748b';
+                    const tagText = isFailedOpt ? `✗ Đã rớt${opt.failed_sem ? ' HK ' + opt.failed_sem : ''}` : 'Phương án';
+                    const cardBorder = isFailedOpt ? '#fca5a5' : (atLimit ? '#d1d5db' : '#93c5fd');
                     cardsHtml += `
                     <div class="study-plan-subject"
-                         style="padding:12px;border:1.5px dashed ${atLimit ? '#d1d5db' : '#93c5fd'};border-radius:8px;background:${atLimit ? 'var(--surface-soft,#f9fafb)' : '#f0f7ff'};position:relative;opacity:${atLimit ? '0.5' : '0.85'};">
-                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:#f1f5f9;color:#64748b;padding:1px 7px;border-radius:4px;font-weight:700;">Phương án</span>
+                         style="padding:12px;border:1.5px dashed ${cardBorder};border-radius:8px;background:${isFailedOpt ? '#fef2f2' : (atLimit ? 'var(--surface-soft,#f9fafb)' : '#f0f7ff')};position:relative;opacity:${atLimit && !isFailedOpt ? '0.5' : '0.9'};">
+                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:${tagBg};color:${tagColor};padding:1px 7px;border-radius:4px;font-weight:700;">${tagText}</span>
                         <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;padding-top:18px;padding-right:8px;">${opt.name}</div>
                         <div style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">${opt.credits} TC | ${opt.code || 'Chung'}</div>
                         ${canSelect
-                            ? `<button type="button"
-                                onclick="toggleElectiveSubject(${plan.id},${opt.id},${sem.semester_index},'add')"
-                                style="font-size:0.75rem;padding:4px 12px;border-radius:6px;border:1.5px solid #2563eb;color:#2563eb;background:transparent;cursor:pointer;font-weight:600;">
-                                + Chọn học môn này
-                              </button>`
+                            ? (isFailedOpt
+                                ? `<button type="button"
+                                    onclick="addRetakeSubject(${plan.id},${opt.id},${opt.failed_sem || sem.semester_index},${opt.failed_grade ?? 0})"
+                                    style="font-size:0.75rem;padding:4px 12px;border-radius:6px;border:1.5px solid #f59e0b;color:#b45309;background:#fffbeb;cursor:pointer;font-weight:600;">
+                                    🔄 Học lại môn này
+                                  </button>`
+                                : `<button type="button"
+                                    onclick="toggleElectiveSubject(${plan.id},${opt.id},${sem.semester_index},'add')"
+                                    style="font-size:0.75rem;padding:4px 12px;border-radius:6px;border:1.5px solid #2563eb;color:#2563eb;background:transparent;cursor:pointer;font-weight:600;">
+                                    + Chọn học môn này
+                                  </button>`)
                             : `<div style="font-size:0.75rem;color:var(--muted);font-style:italic;">${atLimit ? 'Nhóm đã đủ TC' : 'Chưa được chọn'}</div>`
                         }
                     </div>`;
                 }
             });
 
+            const headerBg = isRetakeGroup ? '#b45309' : '#1d4ed8';
+            const frameBorder = isRetakeGroup ? '#fcd34d' : '#93c5fd';
+            const frameBg = isRetakeGroup ? '#fffbeb' : '#eef5ff';
+            const headerTitle = isRetakeGroup
+                ? `🔄 Nhóm tự chọn "${group.name}" — Học lại`
+                : `Nhóm tự chọn "${group.name}"`;
+            const headerSub = isRetakeGroup
+                ? `Đã đậu ${group.passed_credits || 0} TC · cần học lại ${needCr} TC — chọn từ các môn chưa đậu (trừ môn đã đậu)`
+                : `Chọn đủ ${needCr} TC · ${isPast ? '' : 'Kéo tiêu đề để di chuyển cả nhóm · '}${group.options.length} môn phương án`;
+
             html += `
             <div class="eg-group-frame" id="${frameId}"
-                 style="grid-column:1/-1;border:2px solid #93c5fd;border-radius:12px;overflow:hidden;background:#eef5ff;">
-                <div draggable="${!isPast}"
+                 style="grid-column:1/-1;border:2px solid ${frameBorder};border-radius:12px;overflow:hidden;background:${frameBg};">
+                <div ${isRetakeGroup ? '' : `draggable="${!isPast}"
                      ondragstart="handleGroupDragStart(event,[${planIds.join(',')}],${sem.semester_index})"
-                     ondragend="handleDragEnd(event)"
-                     style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#1d4ed8;color:#fff;cursor:${isPast ? 'default' : 'grab'};user-select:none;">
-                    <span style="font-size:1rem;">📚</span>
+                     ondragend="handleDragEnd(event)"`}
+                     style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:${headerBg};color:#fff;cursor:${isRetakeGroup || isPast ? 'default' : 'grab'};user-select:none;">
+                    <span style="font-size:1rem;">${isRetakeGroup ? '🔄' : '📚'}</span>
                     <div style="flex:1;">
-                        <div style="font-weight:700;font-size:0.85rem;">Nhóm tự chọn "${group.name}"</div>
-                        <div style="font-size:0.72rem;opacity:0.85;">Chọn đủ ${needCr} TC · ${isPast ? '' : 'Kéo tiêu đề để di chuyển cả nhóm · '}${group.options.length} môn phương án</div>
+                        <div style="font-weight:700;font-size:0.85rem;">${headerTitle}</div>
+                        <div style="font-size:0.72rem;opacity:0.85;">${headerSub}</div>
                     </div>
                     <span id="eg-counter-${frameId}"
-                          style="font-weight:700;font-size:0.88rem;background:rgba(255,255,255,0.18);padding:3px 12px;border-radius:6px;color:${selectedCr >= needCr ? '#86efac' : '#fde68a'};">
-                        ${selectedCr}/${needCr} TC
+                          style="font-weight:700;font-size:0.88rem;background:rgba(255,255,255,0.18);padding:3px 12px;border-radius:6px;color:${effectiveCr >= needCr ? '#86efac' : '#fde68a'};">
+                        ${effectiveCr}/${needCr} TC
                     </span>
                 </div>
                 <div style="padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">

@@ -60,8 +60,11 @@ class StudyPlanGradeController extends Controller
         // ── Tự động xếp / gỡ HỌC LẠI theo kết quả ─────────────────────────────
         $retakeSemester = null;
         if ($grade !== null && $grade < 5.0) {
-            // Rớt → tự xếp học lại ở học kỳ kế tiếp hợp lệ (giữ điểm cũ + kỳ rớt để hiển thị)
-            $retakeSemester = $this->planService->scheduleRetake($studyPlan, $subjectId, $targetSemIndex, (float) $grade);
+            // Chỉ TỰ xếp học lại cho môn BẮT BUỘC. Môn TỰ CHỌN rớt → KHÔNG ép học lại,
+            // để sinh viên tự quyết (học lại môn đó hoặc đổi sang môn khác trong nhóm).
+            if (!$this->isElectiveSubject($userId, $subjectId)) {
+                $retakeSemester = $this->planService->scheduleRetake($studyPlan, $subjectId, $targetSemIndex, (float) $grade);
+            }
         } else {
             // Đạt hoặc xóa điểm → gỡ học lại chưa chấm (nếu trước đó từng rớt rồi nay sửa lại)
             $this->planService->removeUngradedRetake($studyPlan, $subjectId);

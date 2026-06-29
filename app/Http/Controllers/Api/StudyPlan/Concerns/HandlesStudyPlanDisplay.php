@@ -29,8 +29,49 @@ trait HandlesStudyPlanDisplay
         $allElectiveGroups = $this->loadAllElectiveGroupSubjects($userId);
         $homeSemesters     = $this->loadElectiveGroupHomeSemesters($userId);
         $emittedGroupIds   = [];
+        $renderedGroupIds  = []; // nhóm đã vẽ khung ở một học kỳ TRƯỚC → không vẽ lại
 
+        // Bản đồ TẤT CẢ dòng môn theo subject_id (XUYÊN học kỳ) — để khung nhóm tự chọn
+        // đếm được cả môn học lại nằm ở học kỳ khác ("đếm xuyên học kỳ").
+        $planRowsBySubject = [];
         foreach ($plan->semesters as $sem) {
+            foreach ($sem->subjects as $ss) {
+                $planRowsBySubject[$ss->subject_id][] = [
+                    'grade'     => $ss->subject_grade,
+                    'is_retake' => (bool) $ss->is_retake,
+                    'sem'       => (int) $sem->semester_index,
+                ];
+            }
+        }
+
+        // Nhóm tự chọn ĐANG THIẾU TC do có môn RỚT → tách "khung Học lại" riêng ở kỳ
+        // tương lai (gồm các môn CHƯA ĐẬU, required = TC còn thiếu). Khung gốc ở kỳ cũ
+        // KHÔNG vẽ nữa — môn đã chấm hiện thành thẻ thường (lịch sử).
+        $groupShortfall = [];
+        foreach ($allElectiveGroups as $gid => $groupData) {
+            $required = (int) $groupData['required_credits'];
+            $passedCr = 0; $hasFailed = false; $nonPassed = [];
+            foreach ($groupData['subjects'] as $m) {
+                $passed = false; $failed = false;
+                foreach ($planRowsBySubject[$m->id] ?? [] as $r) {
+                    if ($r['grade'] !== null) { $r['grade'] >= 5.0 ? $passed = true : $failed = true; }
+                }
+                if ($passed) $passedCr += (int) ($m->credits ?? 0);
+                else        $nonPassed[] = $m;
+                if ($failed) $hasFailed = true;
+            }
+            if ($hasFailed && $passedCr < $required) {
+                $groupShortfall[$gid] = [
+                    'name'       => $groupData['name'],
+                    'remaining'  => $required - $passedCr,
+                    'passed_cr'  => $passedCr,
+                    'non_passed' => $nonPassed,
+                ];
+            }
+        }
+
+        // Duyệt theo thứ tự học kỳ để "kỳ đầu tiên" của nhóm là kỳ sớm nhất.
+        foreach ($plan->semesters->sortBy('semester_index') as $sem) {
             foreach ($sem->subjects as $ss) {
                 if (!$ss->subject) continue;
 
@@ -54,9 +95,20 @@ trait HandlesStudyPlanDisplay
             foreach ($sem->subjects as $ss) {
                 $eg = $electiveGroupMap[$ss->subject_id] ?? null;
                 if ($eg?->elective_group_id) {
-                    $semGroupPlanIds[$eg->elective_group_id][] = $ss->subject_id;
-                    $emittedGroupIds[$eg->elective_group_id]   = true;
+                    $gid = $eg->elective_group_id;
+                    // Nhóm THIẾU TC (có môn rớt) → không vẽ khung gốc; môn đã chấm hiện
+                    // thành thẻ thường, phần bù gom vào "khung Học lại" ở kỳ tương lai.
+                    if (isset($groupShortfall[$gid])) { $emittedGroupIds[$gid] = true; continue; }
+                    // Nhóm đã vẽ khung ở kỳ trước → KHÔNG vẽ lại.
+                    if (isset($renderedGroupIds[$gid])) continue;
+                    $semGroupPlanIds[$gid][] = $ss->subject_id;
+                    $emittedGroupIds[$gid]   = true;
                 }
+            }
+
+            // Đánh dấu các nhóm vừa vẽ ở kỳ này để các kỳ sau không vẽ lại
+            foreach (array_keys($semGroupPlanIds) as $gid) {
+                $renderedGroupIds[$gid] = true;
             }
 
             $semElectiveGroups = [];
@@ -64,17 +116,15 @@ trait HandlesStudyPlanDisplay
                 $groupData = $allElectiveGroups[$gid] ?? null;
                 if (!$groupData) continue;
 
+                $frameIdx = (int) $sem->semester_index;
                 $semElectiveGroups[] = [
                     'id'               => $gid,
                     'name'             => $groupData['name'],
                     'required_credits' => $groupData['required_credits'],
-                    'options'          => array_map(fn($m) => [
-                        'id'       => $m->id,
-                        'name'     => $m->name,
-                        'code'     => $m->subject_code ?? '',
-                        'credits'  => (int) ($m->credits ?? 0),
-                        'selected' => in_array($m->id, $planSubjectIds),
-                    ], $groupData['subjects']),
+                    'options'          => array_map(
+                        fn($m) => $this->buildElectiveOption($m, $planRowsBySubject, $frameIdx),
+                        $groupData['subjects']
+                    ),
                 ];
             }
 
@@ -112,7 +162,79 @@ trait HandlesStudyPlanDisplay
             $targetSem->setAttribute('elective_groups', $groups);
         }
 
+        // ── Khung "HỌC LẠI" cho nhóm thiếu TC (có môn rớt) ─────────────────────
+        // Đặt ở kỳ tương lai (nơi đang chọn môn bù, hoặc kỳ hiện tại), gồm các môn
+        // CHƯA ĐẬU, required = TC còn thiếu. Sinh viên chọn thoải mái trong khung này.
+        foreach ($groupShortfall as $gid => $info) {
+            $anchorIdx = $currentSem;
+            foreach ($info['non_passed'] as $m) {
+                foreach ($planRowsBySubject[$m->id] ?? [] as $r) {
+                    if ($r['grade'] === null && !$r['is_retake']) {
+                        $anchorIdx = max($anchorIdx, $r['sem']);
+                    }
+                }
+            }
+            $targetSem = $plan->semesters->firstWhere('semester_index', $anchorIdx)
+                ?? $plan->semesters->sortByDesc('semester_index')->first();
+            if (!$targetSem) continue;
+
+            $frameIdx = (int) $targetSem->semester_index;
+            $groups   = $targetSem->elective_groups ?? [];
+            $groups[] = [
+                'id'               => $gid,
+                'name'             => $info['name'],
+                'required_credits' => $info['remaining'],   // TC còn thiếu
+                'is_retake_group'  => true,
+                'passed_credits'   => $info['passed_cr'],
+                'options'          => array_map(
+                    fn($m) => $this->buildElectiveOption($m, $planRowsBySubject, $frameIdx),
+                    $info['non_passed']
+                ),
+            ];
+            $targetSem->setAttribute('elective_groups', $groups);
+        }
+
         return $plan;
+    }
+
+    /**
+     * Dựng dữ liệu một phương án trong nhóm tự chọn, tính trạng thái XUYÊN học kỳ.
+     * $frameSemIdx = học kỳ đang vẽ khung (để biết môn có "đang chọn ở khung này" không).
+     */
+    private function buildElectiveOption($m, array $planRowsBySubject, int $frameSemIdx): array
+    {
+        $hasPassed = false; $hasPendingNew = false; $failed = false;
+        $retakePendingSem = null; $selectedSem = null; $selectedHere = false;
+        $failedSem = null; $failedGrade = null;
+
+        foreach ($planRowsBySubject[$m->id] ?? [] as $r) {
+            if ($r['grade'] !== null && $r['grade'] >= 5.0) {
+                $hasPassed = true; $selectedSem = $r['sem'];
+            } elseif ($r['grade'] !== null) {
+                $failed = true; $failedSem = $r['sem']; $failedGrade = $r['grade']; // rớt
+            } else {
+                if ($r['is_retake']) $retakePendingSem = $r['sem'];
+                else { $hasPendingNew = true; $selectedSem = $r['sem']; }
+            }
+            if ($r['sem'] === $frameSemIdx) $selectedHere = true;
+        }
+
+        return [
+            'id'                 => $m->id,
+            'name'               => $m->name,
+            'code'               => $m->subject_code ?? '',
+            'credits'            => (int) ($m->credits ?? 0),
+            'selected'           => $selectedHere,         // có dòng ở chính kỳ vẽ khung
+            'passed'             => $hasPassed,
+            'failed'             => $failed,
+            'failed_sem'         => $failedSem,            // kỳ đã rớt (để xếp học lại đúng chỗ)
+            'failed_grade'       => $failedGrade,
+            // Tính vào nhóm nếu: đậu, đang học (chọn mới), HOẶC đang học lại.
+            // → bộ đếm phản ánh đúng tiến độ; muốn đổi sang môn khác thì bỏ chọn.
+            'effective_selected' => $hasPassed || $hasPendingNew || $retakePendingSem !== null,
+            'retake_pending_sem' => $retakePendingSem,
+            'selected_sem'       => $selectedSem,
+        ];
     }
 
     private function loadElectiveGroupMap(int $userId, StudyPlan $plan): array
@@ -178,6 +300,21 @@ trait HandlesStudyPlanDisplay
             });
 
         return $home;
+    }
+
+    /**
+     * Môn này có phải môn TỰ CHỌN (thuộc một nhóm tự chọn) trong khung của user không.
+     * Dùng để phân biệt xử lý khi rớt: bắt buộc → tự học lại; tự chọn → để SV tự quyết.
+     */
+    private function isElectiveSubject(int $userId, int $subjectId): bool
+    {
+        $frameworkId = $this->resolveFrameworkId($userId);
+        if (!$frameworkId) return false;
+
+        return CurriculumSubject::where('curriculum_framework_id', $frameworkId)
+            ->where('subject_id', $subjectId)
+            ->whereNotNull('elective_group_id')
+            ->exists();
     }
 
     private function resolveFrameworkId(int $userId): ?int

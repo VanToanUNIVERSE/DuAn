@@ -191,6 +191,7 @@ class StudyPlanService
 
             $plan->load('semesters.subjects');
             $this->deduplicateRetakes($plan);
+            $this->deduplicateSubjects($plan);
             $plan->load('semesters.subjects');
 
             // Gom subject_id đã có trong các kỳ TRƯỚC fromSem
@@ -262,6 +263,38 @@ class StudyPlanService
     }
 
     /**
+     * Tìm (hoặc tạo) học kỳ TƯƠNG LAI sớm nhất có index >= $minSem và đúng chẵn/lẻ theo
+     * offered_in của môn. Dùng khi thêm môn MỚI (chưa học) mà khung đang ở kỳ đã qua —
+     * môn mới phải xếp vào kỳ tương lai, không thể nhét vào kỳ đã có điểm.
+     */
+    public function findOrCreateFutureSemester(StudyPlan $plan, int $minSem, ?string $offeredIn): StudyPlanSemester
+    {
+        $plan->loadMissing('semesters');
+
+        $fits = function (int $idx) use ($offeredIn): bool {
+            $isOdd = $idx % 2 !== 0;
+            if ($offeredIn === '1' && !$isOdd) return false; // chỉ kỳ lẻ
+            if ($offeredIn === '2' && $isOdd)  return false; // chỉ kỳ chẵn
+            return true;
+        };
+
+        $sem = $plan->semesters
+            ->where('semester_index', '>=', $minSem)
+            ->sortBy('semester_index')
+            ->first(fn($s) => $fits((int) $s->semester_index));
+        if ($sem) return $sem;
+
+        $next = max($minSem, ((int) $plan->semesters->max('semester_index')) + 1);
+        while (!$fits($next)) $next++;
+
+        return StudyPlanSemester::create([
+            'study_plan_id'    => $plan->id,
+            'semester_index'   => $next,
+            'expected_credits' => 0,
+        ]);
+    }
+
+    /**
      * Xóa các bản sao retake trùng trong cùng một kế hoạch.
      * Giữ lại bản ở kỳ MỚI NHẤT, xóa các bản ở kỳ cũ hơn.
      */
@@ -289,6 +322,46 @@ class StudyPlanService
             foreach ($rows as $row) {
                 $toDelete[] = $row['id'];
             }
+        }
+
+        if (!empty($toDelete)) {
+            StudyPlanSubject::whereIn('id', $toDelete)->delete();
+        }
+    }
+
+    /**
+     * Gỡ các dòng KHÔNG-retake bị TRÙNG của cùng một môn (1 môn chỉ nên có 1 bản gốc
+     * + các bản retake riêng). Ưu tiên giữ bản CÓ ĐIỂM; nếu chưa có điểm thì giữ bản ở
+     * học kỳ SỚM nhất. Tránh trường hợp 1 môn nằm ở 2 học kỳ làm khung nhóm tự chọn
+     * (hoặc thẻ môn) hiển thị lặp 2 lần.
+     */
+    public function deduplicateSubjects(StudyPlan $plan): void
+    {
+        $plan->load('semesters.subjects');
+
+        $bySubject = [];
+        foreach ($plan->semesters as $sem) {
+            foreach ($sem->subjects as $ss) {
+                if ($ss->is_retake) continue; // bản retake là lần học riêng — giữ
+                $bySubject[$ss->subject_id][] = [
+                    'id'             => $ss->id,
+                    'semester_index' => $sem->semester_index,
+                    'has_grade'      => $ss->subject_grade !== null,
+                ];
+            }
+        }
+
+        $toDelete = [];
+        foreach ($bySubject as $rows) {
+            if (count($rows) <= 1) continue;
+            usort($rows, function ($a, $b) {
+                if ($a['has_grade'] !== $b['has_grade']) {
+                    return $b['has_grade'] <=> $a['has_grade']; // có điểm → giữ trước
+                }
+                return $a['semester_index'] <=> $b['semester_index']; // kỳ sớm hơn → giữ
+            });
+            array_shift($rows); // giữ dòng đầu, xóa phần còn lại
+            foreach ($rows as $r) $toDelete[] = $r['id'];
         }
 
         if (!empty($toDelete)) {
