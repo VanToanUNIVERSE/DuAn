@@ -18,6 +18,7 @@ class User extends Authenticatable
         'password',
         'fullName',
         'student_code',
+        'class_id',
         'is_admin',
         // Cấu hình chương trình — lưu lựa chọn cuối của user trên trang gợi ý
         'pref_academic_year',
@@ -41,6 +42,23 @@ class User extends Authenticatable
     public function grades()
     {
         return $this->hasMany(UserGrade::class);
+    }
+
+    // Lớp của sinh viên (→ chuyên ngành → khoa)
+    public function schoolClass()
+    {
+        return $this->belongsTo(SchoolClass::class, 'class_id');
+    }
+
+    // Truy cập nhanh chuyên ngành & khoa qua lớp
+    public function major()
+    {
+        return $this->schoolClass?->major;
+    }
+
+    public function faculty()
+    {
+        return $this->schoolClass?->major?->faculty;
     }
 
     // Removed obsolete studyPlans relationship

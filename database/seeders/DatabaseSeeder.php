@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
             SubjectSeeder::class,
             SubjectRelationSeeder::class,
             UserSeeder::class,
+            FacultyMajorClassSeeder::class,
+            MajorStudentsSeeder::class,
             UserGradeSeeder::class,
         ]);
     }

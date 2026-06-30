@@ -9,6 +9,16 @@
             <div style="min-width:0;flex:1;">
                 <div class="sidebar-user-name">{{ Auth::user()->fullName ?? Auth::user()->username }}</div>
                 <div class="sidebar-user-meta">MSSV: {{ Auth::user()->student_code ?? '—' }}</div>
+                @php($_sc = Auth::user()->schoolClass)
+                @if($_sc)
+                    <div class="sidebar-user-meta" title="Lớp">🏫 {{ $_sc->name }}{{ $_sc->cohort ? ' · '.$_sc->cohort : '' }}</div>
+                    @if($_sc->major)
+                        <div class="sidebar-user-meta" title="Chuyên ngành">🎓 {{ $_sc->major->name }}</div>
+                        @if($_sc->major->faculty)
+                            <div class="sidebar-user-meta" title="Khoa">🏛️ {{ $_sc->major->faculty->name }}</div>
+                        @endif
+                    @endif
+                @endif
             </div>
         </div>
 
