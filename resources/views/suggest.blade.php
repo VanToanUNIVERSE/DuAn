@@ -249,25 +249,18 @@
             </div>
         </div>
 
-        {{-- Thế mạnh kỹ năng — TỰ ĐỘNG nhận diện từ điểm (không chọn tay) --}}
+        {{-- Định hướng kỹ năng cá nhân — sinh viên chọn chuyên ngành hướng tới --}}
         <div class="input-group" style="margin-top: 16px;">
-            <label class="input-label" style="display:flex; align-items:center; gap:6px;">
-                🎯 Thế mạnh kỹ năng
-                <span style="font-size:0.75rem; color:var(--muted); font-weight:400;">(tự động — ưu tiên gợi ý môn cùng nhóm bạn học tốt)</span>
+            <label class="input-label" for="skill_focus" style="display:flex; align-items:center; gap:6px;">
+                🎯 Định hướng kỹ năng
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:400;">(ưu tiên gợi ý môn theo chuyên ngành bạn hướng tới)</span>
             </label>
-            @php($_strong = app(\App\Services\RecommendationService::class)->computeStrongSkillGroups(Auth::id()))
-            @if(!empty($_strong))
-                <div style="display:flex; flex-wrap:wrap; gap:6px;">
-                    @foreach($_strong as $_gid => $_avg)
-                        <span class="pill" style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:0.78rem;">
-                            ✓ {{ \App\Models\SkillGroup::find($_gid)?->name ?? 'Nhóm '.$_gid }} · TB {{ $_avg }}
-                        </span>
-                    @endforeach
-                </div>
-                <div style="font-size:0.72rem; color:var(--muted); margin-top:6px;">Hệ thống tự nhận diện nhóm bạn học tốt (điểm TB ≥ 7) và ưu tiên gợi ý môn cùng nhóm.</div>
-            @else
-                <div style="font-size:0.8rem; color:var(--muted); font-style:italic;">Chưa đủ điểm để xác định thế mạnh. Nhập điểm các môn để hệ thống gợi ý theo nhóm bạn học tốt.</div>
-            @endif
+            <select id="skill_focus" class="clay-select" onchange="savePreferences()">
+                <option value="">— Chưa chọn —</option>
+                @foreach(\App\Models\SkillGroup::FOCUS_AREAS as $key => $label)
+                    <option value="{{ $key }}" {{ Auth::user()->pref_skill_focus === $key ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+            </select>
         </div>
         {{-- Mục tiêu tốt nghiệp --}}
         <div class="input-group" style="margin-top:16px;">

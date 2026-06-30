@@ -3328,7 +3328,7 @@ async function fetchSkillFocusProgress() {
         card.style.display = 'block';
 
         const focusLabel = evaluation.skill_focus
-            ? ({ backend:'Backend Development', frontend:'Frontend Development', ai:'AI / Machine Learning', data:'Data Science', mobile:'Mobile Development', devops:'DevOps / Cloud', testing:'Testing / QA', security:'Cybersecurity', core:'Core' }[evaluation.skill_focus] || evaluation.skill_focus)
+            ? ({ software:'Phát triển phần mềm', data:'Khoa học dữ liệu & Trí tuệ nhân tạo', security:'An toàn thông tin & Hệ thống', application:'Công nghệ ứng dụng' }[evaluation.skill_focus] || evaluation.skill_focus)
             : 'Chưa chọn';
 
         const badge = document.getElementById('skill-focus-label-badge');

@@ -31,9 +31,9 @@ class RecommendationService
         })->pluck('subject_id')->toArray();
 
         $user = \App\Models\User::find($userId);
-        // Tự động phát hiện nhóm kỹ năng sinh viên ĐANG HỌC TỐT (theo điểm TB) để ưu tiên
-        // gợi ý môn cùng nhóm — thay cho việc chọn "định hướng" thủ công.
-        $strongGroups = $this->computeStrongSkillGroups($userId);
+        // K(s) — Định hướng kỹ năng cá nhân do sinh viên CHỌN (chuyên ngành hướng tới).
+        // Môn thuộc nhóm kỹ năng tương ứng với định hướng sẽ được cộng điểm ưu tiên (Bảng 2.8/2.9).
+        $skillFocus = $user?->pref_skill_focus;
         $allSubjects = $this->getSubjectsForUserCurriculum($user);
 
         if (!$currentSemester) {
@@ -190,12 +190,13 @@ class RecommendationService
                 }
             }
 
-            // Ưu tiên môn thuộc nhóm kỹ năng sinh viên ĐANG HỌC TỐT (điểm TB cao) →
-            // gợi ý phát huy thế mạnh. Tự suy từ điểm, không cần chọn định hướng tay.
-            if ($subject->skill_group_id && isset($strongGroups[$subject->skill_group_id])) {
+            // K(s): +40 nếu môn thuộc nhóm kỹ năng tương ứng với định hướng sinh viên đã chọn (Bảng 2.9)
+            if ($skillFocus
+                && $subject->skillGroup
+                && $subject->skillGroup->focus_area === $skillFocus) {
                 $score += 40;
                 $gname = $subject->skillGroup->name ?? 'nhóm này';
-                $reasons[] = "Bạn học tốt nhóm {$gname} (TB {$strongGroups[$subject->skill_group_id]}) — nên phát huy";
+                $reasons[] = "Phù hợp định hướng của bạn (nhóm {$gname})";
             }
 
             $recommendations[] = [
@@ -213,33 +214,6 @@ class RecommendationService
         });
 
         return $recommendations;
-    }
-
-    /**
-     * Phát hiện các NHÓM KỸ NĂNG sinh viên đang học tốt: điểm trung bình theo nhóm
-     * (từ điểm thật) ≥ ngưỡng. Trả về [skill_group_id => điểm_TB].
-     */
-    public function computeStrongSkillGroups(int $userId, float $threshold = 7.0): array
-    {
-        $rows = UserGrade::where('user_id', $userId)
-            ->whereNotNull('grade')
-            ->join('subjects', 'subjects.id', '=', 'user_grades.subject_id')
-            ->whereNotNull('subjects.skill_group_id')
-            ->get(['user_grades.grade', 'subjects.skill_group_id']);
-
-        $byGroup = [];
-        foreach ($rows as $r) {
-            $byGroup[$r->skill_group_id][] = (float) $r->grade;
-        }
-
-        $strong = [];
-        foreach ($byGroup as $gid => $grades) {
-            $avg = array_sum($grades) / count($grades);
-            if ($avg >= $threshold) {
-                $strong[$gid] = round($avg, 2);
-            }
-        }
-        return $strong; // [skill_group_id => avg]
     }
 
     private function getSubjectsForUserCurriculum($user)

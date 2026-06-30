@@ -8,16 +8,13 @@ class SkillGroup extends Model
 {
     protected $fillable = ['name', 'focus_area'];
 
+    // Định hướng chuyên ngành của CTĐT ngành CNTT (theo báo cáo mục 2.2.2).
+    // Mỗi skill group được gán 1 định hướng để cộng điểm ưu tiên cho môn cùng nhóm.
     const FOCUS_AREAS = [
-        'backend'  => 'Backend Development',
-        'frontend' => 'Frontend Development',
-        'ai'       => 'AI / Machine Learning',
-        'data'     => 'Data Science / Analytics',
-        'mobile'   => 'Mobile Development',
-        'devops'   => 'DevOps / Cloud',
-        'testing'  => 'Testing / QA',
-        'security' => 'Cybersecurity',
-        'core'     => 'Kiến thức nền tảng (Core)',
+        'software'    => 'Phát triển phần mềm',
+        'data'        => 'Khoa học dữ liệu & Trí tuệ nhân tạo',
+        'security'    => 'An toàn thông tin & Hệ thống',
+        'application' => 'Công nghệ ứng dụng',
     ];
 
     public function subjects()
