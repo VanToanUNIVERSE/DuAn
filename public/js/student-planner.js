@@ -3415,6 +3415,131 @@ function showOverSemestersNotice(message) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// LỊCH SỬ THAY ĐỔI KẾ HOẠCH (study plan revisions)
+// ═══════════════════════════════════════════════════════════════
+function planEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function togglePlanHistoryDrawer() {
+    const ov = document.getElementById('plan-history-overlay');
+    const dr = document.getElementById('plan-history-drawer');
+    if (!ov || !dr) return;
+    const willOpen = !dr.classList.contains('open');
+    if (willOpen && typeof closeHistoryDrawer === 'function') closeHistoryDrawer();
+    ov.classList.toggle('open', willOpen);
+    dr.classList.toggle('open', willOpen);
+    if (willOpen) loadPlanRevisions();
+}
+
+function closePlanHistoryDrawer() {
+    document.getElementById('plan-history-overlay')?.classList.remove('open');
+    document.getElementById('plan-history-drawer')?.classList.remove('open');
+}
+
+async function loadPlanRevisions() {
+    const listEl  = document.getElementById('plan-history-list');
+    const emptyEl = document.getElementById('plan-history-empty');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const planId = window.currentActivePlan?.id;
+    if (!planId) {
+        if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.querySelector('p').innerHTML = 'Chưa có kế hoạch hoạt động.<br>Hãy tạo kế hoạch học tập trước.';
+        }
+        return;
+    }
+
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:0.85rem;">Đang tải…</div>';
+    try {
+        const res  = await fetch(`/api/v1/study-plans/${planId}/revisions`, { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        const list = data?.data || [];
+        if (!list.length) {
+            listEl.innerHTML = '';
+            if (emptyEl) emptyEl.style.display = 'block';
+            return;
+        }
+        if (emptyEl) emptyEl.style.display = 'none';
+        listEl.innerHTML = list.map(renderPlanRevisionCard).join('');
+    } catch (e) {
+        listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#dc2626;font-size:0.85rem;">Không tải được lịch sử.</div>';
+    }
+}
+
+function renderPlanRevisionCard(rev) {
+    const s = rev.summary || {};
+    const chips = [];
+    if (s.from_sems !== s.to_sems)       chips.push(`${s.from_sems}→${s.to_sems} kỳ`);
+    if (s.from_credits !== s.to_credits) chips.push(`${s.from_credits}→${s.to_credits} TC`);
+    if (s.added)   chips.push(`+${s.added} môn`);
+    if (s.removed) chips.push(`−${s.removed} môn`);
+    if (s.moved)   chips.push(`${s.moved} môn đổi kỳ`);
+    const chipsHtml = chips.map(c => `<span style="background:var(--surface-card);border:1px solid var(--hairline);border-radius:99px;padding:1px 8px;font-size:0.72rem;color:var(--muted);">${c}</span>`).join(' ');
+
+    return `
+    <div class="plan-rev-card" style="border:1px solid var(--hairline);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--surface);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:pointer;" onclick="togglePlanRevisionDetail(${rev.id})">
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;font-size:0.86rem;color:var(--ink);">${planEsc(rev.reason)}</div>
+                <div style="font-size:0.74rem;color:var(--muted);margin-top:2px;">${planEsc(rev.created_at)} · GPA ${planEsc(rev.gpa)}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${chipsHtml}</div>
+            </div>
+            <span id="plan-rev-caret-${rev.id}" style="color:var(--muted);font-size:0.8rem;">▼</span>
+        </div>
+        <div id="plan-rev-detail-${rev.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--hairline);">
+            ${planRevisionDiffHtml(rev.old || [], rev.new || [])}
+        </div>
+    </div>`;
+}
+
+function togglePlanRevisionDetail(id) {
+    const el    = document.getElementById(`plan-rev-detail-${id}`);
+    const caret = document.getElementById(`plan-rev-caret-${id}`);
+    if (!el) return;
+    const open = el.style.display === 'none';
+    el.style.display = open ? 'block' : 'none';
+    if (caret) caret.textContent = open ? '▲' : '▼';
+}
+
+function planRevisionDiffHtml(oldSnap, newSnap) {
+    const flatIds = snap => new Set(snap.flatMap(s => (s.subjects || []).map(x => x.id)));
+    const posMap  = snap => { const m = {}; snap.forEach(s => (s.subjects || []).forEach(x => { m[x.id] = s.index; })); return m; };
+    const oldIds = flatIds(oldSnap), newIds = flatIds(newSnap);
+    const posOld = posMap(oldSnap), posNew = posMap(newSnap);
+
+    const col = (snap, side) => {
+        if (!snap.length) return '<div style="font-size:0.78rem;color:var(--muted);font-style:italic;">(trống)</div>';
+        return snap.map(sem => {
+            const subs = (sem.subjects || []).map(x => {
+                let bg = 'var(--surface-card)', bd = 'var(--hairline)', fg = 'var(--muted)';
+                if (side === 'new') {
+                    if (!oldIds.has(x.id))             { bg = '#f0fdf4'; bd = '#bbf7d0'; fg = '#15803d'; }
+                    else if (posOld[x.id] !== sem.index){ bg = '#fffbeb'; bd = '#fde68a'; fg = '#b45309'; }
+                } else {
+                    if (!newIds.has(x.id))             { bg = '#fef2f2'; bd = '#fecaca'; fg = '#b91c1c'; }
+                    else if (posNew[x.id] !== sem.index){ bg = '#fffbeb'; bd = '#fde68a'; fg = '#b45309'; }
+                }
+                const tag = x.is_retake ? ' ↻' : '';
+                return `<span style="display:inline-block;background:${bg};border:1px solid ${bd};color:${fg};border-radius:6px;padding:1px 6px;margin:2px;font-size:0.72rem;">${planEsc(x.name)}${tag}</span>`;
+            }).join('');
+            return `<div style="margin-bottom:6px;"><div style="font-size:0.72rem;font-weight:700;color:var(--muted);margin-bottom:2px;">Kỳ ${sem.index}</div>${subs || '<span style="font-size:0.72rem;color:var(--muted);">—</span>'}</div>`;
+        }).join('');
+    };
+
+    return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><div style="font-size:0.74rem;font-weight:700;color:var(--muted);margin-bottom:6px;">Trước</div>${col(oldSnap, 'old')}</div>
+        <div><div style="font-size:0.74rem;font-weight:700;color:var(--muted);margin-bottom:6px;">Sau</div>${col(newSnap, 'new')}</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:0.68rem;color:var(--muted);">
+        <span style="color:#15803d;">■ thêm</span><span style="color:#b45309;">■ đổi kỳ</span><span style="color:#b91c1c;">■ bỏ</span><span>↻ học lại</span>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ADVISORY MODAL (tư vấn sau khi nhập điểm học kỳ)
 // ═══════════════════════════════════════════════════════════════
 window._advisoryData = null;

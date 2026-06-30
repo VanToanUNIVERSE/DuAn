@@ -5,6 +5,7 @@
             </div>
             <div class="topbar-right" style="display: flex; align-items: center; gap: 16px;">
                 <button class="btn-secondary" onclick="toggleHistoryDrawer()" style="height: 36px; font-size: 0.85rem; padding: 0 16px;">📚 Lịch sử học kỳ</button>
+                <button class="btn-secondary" onclick="togglePlanHistoryDrawer()" style="height: 36px; font-size: 0.85rem; padding: 0 16px;">🕘 Lịch sử kế hoạch</button>
                 <div style="font-size:0.8rem;color:var(--muted);">{{ Auth::user()->email }}</div>
             </div>
         </header>

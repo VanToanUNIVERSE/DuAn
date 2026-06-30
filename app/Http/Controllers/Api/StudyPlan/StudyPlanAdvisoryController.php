@@ -8,6 +8,7 @@ use App\Http\Requests\StudyPlan\AdjustTargetRequest;
 use App\Http\Requests\StudyPlan\ApplyAdvisoryRequest;
 use App\Models\StudyPlan;
 use App\Services\Plan\AdvisoryService;
+use App\Services\Plan\PlanRevisionService;
 use App\Services\StudyPlanService;
 use Illuminate\Support\Facades\Auth;
 
@@ -17,7 +18,8 @@ class StudyPlanAdvisoryController extends Controller
 
     public function __construct(
         protected AdvisoryService $advisoryService,
-        protected StudyPlanService $planService
+        protected StudyPlanService $planService,
+        protected PlanRevisionService $revisionService
     ) {}
 
     // GET /api/v1/study-plans/{id}/advisory
@@ -33,14 +35,18 @@ class StudyPlanAdvisoryController extends Controller
     // POST /api/v1/study-plans/{id}/apply-advisory
     public function applyAdvisory(ApplyAdvisoryRequest $request, $id)
     {
-        $userId  = Auth::id();
-        $plan    = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
-        $updated = $this->advisoryService->applyAdvisory(
+        $userId   = Auth::id();
+        $plan     = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
+        $before   = $this->revisionService->snapshot($plan);
+        $tcPerSem = (int) $request->input('tc_per_sem');
+        $updated  = $this->advisoryService->applyAdvisory(
             $plan,
             $userId,
-            (int) $request->input('tc_per_sem'),
+            $tcPerSem,
             (bool) $request->input('redistribute')
         );
+
+        $this->revisionService->record($plan, "Áp dụng tư vấn — đặt {$tcPerSem} TC/kỳ", $before);
 
         return response()->json([
             'success' => true,
@@ -57,6 +63,9 @@ class StudyPlanAdvisoryController extends Controller
         $userId = Auth::id();
         $plan   = StudyPlan::where('id', $id)->where('user_id', $userId)->firstOrFail();
         $plan->load('semesters.subjects.subject');
+
+        $before    = $this->revisionService->snapshot($plan);
+        $oldTarget = $plan->target_semesters ?? 8;
 
         $newTarget  = (int) $request->input('target_semesters', $plan->target_semesters ?? 8);
         $currentSem = $this->detectCurrentSemester($plan, $userId);
@@ -77,6 +86,8 @@ class StudyPlanAdvisoryController extends Controller
         ]);
 
         $updated = $this->planService->redistributeFrom($plan->fresh(), $currentSem);
+
+        $this->revisionService->record($plan, "Đổi mục tiêu tốt nghiệp: {$oldTarget} → {$newTarget} kỳ", $before);
 
         return response()->json([
             'success'          => true,

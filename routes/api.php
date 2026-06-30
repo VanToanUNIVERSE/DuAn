@@ -52,6 +52,9 @@ Route::prefix('v1')->middleware(['web', 'auth'])->group(function () {
         Route::get('/{id}/advisory',        [\App\Http\Controllers\Api\StudyPlan\StudyPlanAdvisoryController::class, 'advisory']);
         Route::post('/{id}/apply-advisory', [\App\Http\Controllers\Api\StudyPlan\StudyPlanAdvisoryController::class, 'applyAdvisory']);
         Route::post('/{id}/adjust-target',  [\App\Http\Controllers\Api\StudyPlan\StudyPlanAdvisoryController::class, 'adjustTarget']);
+
+        // Lịch sử thay đổi kế hoạch
+        Route::get('/{id}/revisions', [\App\Http\Controllers\Api\StudyPlan\StudyPlanRevisionController::class, 'index']);
     });
 
 

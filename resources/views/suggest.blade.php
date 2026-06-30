@@ -316,6 +316,7 @@
 
 
     @include('components.history-drawer')
+    @include('components.plan-history-drawer')
 
     {{-- ══════════════════════════════════════════════════════════════════
          APP SHELL

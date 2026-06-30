@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\StudyPlan\Concerns\HandlesStudyPlanDisplay;
 use App\Http\Requests\StudyPlan\UpdateGradeRequest;
 use App\Models\StudyPlan;
 use App\Services\AcademicEvaluationService;
+use App\Services\Plan\PlanRevisionService;
 use App\Services\StudyPlanService;
 use Illuminate\Support\Facades\Auth;
 
@@ -16,7 +17,8 @@ class StudyPlanGradeController extends Controller
 
     public function __construct(
         protected AcademicEvaluationService $evaluationService,
-        protected StudyPlanService $planService
+        protected StudyPlanService $planService,
+        protected PlanRevisionService $revisionService
     ) {}
 
     // POST /api/v1/study-plans/update-grade
@@ -58,6 +60,7 @@ class StudyPlanGradeController extends Controller
         $this->syncUserGrade($userId, $subjectId, $studyPlan);
 
         // ── Tự động xếp / gỡ HỌC LẠI theo kết quả ─────────────────────────────
+        $beforeRetake   = $this->revisionService->snapshot($studyPlan);
         $retakeSemester = null;
         if ($grade !== null && $grade < 5.0) {
             // Chỉ TỰ xếp học lại cho môn BẮT BUỘC. Môn TỰ CHỌN rớt → KHÔNG ép học lại,
@@ -68,6 +71,16 @@ class StudyPlanGradeController extends Controller
         } else {
             // Đạt hoặc xóa điểm → gỡ học lại chưa chấm (nếu trước đó từng rớt rồi nay sửa lại)
             $this->planService->removeUngradedRetake($studyPlan, $subjectId);
+        }
+
+        // Ghi lịch sử khi việc rớt môn làm thay đổi kế hoạch (xếp thêm học lại)
+        if ($retakeSemester !== null) {
+            $subjectName = \App\Models\Subject::find($subjectId)?->name ?? 'môn';
+            $this->revisionService->record(
+                $studyPlan,
+                "Rớt môn \"{$subjectName}\" → xếp học lại ở kỳ {$retakeSemester}",
+                $beforeRetake
+            );
         }
 
         $updatedPlan = $this->attachGrades($studyPlan->load('semesters.subjects'), $userId);

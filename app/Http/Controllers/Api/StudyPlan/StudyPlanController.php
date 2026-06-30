@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Api\StudyPlan\Concerns\HandlesStudyPlanDisplay;
 use App\Http\Requests\StudyPlan\GeneratePlanRequest;
 use App\Models\StudyPlan;
+use App\Services\Plan\PlanRevisionService;
 use App\Services\StudyPlanService;
 use Illuminate\Support\Facades\Auth;
 
@@ -13,7 +14,10 @@ class StudyPlanController extends Controller
 {
     use HandlesStudyPlanDisplay;
 
-    public function __construct(protected StudyPlanService $planService) {}
+    public function __construct(
+        protected StudyPlanService $planService,
+        protected PlanRevisionService $revisionService
+    ) {}
 
     // GET /api/v1/study-plans
     public function index()
@@ -49,12 +53,20 @@ class StudyPlanController extends Controller
     // POST /api/v1/study-plans/generate
     public function generate(GeneratePlanRequest $request)
     {
-        $userId = Auth::id();
+        $userId   = Auth::id();
+        $previous = StudyPlan::where('user_id', $userId)->where('is_active', true)->first();
+        $before   = $this->revisionService->snapshot($previous);
+
         $result = $this->planService->generatePlan(
             $userId,
             $request->input('name'),
             (int) $request->input('target_semesters', 8)
         );
+
+        // Chỉ ghi phiên bản khi đã có kế hoạch trước đó (tạo LẠI), không ghi lần tạo đầu.
+        if (!empty($before)) {
+            $this->revisionService->record($result['plan'], 'Tạo lại kế hoạch học tập', $before);
+        }
 
         return response()->json([
             'success'               => true,
