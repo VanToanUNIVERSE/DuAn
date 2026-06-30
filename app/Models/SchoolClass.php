@@ -12,7 +12,7 @@ class SchoolClass extends Model
 {
     protected $table = 'classes';
 
-    protected $fillable = ['name', 'major_id', 'cohort'];
+    protected $fillable = ['name', 'major_id', 'cohort', 'program_type'];
 
     // Lớp thuộc một chuyên ngành
     public function major()

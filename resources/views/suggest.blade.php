@@ -249,23 +249,25 @@
             </div>
         </div>
 
-        {{-- Định hướng kỹ năng --}}
+        {{-- Thế mạnh kỹ năng — TỰ ĐỘNG nhận diện từ điểm (không chọn tay) --}}
         <div class="input-group" style="margin-top: 16px;">
-            <label class="input-label" for="skill_focus" style="display:flex; align-items:center; gap:6px;">
-                🎯 Định hướng kỹ năng
-                <span style="font-size:0.75rem; color:var(--muted); font-weight:400;">(ảnh hưởng đến thứ tự gợi ý môn)</span>
+            <label class="input-label" style="display:flex; align-items:center; gap:6px;">
+                🎯 Thế mạnh kỹ năng
+                <span style="font-size:0.75rem; color:var(--muted); font-weight:400;">(tự động — ưu tiên gợi ý môn cùng nhóm bạn học tốt)</span>
             </label>
-            <select id="skill_focus" class="clay-select" onchange="savePreferences()">
-                <option value="">— Chưa chọn —</option>
-                <option value="backend"  {{ Auth::user()->pref_skill_focus === 'backend'  ? 'selected' : '' }}>🖥️ Backend Development</option>
-                <option value="frontend" {{ Auth::user()->pref_skill_focus === 'frontend' ? 'selected' : '' }}>🎨 Frontend Development</option>
-                <option value="ai"       {{ Auth::user()->pref_skill_focus === 'ai'       ? 'selected' : '' }}>🤖 AI / Machine Learning</option>
-                <option value="data"     {{ Auth::user()->pref_skill_focus === 'data'     ? 'selected' : '' }}>📊 Data Science / Analytics</option>
-                <option value="mobile"   {{ Auth::user()->pref_skill_focus === 'mobile'   ? 'selected' : '' }}>📱 Mobile Development</option>
-                <option value="devops"   {{ Auth::user()->pref_skill_focus === 'devops'   ? 'selected' : '' }}>⚙️ DevOps / Cloud</option>
-                <option value="testing"  {{ Auth::user()->pref_skill_focus === 'testing'  ? 'selected' : '' }}>🧪 Testing / QA</option>
-                <option value="security" {{ Auth::user()->pref_skill_focus === 'security' ? 'selected' : '' }}>🔒 Cybersecurity</option>
-            </select>
+            @php($_strong = app(\App\Services\RecommendationService::class)->computeStrongSkillGroups(Auth::id()))
+            @if(!empty($_strong))
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                    @foreach($_strong as $_gid => $_avg)
+                        <span class="pill" style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:0.78rem;">
+                            ✓ {{ \App\Models\SkillGroup::find($_gid)?->name ?? 'Nhóm '.$_gid }} · TB {{ $_avg }}
+                        </span>
+                    @endforeach
+                </div>
+                <div style="font-size:0.72rem; color:var(--muted); margin-top:6px;">Hệ thống tự nhận diện nhóm bạn học tốt (điểm TB ≥ 7) và ưu tiên gợi ý môn cùng nhóm.</div>
+            @else
+                <div style="font-size:0.8rem; color:var(--muted); font-style:italic;">Chưa đủ điểm để xác định thế mạnh. Nhập điểm các môn để hệ thống gợi ý theo nhóm bạn học tốt.</div>
+            @endif
         </div>
         {{-- Mục tiêu tốt nghiệp --}}
         <div class="input-group" style="margin-top:16px;">

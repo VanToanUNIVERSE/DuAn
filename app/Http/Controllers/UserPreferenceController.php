@@ -23,6 +23,19 @@ class UserPreferenceController extends Controller
     {
         $user = Auth::user();
 
+        // Sinh viên đã có LỚP → suy ra Niên khóa (từ cohort) + Hệ đào tạo (từ lớp) và lưu
+        // lại nếu chưa cấu hình, để KHÔNG phải hỏi onboarding khi vào hệ thống.
+        if (empty($user->pref_academic_year) && $user->class_id) {
+            $class = $user->schoolClass;
+            if ($class && $class->cohort) {
+                $user->update([
+                    'pref_academic_year' => $class->cohort,
+                    'pref_program_type'  => $user->pref_program_type ?: ($class->program_type ?: 'Chính quy'),
+                ]);
+                $user->refresh();
+            }
+        }
+
         return response()->json([
             'academic_year'    => $user->pref_academic_year,
             'program_type'     => $user->pref_program_type,
