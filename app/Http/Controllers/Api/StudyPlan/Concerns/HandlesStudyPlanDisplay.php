@@ -44,10 +44,12 @@ trait HandlesStudyPlanDisplay
             }
         }
 
-        // Nhóm tự chọn ĐANG THIẾU TC do có môn RỚT → tách "khung Học lại" riêng ở kỳ
-        // tương lai (gồm các môn CHƯA ĐẬU, required = TC còn thiếu). Khung gốc ở kỳ cũ
-        // KHÔNG vẽ nữa — môn đã chấm hiện thành thẻ thường (lịch sử).
-        $groupShortfall = [];
+        // Nhóm tự chọn TỪNG có môn RỚT:
+        //  • $groupHasFailure: môn ĐÃ CHẤM hiện thành "khung Đã học" theo từng kỳ (kể cả
+        //    môn học lại đã đậu) → luôn giữ ngữ cảnh nhóm ở mỗi kỳ, không thành thẻ lẻ.
+        //  • $groupShortfall: nhóm CÒN THIẾU TC (chưa đủ TC đậu) → thêm "khung Học lại" để chọn bù.
+        $groupHasFailure = [];
+        $groupShortfall  = [];
         foreach ($allElectiveGroups as $gid => $groupData) {
             $required = (int) $groupData['required_credits'];
             $passedCr = 0; $hasFailed = false; $nonPassed = [];
@@ -60,13 +62,16 @@ trait HandlesStudyPlanDisplay
                 else        $nonPassed[] = $m;
                 if ($failed) $hasFailed = true;
             }
-            if ($hasFailed && $passedCr < $required) {
-                $groupShortfall[$gid] = [
-                    'name'       => $groupData['name'],
-                    'remaining'  => $required - $passedCr,
-                    'passed_cr'  => $passedCr,
-                    'non_passed' => $nonPassed,
-                ];
+            if ($hasFailed) {
+                $groupHasFailure[$gid] = $passedCr; // tổng TC ĐẬU của nhóm (cho counter khung "Đã học")
+                if ($passedCr < $required) {
+                    $groupShortfall[$gid] = [
+                        'name'       => $groupData['name'],
+                        'remaining'  => $required - $passedCr,
+                        'passed_cr'  => $passedCr,
+                        'non_passed' => $nonPassed,
+                    ];
+                }
             }
         }
 
@@ -92,13 +97,19 @@ trait HandlesStudyPlanDisplay
             }
 
             $semGroupPlanIds = [];
+            $semHistoryIds   = []; // nhóm thiếu TC: môn ĐÃ CHẤM ĐIỂM ở kỳ này → khung "Đã học"
             foreach ($sem->subjects as $ss) {
                 $eg = $electiveGroupMap[$ss->subject_id] ?? null;
                 if ($eg?->elective_group_id) {
                     $gid = $eg->elective_group_id;
-                    // Nhóm THIẾU TC (có môn rớt) → không vẽ khung gốc; môn đã chấm hiện
-                    // thành thẻ thường, phần bù gom vào "khung Học lại" ở kỳ tương lai.
-                    if (isset($groupShortfall[$gid])) { $emittedGroupIds[$gid] = true; continue; }
+                    // Nhóm TỪNG có môn rớt: GIỮ khung "Đã học" ở mỗi kỳ (read-only, gồm môn
+                    // đã chấm điểm — kể cả môn học lại đã đậu) để luôn thấy ngữ cảnh nhóm;
+                    // phần còn thiếu (nếu có) gom vào "khung Học lại" ở kỳ tương lai.
+                    if (isset($groupHasFailure[$gid])) {
+                        if ($ss->subject_grade !== null) $semHistoryIds[$gid][] = $ss->subject_id;
+                        $emittedGroupIds[$gid] = true;
+                        continue;
+                    }
                     // Nhóm đã vẽ khung ở kỳ trước → KHÔNG vẽ lại.
                     if (isset($renderedGroupIds[$gid])) continue;
                     $semGroupPlanIds[$gid][] = $ss->subject_id;
@@ -112,6 +123,28 @@ trait HandlesStudyPlanDisplay
             }
 
             $semElectiveGroups = [];
+
+            // Khung "ĐÃ HỌC" (lịch sử, read-only) cho nhóm thiếu TC — chỉ các môn đã chấm ở kỳ này
+            foreach ($semHistoryIds as $gid => $gradedIds) {
+                $groupData = $allElectiveGroups[$gid] ?? null;
+                if (!$groupData) continue;
+                $frameIdx = (int) $sem->semester_index;
+                $histOpts = [];
+                foreach ($groupData['subjects'] as $m) {
+                    if (in_array($m->id, $gradedIds)) {
+                        $histOpts[] = $this->buildElectiveOption($m, $planRowsBySubject, $frameIdx);
+                    }
+                }
+                $semElectiveGroups[] = [
+                    'id'               => $gid,
+                    'name'             => $groupData['name'],
+                    'required_credits' => $groupData['required_credits'],
+                    'is_history_group' => true,
+                    'passed_credits'   => $groupHasFailure[$gid] ?? 0, // tổng TC đậu cả nhóm
+                    'options'          => $histOpts,
+                ];
+            }
+
             foreach ($semGroupPlanIds as $gid => $planSubjectIds) {
                 $groupData = $allElectiveGroups[$gid] ?? null;
                 if (!$groupData) continue;

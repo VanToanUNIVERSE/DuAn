@@ -2340,7 +2340,8 @@ function renderStudyPlan(plan) {
 
             // Plan subject ids (for group drag header)
             const planIds = group.options.filter(o => o.selected).map(o => o.id);
-            const isRetakeGroup = !!group.is_retake_group;
+            const isRetakeGroup  = !!group.is_retake_group;
+            const isHistoryGroup = !!group.is_history_group; // khung "Đã học" read-only ở kỳ cũ
 
             let cardsHtml = '';
             group.options.forEach(opt => {
@@ -2373,7 +2374,7 @@ function renderStudyPlan(plan) {
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                             </svg>
                         </button>
-                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:${isFailed ? '#fee2e2' : (isRetakeRow ? '#fffbeb' : '#dbeafe')};color:${isFailed ? '#991b1b' : (isRetakeRow ? '#b45309' : '#1d4ed8')};padding:1px 7px;border-radius:4px;font-weight:700;">${isFailed ? '✗ Đã rớt' : (isRetakeRow ? '🔄 Học lại' : 'Đang học')}</span>
+                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:${isCompleted ? '#dcfce7' : (isFailed ? '#fee2e2' : (isRetakeRow ? '#fffbeb' : '#dbeafe'))};color:${isCompleted ? '#15803d' : (isFailed ? '#991b1b' : (isRetakeRow ? '#b45309' : '#1d4ed8'))};padding:1px 7px;border-radius:4px;font-weight:700;">${isCompleted ? '✓ Đậu' : (isFailed ? '✗ Đã rớt' : (isRetakeRow ? '🔄 Học lại' : 'Đang học'))}</span>
                         <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;padding-top:18px;padding-right:24px;">${opt.name}</div>
                         <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px;">${opt.credits} TC | ${opt.code || 'Chung'}</div>
                         <div style="display:flex;align-items:center;gap:8px;margin-top:8px;" onmousedown="event.stopPropagation()">
@@ -2389,18 +2390,20 @@ function renderStudyPlan(plan) {
                                    ${limitReached ? 'disabled title="Đã đủ số tín chỉ yêu cầu của nhóm"' : ''}
                                    onchange="updatePlanGrade(${plan.id}, ${opt.id}, this)">
                             ${statusHtml}
-                            ${canDeselect ? `<button type="button"
+                            ${canDeselect && !isHistoryGroup ? `<button type="button"
                                 onclick="toggleElectiveSubject(${plan.id},${opt.id},${sem.semester_index},'remove')"
                                 style="margin-left:auto;font-size:0.72rem;padding:3px 9px;border-radius:6px;border:1px solid #fca5a5;color:#ef4444;background:transparent;cursor:pointer;"
                                 title="Bỏ chọn môn này">Bỏ chọn</button>` : ''}
                             ${isFailed && opt.retake_pending_sem
                                 ? `<span style="margin-left:auto;font-size:0.72rem;padding:3px 9px;border-radius:6px;background:#fffbeb;color:#b45309;border:1px solid #fde68a;" title="Đã xếp học lại ở Học kỳ ${opt.retake_pending_sem}">🔄 Đang học lại (HK ${opt.retake_pending_sem})</span>`
-                                : (isFailed && !isPast
+                                : (isFailed && !isPast && !isHistoryGroup
                                     ? `<button type="button"
                                         onclick="addRetakeSubject(${plan.id},${opt.id},${sem.semester_index},${grade})"
                                         style="margin-left:auto;font-size:0.72rem;padding:3px 9px;border-radius:6px;border:1px solid #f59e0b;color:#b45309;background:#fffbeb;cursor:pointer;"
                                         title="Xếp học lại môn này vào kỳ sau (hoặc chọn môn khác trong nhóm)">🔄 Học lại</button>`
-                                    : '')}
+                                    : (isFailed && isHistoryGroup
+                                        ? `<span style="margin-left:auto;font-size:0.72rem;color:#b45309;font-style:italic;">→ học lại ở khung dưới</span>`
+                                        : ''))}
                         </div>
                     </div>`;
                 } else if (opt.effective_selected && opt.selected_sem) {
@@ -2448,31 +2451,42 @@ function renderStudyPlan(plan) {
                 }
             });
 
-            const headerBg = isRetakeGroup ? '#b45309' : '#1d4ed8';
-            const frameBorder = isRetakeGroup ? '#fcd34d' : '#93c5fd';
-            const frameBg = isRetakeGroup ? '#fffbeb' : '#eef5ff';
-            const headerTitle = isRetakeGroup
-                ? `🔄 Nhóm tự chọn "${group.name}" — Học lại`
-                : `Nhóm tự chọn "${group.name}"`;
-            const headerSub = isRetakeGroup
-                ? `Đã đậu ${group.passed_credits || 0} TC · cần học lại ${needCr} TC — chọn từ các môn chưa đậu (trừ môn đã đậu)`
-                : `Chọn đủ ${needCr} TC · ${isPast ? '' : 'Kéo tiêu đề để di chuyển cả nhóm · '}${group.options.length} môn phương án`;
+            // Khung "Đã học" (lịch sử) KHÔNG kéo; khung thường & khung "Học lại" kéo được
+            // (khung học lại chỉ di chuyển môn ĐANG CHỌN — môn rớt là lịch sử, không nằm trong planIds).
+            const draggable = !isHistoryGroup && planIds.length > 0;
+            const headerBg = isHistoryGroup ? '#475569' : (isRetakeGroup ? '#b45309' : '#1d4ed8');
+            const frameBorder = isHistoryGroup ? '#cbd5e1' : (isRetakeGroup ? '#fcd34d' : '#93c5fd');
+            const frameBg = isHistoryGroup ? '#f8fafc' : (isRetakeGroup ? '#fffbeb' : '#eef5ff');
+            const headerIcon = isHistoryGroup ? '🗂️' : (isRetakeGroup ? '🔄' : '📚');
+            const headerTitle = isHistoryGroup
+                ? `🗂️ Nhóm tự chọn "${group.name}" — Đã học (kỳ này)`
+                : (isRetakeGroup
+                    ? `🔄 Nhóm tự chọn "${group.name}" — Học lại`
+                    : `Nhóm tự chọn "${group.name}"`);
+            const headerSub = isHistoryGroup
+                ? `Kết quả nhóm tự chọn ở học kỳ này — phần còn thiếu xem ở "Học lại" bên dưới`
+                : (isRetakeGroup
+                    ? `Đã đậu ${group.passed_credits || 0} TC · cần học lại ${needCr} TC — chọn từ các môn chưa đậu${draggable ? ' · kéo tiêu đề để đổi học kỳ' : ''}`
+                    : `Chọn đủ ${needCr} TC · ${isPast ? '' : 'Kéo tiêu đề để di chuyển cả nhóm · '}${group.options.length} môn phương án`);
+            // Khung "Đã học" hiển thị TỔNG TC ĐẬU của cả nhóm (không phải riêng kỳ này);
+            // khung khác hiển thị TC hiệu lực.
+            const counterCr = isHistoryGroup ? (group.passed_credits ?? passedCr) : effectiveCr;
 
             html += `
             <div class="eg-group-frame" id="${frameId}"
                  style="grid-column:1/-1;border:2px solid ${frameBorder};border-radius:12px;overflow:hidden;background:${frameBg};">
-                <div ${isRetakeGroup ? '' : `draggable="${!isPast}"
+                <div ${draggable ? `draggable="${!isPast}"
                      ondragstart="handleGroupDragStart(event,[${planIds.join(',')}],${sem.semester_index})"
-                     ondragend="handleDragEnd(event)"`}
-                     style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:${headerBg};color:#fff;cursor:${isRetakeGroup || isPast ? 'default' : 'grab'};user-select:none;">
-                    <span style="font-size:1rem;">${isRetakeGroup ? '🔄' : '📚'}</span>
+                     ondragend="handleDragEnd(event)"` : ''}
+                     style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:${headerBg};color:#fff;cursor:${draggable && !isPast ? 'grab' : 'default'};user-select:none;">
+                    <span style="font-size:1rem;">${headerIcon}</span>
                     <div style="flex:1;">
                         <div style="font-weight:700;font-size:0.85rem;">${headerTitle}</div>
                         <div style="font-size:0.72rem;opacity:0.85;">${headerSub}</div>
                     </div>
                     <span id="eg-counter-${frameId}"
-                          style="font-weight:700;font-size:0.88rem;background:rgba(255,255,255,0.18);padding:3px 12px;border-radius:6px;color:${effectiveCr >= needCr ? '#86efac' : '#fde68a'};">
-                        ${effectiveCr}/${needCr} TC
+                          style="font-weight:700;font-size:0.88rem;background:rgba(255,255,255,0.18);padding:3px 12px;border-radius:6px;color:${counterCr >= needCr ? '#86efac' : '#fde68a'};">
+                        ${counterCr}/${needCr} TC
                     </span>
                 </div>
                 <div style="padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">
