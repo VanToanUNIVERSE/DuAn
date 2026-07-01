@@ -215,7 +215,7 @@
                 🎯 Định hướng kỹ năng
                 <span style="font-size:0.75rem; color:var(--muted); font-weight:400;">(ưu tiên gợi ý môn theo chuyên ngành bạn hướng tới)</span>
             </label>
-            <select id="skill_focus" class="clay-select" onchange="savePreferences()">
+            <select id="skill_focus" class="clay-select" onchange="changeSkillFocus()">
                 <option value="">— Chưa chọn —</option>
                 @foreach(\App\Models\SkillGroup::FOCUS_AREAS as $key => $label)
                     <option value="{{ $key }}" {{ Auth::user()->pref_skill_focus === $key ? 'selected' : '' }}>{{ $label }}</option>

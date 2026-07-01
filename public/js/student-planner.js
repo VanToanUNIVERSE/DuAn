@@ -56,6 +56,7 @@ function switchTab(tabId, navEl) {
     // Trigger chart reload when switching to chart tab
     if (tabId === 'analysis') {
         if (chartRawData) { try { renderGradeChartDetail(chartRawData, 'all'); } catch (e) {} }
+        else { fetchChartData(); }
         fetchGpaTrend();
         fetchSkillFocusProgress();
     }
@@ -262,15 +263,25 @@ function updateDrawerStats() {
 // ═══════════════════════════════════════════════════════════════
 function savePreferences() {
     clearTimeout(prefTimer);
-    prefTimer = setTimeout(async () => {
-        try {
-            const skillFocusEl = document.getElementById('skill_focus');
-            const payload = { academic_year: document.getElementById('academic_year').value, program_type: document.getElementById('program_type').value, current_courses: currentCourses, skill_focus: skillFocusEl ? skillFocusEl.value : null };
-            const res = await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify(payload) });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            showSaveIndicator('saved', 'Đã lưu cấu hình ✓');
-        } catch (err) { showSaveIndicator('error', 'Lưu cấu hình thất bại'); }
-    }, 500);
+    prefTimer = setTimeout(persistPreferences, 500);
+}
+
+async function persistPreferences() {
+    clearTimeout(prefTimer);
+    try {
+        const skillFocusEl = document.getElementById('skill_focus');
+        const payload = { academic_year: document.getElementById('academic_year').value, program_type: document.getElementById('program_type').value, current_courses: currentCourses, skill_focus: skillFocusEl ? skillFocusEl.value : null };
+        const res = await fetch('/preferences/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' }, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showSaveIndicator('saved', 'Đã lưu cấu hình ✓');
+    } catch (err) { showSaveIndicator('error', 'Lưu cấu hình thất bại'); }
+}
+
+// Đổi định hướng kỹ năng: PHẢI lưu xong (DB cập nhật pref_skill_focus) rồi mới
+// gọi lại API gợi ý, vì /api/v1/recommendations đọc định hướng trực tiếp từ DB.
+async function changeSkillFocus() {
+    await persistPreferences();
+    fetchSuggestions();
 }
 
 async function loadPreferences() {
@@ -520,7 +531,7 @@ function renderCurrentCourses() {
     localStorage.setItem('current_courses', JSON.stringify(currentCourses));
     savePreferences();
     const container = document.getElementById('current-courses-list');
-    const counter = document.getElementById('cc-count'); counter.textContent = currentCourses.length;
+    const counter = document.getElementById('cc-count'); if (counter) counter.textContent = currentCourses.length;
     const currentCredits = currentCourses.reduce((sum, c) => sum + (parseInt(c.credits) || 0), 0);
     const ccCredits = document.getElementById('cc-credits');
     if (ccCredits) {
@@ -536,6 +547,7 @@ function renderCurrentCourses() {
         }
     }
     updateCompleteButton();
+    if (!container) return;
     if (currentCourses.length === 0) { container.innerHTML = '<div class="current-courses-empty">Chưa có môn nào — vào <strong>Đề Xuất Môn Học</strong> và nhấn <strong>+ Thêm</strong>.</div>'; return; }
     container.innerHTML = currentCourses.map(c => `
             <div class="course-item${c.grade !== null && c.grade >= 5 ? ' cc-pass' : c.grade !== null ? ' cc-fail' : ''}" id="cc-item-${c.id}">
@@ -1365,12 +1377,26 @@ let gradeChartDetailInstance = null;
 let chartRawData = null;
 let chartTimer = null;
 
+// Cập nhật 2 thẻ thống kê ("Môn đã nhập điểm" / "GPA tích lũy") ở tab Phân Tích.
+// Trang này không render .grade-input nên updateEarnedCredits() không tính được;
+// lấy trực tiếp từ dữ liệu biểu đồ (điểm của TẤT CẢ học kỳ).
+function updateChartStatCards(data) {
+    const grades = (data.my_grades || []).filter(g => g !== null && g !== undefined);
+    const gradedEl = document.getElementById('chart-stat-graded');
+    if (gradedEl) gradedEl.textContent = grades.length + ' môn';
+    const gpaEl = document.getElementById('chart-stat-gpa');
+    if (gpaEl) gpaEl.textContent = grades.length
+        ? (grades.reduce((s, v) => s + v, 0) / grades.length).toFixed(2)
+        : '—';
+}
+
 async function fetchChartData() {
     try {
         const res = await fetch('/grades/chart-data', { headers: { 'Accept': 'application/json' } });
         if (!res.ok) return;
         chartRawData = await res.json();
         buildChartSemFilter(chartRawData.semesters);
+        try { updateChartStatCards(chartRawData); } catch(e) { console.warn(e); }
         try { renderGradeChart(chartRawData, 'all'); } catch(e) { console.warn(e); }
         try { renderGradeChartDetail(chartRawData, 'all'); } catch(e) { console.warn(e); }
     } catch (err) { console.warn('[Chart error]', err); }
