@@ -166,7 +166,7 @@ class SemesterHistoryController extends Controller
                 $evaluation = $evalService->evaluate(
                     $user->id,
                     $activePlan->mode ?? 'normal',
-                    $activePlan->target_semester_count ?? 8,
+                    $activePlan->target_semesters ?? $activePlan->target_semester_count ?? 8,
                     $validated['semester_number'] + 1  // Học kỳ tiếp theo
                 );
 

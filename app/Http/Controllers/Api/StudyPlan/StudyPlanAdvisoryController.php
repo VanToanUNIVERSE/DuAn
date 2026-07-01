@@ -43,7 +43,12 @@ class StudyPlanAdvisoryController extends Controller
             $plan,
             $userId,
             $tcPerSem,
-            (bool) $request->input('redistribute')
+            (bool) $request->input('redistribute'),
+            $request->filled('estimated_semesters')
+                ? (int) $request->input('estimated_semesters')
+                : ($request->filled('target_semesters')
+                    ? (int) $request->input('target_semesters')
+                    : null)
         );
 
         $this->revisionService->record($plan, "Áp dụng tư vấn — đặt {$tcPerSem} TC/kỳ", $before);
@@ -84,6 +89,7 @@ class StudyPlanAdvisoryController extends Controller
             'tc_per_sem'       => $newTc,
             'mode'             => $newMode,
         ]);
+        Auth::user()?->update(['pref_graduation_semester' => $newTarget]);
 
         $updated = $this->planService->redistributeFrom($plan->fresh(), $currentSem);
 

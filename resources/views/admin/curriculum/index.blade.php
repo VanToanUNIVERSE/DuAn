@@ -45,9 +45,7 @@
                         <td style="text-align:center;">{{ $fw->number_of_semesters }} HK</td>
                         @php 
                             $subjectCount = \App\Models\CurriculumSubject::where('curriculum_framework_id', $fw->id)->count(); 
-                            $totalCredits = \App\Models\CurriculumSubject::where('curriculum_framework_id', $fw->id)
-                                ->join('subjects', 'curriculum_subject.subject_id', '=', 'subjects.id')
-                                ->sum('subjects.credits');
+                            $totalCredits = $fw->calculatedTotalCredits();
                         @endphp
                         <td style="text-align:center;">{{ $totalCredits }} TC</td>
                         <td style="text-align:center;">

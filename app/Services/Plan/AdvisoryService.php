@@ -4,15 +4,15 @@ namespace App\Services\Plan;
 
 use App\Models\SemesterHistory;
 use App\Models\StudyPlan;
-use App\Services\ProgressService;
+use App\Models\User;
+use App\Services\AcademicEvaluationService;
 use App\Services\StudyPlanService;
 
 class AdvisoryService
 {
     public function __construct(
-        protected PlanDataService $dataService,
         protected StudyPlanService $planService,
-        protected ProgressService $progressService
+        protected AcademicEvaluationService $academicEvaluation
     ) {}
 
     /**
@@ -35,72 +35,47 @@ class AdvisoryService
             ];
         }
 
-        [$allSubjects, $passedIds] = $this->dataService->loadPlanningData($userId);
-        $completedSems    = $histories->count();
-        $remainingSems    = max(1, $plan->target_semesters - $completedSems);
-        $remainingCredits = $allSubjects
-            ->reject(fn($s) => in_array($s->id, $passedIds))
-            ->sum(fn($s) => (int)($s->credits ?? 3));
+        $currentTarget = $this->configuredTarget($plan, $userId);
+        $currentSem    = ((int) $histories->max('semester_number')) + 1;
+        $evaluation    = $this->academicEvaluation->evaluate(
+            $userId,
+            $plan->mode ?? 'normal',
+            $currentTarget,
+            $currentSem
+        );
 
-        // GPA tích lũy chuẩn (cùng nguồn ProgressService với modal kết quả học kỳ →
-        // tránh hiện 2 con số GPA khác nhau ở 2 thông báo).
-        $progress     = $this->progressService->evaluateProgress($userId);
-        $gpa          = round((float) $progress['current_gpa'], 2);
-        $effectiveGpa = $gpa;
-        $currentTc    = $plan->tc_per_sem;
+        $recommendedTc = (int) ($evaluation['recommended_tc_per_sem'] ?? $plan->tc_per_sem ?? 18);
+        $newTarget      = $evaluation['status'] === 'KEEP'
+            ? null
+            : (int) ($evaluation['suggested_sems'] ?? $currentTarget);
 
-        $neededTc   = $remainingSems > 0 ? (int) ceil($remainingCredits / $remainingSems) : $currentTc;
-        $gpaContext = "GPA {$gpa}";
-
-        if ($effectiveGpa >= 7.0 && $currentTc < 22) {
-            $newTc   = min(22, $currentTc + max(2, (int)($currentTc * 0.15)));
-            $newSems = (int) ceil($remainingCredits / $newTc) + $completedSems;
-            $delta   = $plan->target_semesters - $newSems;
-            $earlyBy = $delta > 0 ? " Dự kiến tốt nghiệp sớm hơn {$delta} học kỳ so với mục tiêu." : '';
-            return [
-                'recommend'               => 'increase',
-                'reason'                  => "{$gpaContext} — học lực tốt, bạn hoàn toàn có thể tăng tải lên {$newTc} TC/kỳ.{$earlyBy}",
-                'current_tc_per_sem'      => $currentTc,
-                'recommended_tc_per_sem'  => $newTc,
-                'new_graduation_estimate' => $newSems,
-                'semesters_delta'         => $delta,
-            ];
-        }
-
-        if ($effectiveGpa < 5.5 || $neededTc > $currentTc * 1.15) {
-            $newTc    = max(12, $currentTc - max(2, (int)($currentTc * 0.15)));
-            $newSems  = (int) ceil($remainingCredits / $newTc) + $completedSems;
-            $delta    = $newSems - $plan->target_semesters;
-            $tradeOff = $delta > 0
-                ? " Tuy nhiên, điều này sẽ khiến bạn tốt nghiệp trễ hơn mục tiêu ban đầu {$delta} học kỳ (dự kiến học kỳ {$newSems})."
-                : '';
-            $trigger  = $effectiveGpa < 5.5
-                ? "{$gpaContext} — học lực yếu"
-                : "{$gpaContext} — cần đến {$neededTc} TC/kỳ để đúng tiến độ trong khi hiện tại chỉ có {$currentTc} TC/kỳ";
-            return [
-                'recommend'               => 'decrease',
-                'reason'                  => "{$trigger}. Giảm xuống {$newTc} TC/kỳ giúp tránh nguy cơ học lại.{$tradeOff}",
-                'current_tc_per_sem'      => $currentTc,
-                'recommended_tc_per_sem'  => $newTc,
-                'new_graduation_estimate' => $newSems,
-                'semesters_delta'         => $delta,
-            ];
-        }
+        $recommend = match ($evaluation['status']) {
+            'SPEED_UP'          => 'increase',
+            'REPLAN', 'REDUCE'  => 'decrease',
+            default             => 'maintain',
+        };
 
         return [
-            'recommend'               => 'maintain',
-            'reason'                  => "{$gpaContext} — tiến độ ổn định, phù hợp với kế hoạch hiện tại. Tiếp tục duy trì.",
-            'current_tc_per_sem'      => $currentTc,
-            'recommended_tc_per_sem'  => $currentTc,
-            'new_graduation_estimate' => null,
-            'semesters_delta'         => 0,
+            'recommend'               => $recommend,
+            'reason'                  => $evaluation['message'],
+            'current_tc_per_sem'      => (int) ($plan->tc_per_sem ?? 18),
+            'recommended_tc_per_sem'  => $recommendedTc,
+            'new_graduation_estimate' => $newTarget,
+            'semesters_delta'         => $newTarget === null ? 0 : $newTarget - $currentTarget,
+            'evaluation'              => $evaluation,
         ];
     }
 
     /**
      * Áp dụng tư vấn: cập nhật tc_per_sem và tùy chọn rải lại môn học.
      */
-    public function applyAdvisory(StudyPlan $plan, int $userId, int $newTcPerSem, bool $redistribute): StudyPlan
+    public function applyAdvisory(
+        StudyPlan $plan,
+        int $userId,
+        int $newTcPerSem,
+        bool $redistribute,
+        ?int $estimatedSemesters = null
+    ): StudyPlan
     {
         $newTcPerSem = max(12, min(22, $newTcPerSem));
         $mode        = $newTcPerSem >= 20 ? 'fast' : ($newTcPerSem <= 14 ? 'slow' : 'normal');
@@ -108,12 +83,19 @@ class AdvisoryService
         $lastHistory = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
         $currentSem  = max(1, $lastHistory + 1);
 
-        $update = ['tc_per_sem' => $newTcPerSem, 'mode' => $mode];
+        $configuredTarget = $this->configuredTarget($plan, $userId);
+        $planningHorizon  = null;
+        $update = [
+            'tc_per_sem'       => $newTcPerSem,
+            'mode'             => $mode,
+            // Mục tiêu là cấu hình của sinh viên, không phải số kỳ dự kiến sau tư vấn.
+            // Gán lại trường này cũng tự sửa các kế hoạch từng bị luồng cũ ghi đè.
+            'target_semesters' => $configuredTarget,
+        ];
 
         if ($redistribute) {
-            // Đổi TC/kỳ ⇒ TÍNH LẠI số kỳ mục tiêu: nhiều TC/kỳ hơn ⇒ ít kỳ hơn (rút ngắn lộ trình).
-            // Nếu giữ nguyên target cũ, trần động = TC còn lại / số kỳ cũ → rải đều ~18 TC dù đặt
-            // trần 22 → KHÔNG rút ngắn được (đây là lý do "đặt 21-22 nhưng chỉ rải 16-18").
+            // Số kỳ dự kiến chỉ là mốc dùng để rải lịch. Nó tuyệt đối không được ghi đè
+            // mục tiêu tốt nghiệp mà sinh viên đã chọn trong cấu hình.
             $plan->loadMissing('semesters.subjects.subject');
             $remainingCredits = 0;
             foreach ($plan->semesters as $sem) {
@@ -123,15 +105,50 @@ class AdvisoryService
                 }
             }
             $neededSems = max(1, (int) ceil($remainingCredits / $newTcPerSem));
-            $update['target_semesters'] = ($currentSem - 1) + $neededSems;
+            $calculatedTarget = ($currentSem - 1) + $neededSems;
+            $planningHorizon = max(6, min(10, $estimatedSemesters ?? $calculatedTarget));
         }
 
         $plan->update($update);
+        User::whereKey($userId)->update([
+            'pref_graduation_semester' => $configuredTarget,
+        ]);
 
         if ($redistribute) {
-            return $this->planService->redistributeFrom($plan->fresh(), $currentSem);
+            return $this->planService->redistributeFrom(
+                $plan->fresh(),
+                $currentSem,
+                [],
+                $planningHorizon
+            );
         }
 
         return $plan->load('semesters.subjects.subject');
+    }
+
+    /**
+     * Mục tiêu cấu hình là nguồn dữ liệu chuẩn. Fallback về kế hoạch để hỗ trợ
+     * tài khoản cũ chưa có pref_graduation_semester.
+     */
+    private function configuredTarget(StudyPlan $plan, int $userId): int
+    {
+        $preference = User::whereKey($userId)->value('pref_graduation_semester');
+        if ($preference) {
+            return max(6, min(10, (int) $preference));
+        }
+
+        // Tự sửa dữ liệu do phiên bản cũ gây ra: tên kế hoạch được tạo theo mục tiêu
+        // ban đầu (ví dụ "Kế hoạch tốt nghiệp 8 kỳ"), trong khi target_semesters
+        // có thể đã bị tư vấn ghi đè thành con số dự kiến 7.
+        if (preg_match('/(\d+)\s*kỳ/ui', (string) $plan->name, $matches)) {
+            $legacyTarget = (int) $matches[1];
+            if ($legacyTarget >= 6 && $legacyTarget <= 10) {
+                return $legacyTarget;
+            }
+        }
+
+        $target = (int) ($plan->target_semesters ?: $plan->target_semester_count ?: 8);
+
+        return max(6, min(10, $target));
     }
 }

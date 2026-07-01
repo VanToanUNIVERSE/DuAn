@@ -36,6 +36,7 @@ class StudyPlanService
         return DB::transaction(function () use ($userId, $name, $targetSemesters) {
             $user            = User::findOrFail($userId);
             $targetSemesters = max(6, min(10, $targetSemesters));
+            $user->update(['pref_graduation_semester' => $targetSemesters]);
 
             StudyPlan::where('user_id', $userId)->where('is_active', true)->update(['is_active' => false]);
 
@@ -57,18 +58,6 @@ class StudyPlanService
             ]);
 
             $lastHistorySem = $this->buildHistorySemesters($plan, $userId);
-
-            // Sinh viên mới, chưa có điểm, target = 8 kỳ → clone chương trình khung
-            if (empty($passedIds) && $lastHistorySem === 0 && $targetSemesters === 8) {
-                $this->cloneCurriculumFramework($plan, $allSubjects);
-                return [
-                    'plan'                  => $plan->load('semesters.subjects.subject'),
-                    'tc_per_sem'            => $tcPerSem,
-                    'target_semesters'      => $targetSemesters,
-                    'over_semesters'        => false,
-                    'over_semesters_notice' => null,
-                ];
-            }
 
             $toSchedule = $allSubjects->reject(fn($s) =>
                 in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds)
@@ -178,12 +167,18 @@ class StudyPlanService
      *
      * @param  int[] $pinnedSubjectIds  Môn cần ghim vào đúng $fromSem (cho applySuggestions)
      */
-    public function redistributeFrom(StudyPlan $plan, int $fromSem, array $pinnedSubjectIds = []): StudyPlan
+    public function redistributeFrom(
+        StudyPlan $plan,
+        int $fromSem,
+        array $pinnedSubjectIds = [],
+        ?int $planningHorizon = null
+    ): StudyPlan
     {
-        return DB::transaction(function () use ($plan, $fromSem, $pinnedSubjectIds) {
+        return DB::transaction(function () use ($plan, $fromSem, $pinnedSubjectIds, $planningHorizon) {
             $userId          = $plan->user_id;
             $tcPerSem        = $plan->tc_per_sem ?? 18;
             $targetSemesters = $plan->target_semesters ?? 8;
+            $scheduleUntil    = $planningHorizon ?? $targetSemesters;
             $user            = User::findOrFail($userId);
             $groupIds        = $this->dataService->resolveGroupIds();
 
@@ -205,10 +200,16 @@ class StudyPlanService
             }
 
             $passedHistoryIds = array_diff($historySubjectIds, $failedIds);
-            $alreadyPlanned   = array_unique(array_merge(
-                array_diff($passedIds, $failedIds),
-                $passedHistoryIds,
-                $planPriorIds
+
+            // Môn rớt vẫn còn trong các học kỳ lịch sử trước $fromSem, nên cũng xuất
+            // hiện trong $planPriorIds. Nếu đưa chúng vào $alreadyPlanned, scheduler
+            // vừa nhận môn đó trong $toSchedule vừa coi nó là "đã xếp": vòng chính
+            // sẽ bỏ qua và nhánh chống deadlock chỉ đẩy mỗi kỳ một môn (HK9, HK10…).
+            // Loại failedIds SAU KHI hợp nhất mọi nguồn để môn học lại được xếp bình
+            // thường, có thể gom nhiều môn trong cùng kỳ theo trần tín chỉ.
+            $alreadyPlanned = array_values(array_diff(
+                array_unique(array_merge($passedIds, $passedHistoryIds, $planPriorIds)),
+                $failedIds
             ));
 
             // Xóa tất cả kỳ >= fromSem để rebuild
@@ -254,7 +255,7 @@ class StudyPlanService
                 $startSem       = $fromSem + 1;
             }
 
-            $rest      = $this->scheduler->schedule($toSchedule, $alreadyPlanned, $failedIds, $startSem, $tcPerSem, $targetSemesters, $user, $groupIds);
+            $rest      = $this->scheduler->schedule($toSchedule, $alreadyPlanned, $failedIds, $startSem, $tcPerSem, $scheduleUntil, $user, $groupIds);
             $totalSems = $this->persistSchedule($plan, $rest, $passedIds, $failedIds);
             $plan->update(['target_semester_count' => max($totalSems, $fromSem)]);
 
@@ -327,6 +328,44 @@ class StudyPlanService
         if (!empty($toDelete)) {
             StudyPlanSubject::whereIn('id', $toDelete)->delete();
         }
+    }
+
+    /**
+     * Gộp các học kỳ TRÙNG semester_index của cùng một kế hoạch (bug do 2 request
+     * cập nhật điểm chạy song song cùng lúc tự tạo 2 kỳ mới trùng số — mỗi request
+     * đọc DB trước khi request kia kịp ghi, nên cả hai đều nghĩ "chưa có kỳ nào ở đây"
+     * và cùng tạo kỳ mới). Giữ lại kỳ TẠO SỚM NHẤT (id nhỏ nhất), chuyển hết môn từ
+     * các kỳ trùng còn lại sang rồi xóa các kỳ đó — để không bị rải rác mỗi môn một
+     * kỳ riêng và để kéo-thả hoạt động lại (kéo-thả định vị kỳ đích theo semester_index).
+     */
+    public function mergeDuplicateSemesters(StudyPlan $plan): void
+    {
+        $plan->load('semesters.subjects');
+
+        $bySemIndex = $plan->semesters->groupBy('semester_index');
+        foreach ($bySemIndex as $sems) {
+            if ($sems->count() <= 1) continue;
+
+            $sorted  = $sems->sortBy('id')->values();
+            $keeper  = $sorted->first();
+            $dupes   = $sorted->slice(1);
+
+            foreach ($dupes as $dupe) {
+                StudyPlanSubject::where('study_plan_semester_id', $dupe->id)
+                    ->update(['study_plan_semester_id' => $keeper->id]);
+            }
+
+            $keeper->refresh()->load('subjects.subject');
+            $keeper->update([
+                'expected_credits' => $keeper->subjects->sum(fn($ss) => (int) ($ss->subject->credits ?? 3)),
+            ]);
+
+            StudyPlanSemester::whereIn('id', $dupes->pluck('id'))->delete();
+        }
+
+        $plan->load('semesters.subjects');
+        $this->deduplicateRetakes($plan);
+        $this->deduplicateSubjects($plan);
     }
 
     /**
@@ -435,7 +474,7 @@ class StudyPlanService
      */
     public function scheduleRetake(StudyPlan $plan, int $subjectId, int $fromSem, ?float $originalGrade): ?int
     {
-        $plan->loadMissing('semesters.subjects');
+        $plan->loadMissing('semesters.subjects.subject');
         $semIds = $plan->semesters->pluck('id');
 
         // Đã có học lại chưa chấm điểm cho môn này → không tạo trùng
@@ -446,7 +485,9 @@ class StudyPlanService
             ->exists();
         if ($hasPending) return null;
 
-        $offeredIn = Subject::find($subjectId)?->offered_in; // '1' lẻ, '2' chẵn, null = cả hai
+        $subject   = Subject::find($subjectId);
+        $offeredIn = $subject?->offered_in; // '1' lẻ, '2' chẵn, null = cả hai
+        $newCredits = (int) ($subject?->credits ?? 3);
         $fitsParity = function (int $semIdx) use ($offeredIn): bool {
             $isOdd = $semIdx % 2 !== 0;
             if ($offeredIn === '1' && !$isOdd) return false;
@@ -454,11 +495,19 @@ class StudyPlanService
             return true;
         };
 
-        // Tìm học kỳ kế tiếp (> kỳ rớt) có parity phù hợp
+        // Trần TC/kỳ để GOM nhiều môn rớt vào chung một kỳ thay vì mỗi môn tự đẻ một kỳ
+        // mới gần như trống (bug: 3 môn rớt → 3 kỳ riêng, mỗi kỳ 1 môn).
+        $creditCap = max(12, min(22, $plan->tc_per_sem ?? 18));
+
+        // Tìm học kỳ kế tiếp (> kỳ rớt) có parity phù hợp VÀ còn đủ chỗ tín chỉ
         $targetSem = $plan->semesters
             ->where('semester_index', '>', $fromSem)
             ->sortBy('semester_index')
-            ->first(fn($s) => $fitsParity($s->semester_index));
+            ->first(function ($s) use ($fitsParity, $newCredits, $creditCap) {
+                if (!$fitsParity($s->semester_index)) return false;
+                $used = $s->subjects->sum(fn($ss) => (int) ($ss->subject->credits ?? 3));
+                return $used + $newCredits <= $creditCap;
+            });
 
         // Không có → tạo học kỳ mới ở cuối với parity đúng
         if (!$targetSem) {

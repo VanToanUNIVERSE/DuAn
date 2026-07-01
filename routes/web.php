@@ -46,11 +46,29 @@ Route::middleware('auth')->group(function () {
                 return $key === 'Khác' ? 999 : (int)$key;
             });
 
-        $totalCredits = App\Models\Subject::sum('credits');
+        $programCreditTotals = App\Models\TrainingProgram::with('curriculumFrameworks')->get()
+            ->mapWithKeys(function ($program) {
+                $framework = $program->curriculumFrameworks->first();
+                $key = "{$program->academic_year}|{$program->program_type}";
+
+                return [$key => $framework?->calculatedTotalCredits() ?? 0];
+            })->toArray();
+
+        $user = auth()->user();
+        $selectedProgramKey = "{$user->pref_academic_year}|{$user->pref_program_type}";
+        $totalCredits = (int) ($programCreditTotals[$selectedProgramKey]
+            ?? collect($programCreditTotals)->filter()->first()
+            ?? 0);
         $academicYears = App\Models\TrainingProgram::distinct()->pluck('academic_year')->toArray();
         $programTypes = App\Models\TrainingProgram::distinct()->pluck('program_type')->toArray();
 
-        return view('suggest', compact('subjects', 'academicYears', 'programTypes', 'totalCredits'));
+        return view('suggest', compact(
+            'subjects',
+            'academicYears',
+            'programTypes',
+            'totalCredits',
+            'programCreditTotals'
+        ));
     })->name('suggest');
 
     // ── Routes điểm số ──────────────────────────────────────────────────────
@@ -126,5 +144,4 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::get('/enrollment-stats',        [App\Http\Controllers\Admin\EnrollmentStatsController::class, 'index'])->name('enrollment-stats.index');
     Route::get('/enrollment-stats/export', [App\Http\Controllers\Admin\EnrollmentStatsController::class, 'export'])->name('enrollment-stats.export');
 });
-
 

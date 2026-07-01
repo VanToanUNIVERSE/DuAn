@@ -164,9 +164,9 @@ class RecommendationService
                 $reasons[] = 'Đã thêm vào kế hoạch học lại';
             }
 
-            // +30 for specific requirement types (Mandatory/Core)
-            // Assuming 'none' means elective, others mean required in some way
-            if ($subject->requirement_type && $subject->requirement_type !== 'none') {
+            // Phân loại bắt buộc/tự chọn theo đúng cột is_elective. requirement_type
+            // mô tả điều kiện hoàn thành, không phải loại môn học.
+            if (!$subject->is_elective) {
                 $score += 30;
                 $reasons[] = 'Môn bắt buộc / cốt lõi';
             } else {

@@ -15,6 +15,10 @@ trait HandlesStudyPlanDisplay
 {
     private function attachGrades(StudyPlan $plan, int $userId): StudyPlan
     {
+        // Tự sửa các kỳ bị trùng semester_index (bug cũ do race condition khi rải
+        // học lại) ngay khi hiển thị, để kế hoạch đã bị lỗi từ trước cũng tự lành.
+        $this->planService->mergeDuplicateSemesters($plan);
+
         $plan->loadMissing(
             'semesters.subjects.subject.prerequisites',
             'semesters.subjects.subject.corequisites',

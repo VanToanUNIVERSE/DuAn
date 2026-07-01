@@ -1037,14 +1037,14 @@
         // ─── Server data ──────────────────────────────────────────────────────────
         const ACADEMIC_YEARS = @json($academicYears);
         const PROGRAM_TYPES = @json($programTypes);
+        const PROGRAM_CREDIT_TOTALS = @json($programCreditTotals);
         const SUBJECTS_BY_SEM = @json($subjectsBySem);
-        const TOTAL_CREDITS = {{ $totalCredits }};
+        let TOTAL_CREDITS = {{ $totalCredits }};
+        window.TOTAL_CREDITS = TOTAL_CREDITS;
         const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
         // ─── App State ────────────────────────────────────────────────────────────
     </script>
-    <script src="{{ asset('js/student-planner.js') }}"></script>
-
     {{-- Modal Môn Tiên Quyết --}}
     <div class="prereq-modal-overlay hidden" id="prereq-modal-overlay">
         <div class="prereq-modal">
@@ -1084,8 +1084,8 @@
                 <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px;">
                     <li style="display:flex; align-items:start; gap:12px;">
                         <span style="font-size:1.3rem; line-height:1;">💯</span>
-                        <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Điểm Gốc (100đ):</strong>
-                            Mọi môn học luôn bắt đầu với 100 điểm.</div>
+                        <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Điểm khởi tạo (0đ):</strong>
+                            Điểm ưu tiên được cộng/trừ theo các tiêu chí bên dưới.</div>
                     </li>
                     <li style="display:flex; align-items:start; gap:12px;">
                         <span style="font-size:1.3rem; line-height:1;">⏳</span>
@@ -1095,15 +1095,18 @@
                     </li>
                     <li style="display:flex; align-items:start; gap:12px;">
                         <span style="font-size:1.3rem; line-height:1;">🌟</span>
-                        <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Năng Lực Cá Nhân
-                                (±15đ):</strong> Hệ thống phân tích lịch sử điểm để xác định Thế mạnh và Điểm yếu. Môn
-                            thuộc thế mạnh được thưởng (tối đa +15đ), môn điểm yếu sẽ bị phạt (tối đa -15đ).</div>
+                        <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Định hướng kỹ năng
+                                (+40đ):</strong> Môn thuộc đúng định hướng kỹ năng sinh viên đã chọn được cộng 40 điểm.</div>
                     </li>
                     <li style="display:flex; align-items:start; gap:12px;">
                         <span style="font-size:1.3rem; line-height:1;">🔄</span>
-                        <div><strong style="color:var(--red);display:block;margin-bottom:2px;">Học Lại (+50đ):</strong>
-                            Những môn bạn đã thi rớt sẽ được tự động cộng 50 điểm tuyệt đối để ưu tiên học lại sớm nhất
-                            có thể!</div>
+                        <div><strong style="color:var(--red);display:block;margin-bottom:2px;">Học Lại (+100đ):</strong>
+                            Môn đã rớt được cộng 100 điểm; nếu đã có trong kế hoạch học lại thì cộng thêm 30 điểm.</div>
+                    </li>
+                    <li style="display:flex; align-items:start; gap:12px;">
+                        <span style="font-size:1.3rem; line-height:1;">🧭</span>
+                        <div><strong style="color:var(--ink);display:block;margin-bottom:2px;">Vai trò môn học:</strong>
+                            Môn bắt buộc/cốt lõi +30đ, môn tự chọn +10đ và mỗi môn được mở khóa tiếp theo +5đ.</div>
                     </li>
                     <li
                         style="display:flex; align-items:start; gap:12px; margin-top:8px; padding-top:12px; border-top:1px dashed var(--hairline);">
@@ -1142,9 +1145,6 @@
         </div>
     </div>
 
-    <script>
-        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    </script>
     <script src="{{ asset('js/student-planner.js') }}"></script>
 </body>
 

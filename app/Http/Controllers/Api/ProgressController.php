@@ -113,7 +113,10 @@ class ProgressController extends Controller
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
-        // Lấy cảnh báo từ DB (do ProgressService tạo ra và lưu vào bảng warnings)
+        // Tính/sync cảnh báo trước, sau đó mới đọc DB để unread_count phản ánh ngay
+        // trong chính request đầu tiên.
+        $rawWarnings = $this->progressService->generateWarnings($userId);
+
         $dbWarnings = Warning::where('user_id', $userId)
             ->orderByDesc('created_at')
             ->limit(20)
@@ -125,9 +128,6 @@ class ProgressController extends Controller
                 'is_read'    => (bool) $w->is_read,
                 'created_at' => $w->created_at?->format('d/m/Y'),
             ]);
-
-        // Luôn tính lại cảnh báo theo thời gian thực từ ProgressService
-        $rawWarnings = $this->progressService->generateWarnings($userId);
 
         $severityMap = [
             'low_gpa'         => ['severity' => 'critical', 'title' => 'GPA thấp'],

@@ -32,10 +32,13 @@ class SchedulerService
         User $user,
         array $groupIds
     ): array {
-        $remaining   = $subjects->keyBy('id')->all();
-        $subjectMap  = $remaining;
-        $plannedSet  = array_flip($alreadyPlanned);
-        $failedSet   = array_flip($failedIds);
+        $remaining  = $subjects->keyBy('id')->all();
+        $subjectMap = $remaining;
+
+        // Phòng thủ ở tầng scheduler: môn rớt luôn phải được xem là chưa hoàn
+        // thành, kể cả caller vô tình truyền nó trong $alreadyPlanned.
+        $plannedSet = array_flip(array_diff($alreadyPlanned, $failedIds));
+        $failedSet  = array_flip($failedIds);
 
         $semIndex         = $startSem;
         $maxIterations    = $startSem + 24;
@@ -57,7 +60,7 @@ class SchedulerService
             $remainingCredits = array_sum(array_map(fn($s) => (int)($s->credits ?? 3), $remaining));
             $semestersLeft    = max(1, $targetSemesters - $semIndex + 1);
             $balancedCap      = (int) ceil($remainingCredits / $semestersLeft);
-            $hardMax          = max($tcPerSem, 24);
+            $hardMax          = 22;
             $effectiveCap     = min($hardMax, max(1, $balancedCap));
 
             $available = [];
@@ -177,8 +180,11 @@ class SchedulerService
                     if (!$req || $req === 'none') continue;               // chỉ môn chốt
                     if (!$this->canPlace($subject, $plannedSet, $isOdd, $groupIds, $subjects)) continue;
 
+                    $credits = (int) ($subject->credits ?? 3);
+                    if ($semCredits + $credits > $effectiveCap) continue;
+
                     $semSubjectIds[]  = $id;
-                    $semCredits      += (int)($subject->credits ?? 3);
+                    $semCredits      += $credits;
                     $plannedSet[$id]  = true;
                     unset($remaining[$id]);
                     $lateChanged      = true;                             // mở khoá môn chốt phụ thuộc nhau

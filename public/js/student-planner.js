@@ -5,6 +5,27 @@ let currentCourses = [];
 try { const saved = localStorage.getItem('current_courses'); if (saved) currentCourses = JSON.parse(saved); } catch (e) { }
 let syncLock = false;
 
+function getProgramTotalCredits(academicYear = null, programType = null) {
+    const year = academicYear || document.getElementById('academic_year')?.value || obData?.academic_year;
+    const type = programType || document.getElementById('program_type')?.value || obData?.program_type;
+    const total = Number(PROGRAM_CREDIT_TOTALS?.[`${year}|${type}`] || 0);
+
+    return total > 0 ? total : Number(TOTAL_CREDITS || 0);
+}
+
+function syncProgramTotalCredits(academicYear = null, programType = null) {
+    const total = getProgramTotalCredits(academicYear, programType);
+    if (total <= 0) return;
+
+    TOTAL_CREDITS = total;
+    window.TOTAL_CREDITS = total;
+
+    const statTotal = document.getElementById('stat-total-credits');
+    const dashTotal = document.getElementById('dash-credit-total');
+    if (statTotal) statTotal.textContent = total;
+    if (dashTotal) dashTotal.textContent = total;
+}
+
 // ─── Tab Switching ────────────────────────────────────────────────────────
 const TAB_TITLES = {
     dashboard: { title: 'Dashboard', sub: 'Tổng quan tiến độ học tập của bạn' },
@@ -110,8 +131,8 @@ function renderObBody() {
         const yearOpts = ACADEMIC_YEARS.map(y => `<option value="${y}" ${obData.academic_year === y ? 'selected' : ''}>${y}</option>`).join('');
         const typeOpts = PROGRAM_TYPES.map(t => `<option value="${t}" ${obData.program_type === t ? 'selected' : ''}>${t}</option>`).join('');
         body.innerHTML = `<div class="ob-form-grid">
-                <div class="ob-input-group"><label>Niên khóa</label><select class="ob-select" id="ob-academic-year" onchange="obData.academic_year=this.value"><option value="">-- Chọn niên khóa --</option>${yearOpts}</select></div>
-                <div class="ob-input-group"><label>Hệ đào tạo</label><select class="ob-select" id="ob-program-type" onchange="obData.program_type=this.value"><option value="">-- Chọn hệ đào tạo --</option>${typeOpts}</select></div>
+                <div class="ob-input-group"><label>Niên khóa</label><select class="ob-select" id="ob-academic-year" onchange="obData.academic_year=this.value;syncProgramTotalCredits(obData.academic_year,obData.program_type)"><option value="">-- Chọn niên khóa --</option>${yearOpts}</select></div>
+                <div class="ob-input-group"><label>Hệ đào tạo</label><select class="ob-select" id="ob-program-type" onchange="obData.program_type=this.value;syncProgramTotalCredits(obData.academic_year,obData.program_type)"><option value="">-- Chọn hệ đào tạo --</option>${typeOpts}</select></div>
             </div>`;
     } else if (obStep === 1) {
         const goals = [
@@ -123,7 +144,10 @@ function renderObBody() {
         ];
         body.innerHTML = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:4px 0;">
             ${goals.map(g => {
-                const tcEst = Math.ceil(130 / g.sems);
+                const tcEst = Math.min(
+                    22,
+                    Math.ceil(getProgramTotalCredits(obData.academic_year, obData.program_type) / g.sems)
+                );
                 const isSel = obData.target_semesters === g.sems;
                 return `<div onclick="obSelectGoal(${g.sems},this)"
                     style="padding:14px 12px; border-radius:10px; border:2px solid ${isSel ? 'var(--ink)' : 'var(--hairline)'}; background:${isSel ? 'var(--surface-card)' : 'var(--canvas)'}; cursor:pointer; text-align:center; transition:all 0.15s; user-select:none;"
@@ -186,6 +210,7 @@ function closeOnboarding() { document.getElementById('ob-overlay').classList.add
 function applyPreferencesToUI(data) {
     if (data.academic_year) document.getElementById('academic_year').value = data.academic_year;
     if (data.program_type) document.getElementById('program_type').value = data.program_type;
+    syncProgramTotalCredits(data.academic_year, data.program_type);
 
     Object.entries(data.grades).forEach(([sid, grade]) => { const input = document.getElementById(`grade-${sid}`); if (input) { input.value = grade; onGradeChange(parseInt(sid), input, true); } });
     document.getElementById('config-dot')?.remove();
@@ -1102,7 +1127,7 @@ function showDynamicModeModal(planId, evaluation) {
         title.textContent = 'Thành tích xuất sắc! 🚀';
         header.style.background = 'var(--success)';
         pros.innerHTML = '+ Ra trường sớm hơn dự kiến, tiết kiệm thời gian.<br>+ Giảm chi phí sinh hoạt dài hạn.';
-        cons.innerHTML = '− Khối lượng học tập mỗi kỳ khá nặng (lên đến 25 TC).<br>− Yêu cầu duy trì sự tập trung cao độ.';
+        cons.innerHTML = '− Khối lượng học tập mỗi kỳ khá nặng (tối đa 22 TC).<br>− Yêu cầu duy trì sự tập trung cao độ.';
     } else {
         title.textContent = 'Cảnh báo học thuật ⚠️';
         header.style.background = 'var(--brand-ochre)';
@@ -1154,8 +1179,20 @@ function showToast(msg, type = 'success') {
 // ═══════════════════════════════════════════════════════════════
 // EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════════
-document.getElementById('academic_year').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); fetchSuggestions(); });
-document.getElementById('program_type').addEventListener('change', () => { clearTimeout(saveTimer); showSaveIndicator('hide'); savePreferences(); fetchSuggestions(); });
+document.getElementById('academic_year').addEventListener('change', () => {
+    clearTimeout(saveTimer);
+    showSaveIndicator('hide');
+    syncProgramTotalCredits();
+    savePreferences();
+    fetchSuggestions();
+});
+document.getElementById('program_type').addEventListener('change', () => {
+    clearTimeout(saveTimer);
+    showSaveIndicator('hide');
+    syncProgramTotalCredits();
+    savePreferences();
+    fetchSuggestions();
+});
 
 
 
@@ -1170,6 +1207,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     else {
         if (prefs.academic_year) document.getElementById('academic_year').value = prefs.academic_year;
         if (prefs.program_type) document.getElementById('program_type').value = prefs.program_type;
+        syncProgramTotalCredits(prefs.academic_year, prefs.program_type);
+        window._selectedGoalSems = prefs.target_semesters || 8;
         const sfEl = document.getElementById('skill_focus');
         if (sfEl && prefs.skill_focus) sfEl.value = prefs.skill_focus;
 
@@ -2016,7 +2055,7 @@ function renderStudyPlan(plan) {
 
     // ── Tính trạng thái tốt nghiệp ────────────────────────────────
     const targetSems      = plan.target_semesters || plan.target_semester_count || 8;
-    const totalPlanned    = plan.semesters.length;
+    const totalPlanned    = Math.max(...plan.semesters.map(s => Number(s.semester_index) || 0));
     const completedSems   = plan.semesters.filter(s => s.subjects.length > 0 && s.subjects.every(ss => ss.is_completed)).length;
     const delta           = totalPlanned - targetSems;
 
@@ -2169,9 +2208,11 @@ function renderStudyPlan(plan) {
             const cardBg     = isCompleted ? '#f0fdf4' : (isFailed ? '#fef2f2' : 'var(--surface)');
             const borderColor= isCompleted ? '#86efac' : (isFailed ? '#fca5a5' : 'var(--hairline)');
 
-            // Môn ĐÃ CÓ ĐIỂM (đậu hoặc rớt) là lịch sử của lần học đó → KHÓA kéo.
-            // Muốn đổi kỳ cho môn rớt thì kéo dòng "Học lại" (chưa có điểm), không kéo bản gốc.
-            const draggableAttr = (!hasGrade && !isPast)
+            // Môn ĐÃ CÓ ĐIỂM ĐẠT là lịch sử của lần học đó → KHÓA kéo.
+            // Môn học lại đã rớt LẠI (is_retake && isFailed) vẫn cho kéo để sinh viên gom
+            // các lần rớt vào chung một kỳ thay vì bị khóa rải rác mỗi kỳ một môn.
+            const canDrag = !isPast && (!hasGrade || (ss.is_retake && isFailed));
+            const draggableAttr = canDrag
                 ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
                 : '';
 
@@ -2933,18 +2974,28 @@ async function adjustStudyPlan(planId, evaluation) {
     container.style.opacity = '0.3';
 
     try {
-        const res = await fetch('/api/v1/study-plans/adjust', {
+        const fallbackTc = evaluation.status === 'SPEED_UP'
+            ? 22
+            : (evaluation.gpa_level === 'critical' ? 12 : evaluation.gpa_level === 'weak' ? 15 : 17);
+        const recommendedTc = evaluation.recommended_tc_per_sem || fallbackTc;
+
+        const res = await fetch(`/api/v1/study-plans/${planId}/apply-advisory`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': CSRF_TOKEN,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ study_plan_id: planId, evaluation: evaluation })
+            body: JSON.stringify({
+                tc_per_sem: recommendedTc,
+                redistribute: true,
+                estimated_semesters: evaluation.suggested_sems || null,
+            })
         });
         if (!res.ok) throw new Error('API error');
         const resData = await res.json();
         if (resData.success && resData.data) {
+            window.currentActivePlan = resData.data;
             renderStudyPlan(resData.data);
             showToast('Đã tự động cập nhật lại lộ trình! ✨', 'success');
             fetchSavedPlansList();
@@ -3566,11 +3617,13 @@ function renderAdvisoryPanel(data) {
             <strong style="font-size:0.82rem; color:${c.text};">${dir} ${data.recommended_tc_per_sem} TC</strong>
         </div>`;
         if (grad) {
-            const delta = Math.abs(data.semesters_delta);
+            const delta = Number(data.semesters_delta || 0);
+            const deltaAbs = Math.abs(delta);
+            const timing = delta < 0 ? 'sớm hơn' : 'trễ hơn';
             statsHtml += `
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:0.8rem; color:#64748b;">Tốt nghiệp dự kiến</span>
-            <strong style="font-size:0.82rem; color:${data.recommend==='increase'&&delta>0?'#059669':data.recommend==='decrease'&&delta>0?'#d97706':'inherit'};">HK ${grad} ${delta > 0 ? `(${data.recommend==='increase'?'sớm hơn':'trễ hơn'} ${delta} kỳ)` : '(đúng mục tiêu)'}</strong>
+            <strong style="font-size:0.82rem; color:${delta < 0 ? '#059669' : delta > 0 ? '#d97706' : 'inherit'};">HK ${grad} ${delta !== 0 ? `(${timing} ${deltaAbs} kỳ)` : '(đúng mục tiêu)'}</strong>
         </div>`;
         }
     }
@@ -3637,7 +3690,9 @@ function showAdvisoryModal(data) {
 
     if (data.recommend !== 'maintain') {
         const dir = data.recommend === 'increase' ? 'tăng' : 'giảm';
-        const delta = Math.abs(data.semesters_delta);
+        const delta = Number(data.semesters_delta || 0);
+        const deltaAbs = Math.abs(delta);
+        const timing = delta < 0 ? 'sớm hơn' : 'trễ hơn';
         const grad  = data.new_graduation_estimate;
         body += `
             <div style="background:var(--surface-soft); border-radius:10px; padding:14px 16px; margin-bottom:14px; border:1px solid var(--hairline);">
@@ -3651,8 +3706,8 @@ function showAdvisoryModal(data) {
                 </div>
                 ${grad ? `<div style="display:flex; justify-content:space-between;">
                     <span style="color:var(--muted); font-size:0.85rem;">Tốt nghiệp dự kiến</span>
-                    <strong style="color:${data.recommend==='increase'&&delta>0?'#059669':data.recommend==='decrease'&&delta>0?'#d97706':'inherit'};">
-                        Học kỳ ${grad} ${delta > 0 ? `(${data.recommend==='increase'?'sớm hơn':'trễ hơn'} ${delta} kỳ)` : '(đúng mục tiêu)'}</strong>
+                    <strong style="color:${delta < 0 ? '#059669' : delta > 0 ? '#d97706' : 'inherit'};">
+                        Học kỳ ${grad} ${delta !== 0 ? `(${timing} ${deltaAbs} kỳ)` : '(đúng mục tiêu)'}</strong>
                 </div>` : ''}
             </div>
             <p style="font-size:0.85rem; color:var(--muted);">Chọn cách áp dụng đề xuất:</p>
@@ -3682,6 +3737,7 @@ function closeAdvisoryModal() {
 async function applyAdvisoryAction(redistribute) {
     if (!window._advisoryData || !window.currentActivePlan) return;
     const tc = window._advisoryData.recommended_tc_per_sem;
+    const estimatedSemesters = window._advisoryData.new_graduation_estimate;
     const loader = document.getElementById('planner-loader');
     if (loader) loader.style.display = 'block';
     closeAdvisoryModal();
@@ -3691,10 +3747,15 @@ async function applyAdvisoryAction(redistribute) {
         const res = await fetch(`/api/v1/study-plans/${window.currentActivePlan.id}/apply-advisory`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json' },
-            body: JSON.stringify({ tc_per_sem: tc, redistribute })
+            body: JSON.stringify({
+                tc_per_sem: tc,
+                redistribute,
+                estimated_semesters: estimatedSemesters,
+            })
         });
         const resData = await res.json();
         if (resData.success && resData.data) {
+            window.currentActivePlan = resData.data;
             renderStudyPlan(resData.data);
             showToast(redistribute ? `Đã rải lại lộ trình với ${tc} TC/kỳ` : `Đã cập nhật giới hạn ${tc} TC/kỳ`, 'success');
         } else {

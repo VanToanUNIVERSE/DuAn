@@ -217,9 +217,7 @@
             <div>
                 <div style="font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700;">Tổng tín chỉ</div>
                 @php 
-                    $totalCredits = \App\Models\CurriculumSubject::where('curriculum_framework_id', $curriculumFramework->id)
-                        ->join('subjects', 'curriculum_subject.subject_id', '=', 'subjects.id')
-                        ->sum('subjects.credits');
+                    $totalCredits = $curriculumFramework->calculatedTotalCredits();
                 @endphp
                 <div style="font-size:15px; font-weight:700;">{{ $totalCredits }} TC</div>
             </div>

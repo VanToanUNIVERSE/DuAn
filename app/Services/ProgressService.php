@@ -51,7 +51,7 @@ class ProgressService
                 ->first();
                 
             if ($program && $program->curriculumFrameworks->isNotEmpty()) {
-                $totalRequiredCredits = $program->curriculumFrameworks->first()->total_credits ?? 140;
+                $totalRequiredCredits = $program->curriculumFrameworks->first()->calculatedTotalCredits();
             }
         }
         // Guard tránh division by zero nếu total_credits = 0 trong DB

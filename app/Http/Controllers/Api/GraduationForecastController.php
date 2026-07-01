@@ -40,8 +40,8 @@ class GraduationForecastController extends Controller
 
         // Tổng số kỳ mục tiêu
         $targetSems = 8;
-        if ($activePlan?->target_semester_count) {
-            $targetSems = $activePlan->target_semester_count;
+        if ($activePlan?->target_semesters || $activePlan?->target_semester_count) {
+            $targetSems = $activePlan->target_semesters ?? $activePlan->target_semester_count;
         } else {
             $user = User::find($userId);
             if ($user?->pref_graduation_semester) {
@@ -53,11 +53,18 @@ class GraduationForecastController extends Controller
 
         $completedSems   = $progress['completed_semesters'];
         $remainingCredits = $progress['remaining_credits'];
-        $avgPerSem       = max(1, $progress['avg_credits_per_sem']);
+        $avgPerSem       = (float) $progress['avg_credits_per_sem'];
         $gpa             = $progress['current_gpa'];
         $gpaTrend        = $progress['gpa_trend'] ?? 'stable';
 
         // ── 3 Kịch bản dự báo ──────────────────────────────────────────────
+
+        // Sinh viên chưa có lịch sử không có "tốc độ hiện tại". Dùng tải tín chỉ
+        // cần thiết theo mục tiêu thay vì ép 0 thành 1 TC/kỳ (từng gây dự báo tới
+        // năm 2086 cho tài khoản mới).
+        if ($completedSems === 0 || $avgPerSem <= 0) {
+            $avgPerSem = min(22, max(1, $remainingCredits / max(1, $targetSems)));
+        }
 
         // Lạc quan: tăng 25% tốc độ, tối đa 22 TC/kỳ
         $optimisticPerSem = min(22, $avgPerSem * 1.25);

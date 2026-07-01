@@ -167,6 +167,29 @@ class AcademicEvaluationService
             ),
         };
 
+        // Khi đề xuất đã chạm trần 10 học kỳ, tải an toàn theo ma trận (12/14/15/17)
+        // có thể không đủ để hoàn thành số TC còn lại. Nâng mức đề xuất lên đúng bình
+        // quân tối thiểu để kế hoạch sau khi rải không hiển thị trần thấp hơn tải thật.
+        if (($result['recommended_tc_per_sem'] ?? null)
+            && ($result['suggested_sems'] ?? 0) >= 10) {
+            $slotsAtMaxTarget = max(1, 10 - $currentSem + 1);
+            $minimumAtMaxTarget = (int) ceil($remainingCredits / $slotsAtMaxTarget);
+
+            if ($minimumAtMaxTarget > $result['recommended_tc_per_sem']) {
+                $oldRecommended = $result['recommended_tc_per_sem'];
+                $result['recommended_tc_per_sem'] = min(22, $minimumAtMaxTarget);
+                if ($minimumAtMaxTarget <= 22) {
+                    $result['message'] = str_replace(
+                        "~{$oldRecommended} TC/kỳ",
+                        "~{$minimumAtMaxTarget} TC/kỳ",
+                        $result['message']
+                    );
+                } else {
+                    $result['message'] .= ' Ngay cả ở mức 22 TC/kỳ, mục tiêu 10 học kỳ có thể không khả thi; hệ thống sẽ hiển thị học kỳ phát sinh.';
+                }
+            }
+        }
+
         // Gắn phân tích định hướng kỹ năng vào kết quả
         $result['skill_focus']    = $skillFocus;
         $result['skill_analysis'] = $skillAnalysis;
@@ -196,7 +219,7 @@ class AcademicEvaluationService
         // Đủ điều kiện tăng tốc khi pass rate cao và GPA xuất sắc
         if ($gpa >= 8.0 && $passRate >= 0.9) {
             $fastRemainingSems = max(3, (int) ceil($remainingCredits / 22));
-            $newTargetSems     = max(5, $currentSem + $fastRemainingSems - 1);
+            $newTargetSems     = max(6, min(10, $currentSem + $fastRemainingSems - 1));
 
             if ($newTargetSems < $currentTargetSems) {
                 return $this->buildResult(
@@ -237,7 +260,7 @@ class AcademicEvaluationService
     ): array {
         // Tính số kỳ cần thiết nếu tăng lên 20 TC/kỳ
         $newRemainingSems = (int) ceil($remainingCredits / 20);
-        $newTargetSems    = $currentSem + $newRemainingSems - 1;
+        $newTargetSems    = max(6, min(10, $currentSem + $newRemainingSems - 1));
 
         return $this->buildResult(
             'SPEED_UP',
@@ -262,7 +285,7 @@ class AcademicEvaluationService
     ): array {
         // Tính số kỳ cần thiết với 17 TC/kỳ (cân bằng)
         $balancedSems  = (int) ceil($remainingCredits / 17);
-        $newTargetSems = $currentSem + $balancedSems - 1;
+        $newTargetSems = max(6, min(10, $currentSem + $balancedSems - 1));
         $projDisplay   = (int) round($projectedCreditsPerSem);
 
         if ($newTargetSems > $currentTargetSems) {
@@ -302,7 +325,7 @@ class AcademicEvaluationService
         int $currentSem, int $currentTargetSems, string $currentMode
     ): array {
         $safeRemainingSems = (int) ceil($remainingCredits / 14);
-        $newTargetSems     = $currentSem + $safeRemainingSems - 1;
+        $newTargetSems     = max(6, min(10, $currentSem + $safeRemainingSems - 1));
 
         $failNote = $failedCount > 0
             ? " Đặc biệt cần ưu tiên học lại {$failedCount} môn đã rớt."
@@ -345,7 +368,7 @@ class AcademicEvaluationService
     ): array {
         // Cân bằng: ~15 TC/kỳ
         $balancedSems  = (int) ceil($remainingCredits / 15);
-        $newTargetSems = $currentSem + $balancedSems - 1;
+        $newTargetSems = max(6, min(10, $currentSem + $balancedSems - 1));
 
         $failNote = $failedCount > 0
             ? " Ưu tiên học lại {$failedCount} môn đã rớt trước tiên."
@@ -374,7 +397,7 @@ class AcademicEvaluationService
         int $currentSem, int $currentTargetSems, string $currentMode
     ): array {
         $safeRemainingSems = (int) ceil($remainingCredits / 12);
-        $newTargetSems     = $currentSem + $safeRemainingSems - 1;
+        $newTargetSems     = max(6, min(10, $currentSem + $safeRemainingSems - 1));
 
         $failNote = $failedCount >= 3
             ? " ⚠️ Bạn đang nợ {$failedCount} môn — hãy ưu tiên học lại ngay!"
@@ -403,7 +426,7 @@ class AcademicEvaluationService
         int $currentSem, int $currentTargetSems, string $currentMode, float $projectedCreditsPerSem
     ): array {
         $safeRemainingSems = (int) ceil($remainingCredits / 12);
-        $newTargetSems     = $currentSem + $safeRemainingSems - 1;
+        $newTargetSems     = max(6, min(10, $currentSem + $safeRemainingSems - 1));
 
         $failNote = $failedCount >= 3
             ? " Đặc biệt nghiêm trọng: bạn đang nợ {$failedCount} môn."
@@ -439,6 +462,18 @@ class AcademicEvaluationService
         string $gpaLevel,
         string $progressLevel
     ): array {
+        $recommendedTcPerSem = match ($status) {
+            'SPEED_UP' => $progressLevel === 'ontrack' ? 22 : 20,
+            'REDUCE'   => 14,
+            'REPLAN'   => match ($gpaLevel) {
+                'average' => 17,
+                'weak'    => $progressLevel === 'ontrack' ? 14 : 15,
+                'critical'=> 12,
+                default   => null,
+            },
+            default => null,
+        };
+
         return [
             'status'           => $status,        // KEEP | REPLAN | SPEED_UP | REDUCE
             'message'          => $message,
@@ -448,6 +483,7 @@ class AcademicEvaluationService
             'gpa'              => $gpa,
             'gpa_level'        => $gpaLevel,       // good | average | weak | critical
             'progress_level'   => $progressLevel,  // ontrack | behind
+            'recommended_tc_per_sem' => $recommendedTcPerSem,
         ];
     }
 }

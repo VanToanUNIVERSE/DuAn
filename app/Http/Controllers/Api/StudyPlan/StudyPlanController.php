@@ -85,7 +85,7 @@ class StudyPlanController extends Controller
         $plans = StudyPlan::where('user_id', Auth::id())
             ->where('is_saved', true)
             ->orderByDesc('updated_at')
-            ->get(['id', 'name', 'mode', 'target_semester_count', 'is_active', 'updated_at']);
+            ->get(['id', 'name', 'mode', 'target_semester_count', 'target_semesters', 'is_active', 'updated_at']);
 
         return response()->json(['success' => true, 'data' => $plans]);
     }
