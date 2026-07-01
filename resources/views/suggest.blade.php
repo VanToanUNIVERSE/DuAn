@@ -976,6 +976,9 @@
                     } else {
                         drawer.style.right = '0px';
                         if (overlay) { overlay.style.opacity = '1'; overlay.style.pointerEvents = 'auto'; }
+                        // Luôn làm mới theo tc_per_sem hiện tại; tránh giữ danh sách
+                        // được tính từ trước khi sinh viên đổi mức tải tín chỉ.
+                        fetchSuggestions();
                     }
                 }
 

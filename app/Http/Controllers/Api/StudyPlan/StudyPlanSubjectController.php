@@ -13,6 +13,7 @@ use App\Models\StudyPlan;
 use App\Models\StudyPlanSemester;
 use App\Models\StudyPlanSubject;
 use App\Models\Subject;
+use App\Models\SubjectRelation;
 use App\Models\TrainingProgram;
 use App\Models\User;
 use App\Models\UserGrade;
@@ -30,6 +31,9 @@ class StudyPlanSubjectController extends Controller
     {
         $userId      = Auth::id();
         $subjectId   = (int) $request->input('subject_id');
+        $planSubjectId = $request->filled('plan_subject_id')
+            ? (int) $request->input('plan_subject_id')
+            : null;
         $targetSemIdx = (int) $request->input('target_semester_index');
 
         $plan = StudyPlan::with(['semesters.subjects.subject.prerequisites', 'semesters.subjects.subject.corequisites'])
@@ -44,9 +48,20 @@ class StudyPlanSubjectController extends Controller
         foreach ($plan->semesters as $sem) {
             if ($sem->semester_index === $targetSemIdx) $targetSemId = $sem->id;
             foreach ($sem->subjects as $ss) {
-                $subjectSemMap[$ss->subject_id] = $sem->semester_index;
-                if ($ss->subject_id === $subjectId && !$sourcePlanSubject) {
+                if (!isset($subjectSemMap[$ss->subject_id])
+                    || $sem->semester_index < $subjectSemMap[$ss->subject_id]) {
+                    $subjectSemMap[$ss->subject_id] = $sem->semester_index;
+                }
+
+                if ($planSubjectId && $ss->id === $planSubjectId) {
                     $sourcePlanSubject = $ss;
+                } elseif (!$planSubjectId && $ss->subject_id === $subjectId) {
+                    // Client cũ chưa gửi row id: ưu tiên đúng dòng học lại, sau đó
+                    // mới tới dòng chưa có điểm; không mặc định lấy bản lịch sử đầu tiên.
+                    $shouldPrefer = !$sourcePlanSubject
+                        || ($ss->is_retake && !$sourcePlanSubject->is_retake)
+                        || ($ss->subject_grade === null && $sourcePlanSubject->subject_grade !== null);
+                    if ($shouldPrefer) $sourcePlanSubject = $ss;
                 }
             }
         }
@@ -54,15 +69,30 @@ class StudyPlanSubjectController extends Controller
         if (!$sourcePlanSubject) {
             return response()->json(['error' => 'Môn không tồn tại trong kế hoạch.'], 404);
         }
-        // Môn đã có điểm (đậu HOẶC rớt) là lịch sử lần học đó — không cho di chuyển.
-        // Muốn đổi kỳ cho môn rớt: kéo dòng "Học lại" (chưa có điểm) thay vì bản gốc.
-        if ($sourcePlanSubject->subject_grade !== null) {
+        if ($sourcePlanSubject->subject_id !== $subjectId) {
+            return response()->json(['error' => 'Dòng kế hoạch không khớp với môn được kéo.'], 422);
+        }
+
+        // Bản lịch sử gốc có điểm luôn bị khóa. Riêng một lần HỌC LẠI đã rớt
+        // vẫn được phép đổi kỳ để sinh viên sắp xếp lần học tiếp theo.
+        $isFailedRetake = $sourcePlanSubject->is_retake
+            && $sourcePlanSubject->subject_grade !== null
+            && $sourcePlanSubject->subject_grade < 5.0;
+        if ($sourcePlanSubject->subject_grade !== null && !$isFailedRetake) {
             return response()->json([
                 'error' => 'Không thể di chuyển môn đã có điểm — đây là lịch sử lần học. Hãy kéo dòng "Học lại" nếu muốn đổi học kỳ.'
             ], 422);
         }
 
-        foreach ($sourcePlanSubject->subject->prerequisites ?? [] as $prereq) {
+        if ($sourcePlanSubject->is_retake
+            && $sourcePlanSubject->original_attempt_sem
+            && $targetSemIdx <= $sourcePlanSubject->original_attempt_sem) {
+            return response()->json([
+                'error' => "Học lại chỉ được xếp sau lần học gốc ở Học kỳ {$sourcePlanSubject->original_attempt_sem}."
+            ], 422);
+        }
+
+        foreach ($sourcePlanSubject->is_retake ? [] : ($sourcePlanSubject->subject->prerequisites ?? []) as $prereq) {
             $prereqSem = $subjectSemMap[$prereq->id] ?? null;
             if ($prereqSem === null) {
                 $passed = UserGrade::where('user_id', $userId)
@@ -86,34 +116,76 @@ class StudyPlanSubjectController extends Controller
             ])->id;
         }
 
+        $sourceSemIdx = (int) ($plan->semesters
+            ->firstWhere('id', $sourcePlanSubject->study_plan_semester_id)
+            ?->semester_index ?? 0);
         $sourcePlanSubject->update(['study_plan_semester_id' => $targetSemId]);
 
-        // Kéo corequisites theo (BFS)
-        $plan->load('semesters.subjects.subject.corequisites');
-        $planSubjectMap = [];
+        // Kéo corequisites theo (BFS). Dùng quan hệ hai chiều và chọn đúng phiên
+        // bản retake ở cùng kỳ nguồn, tránh kéo nhầm bản lịch sử gốc.
+        $plan->load('semesters.subjects.subject');
+        $planSubjectRowsBySubject = [];
         foreach ($plan->semesters as $sem) {
             foreach ($sem->subjects as $ss) {
-                $planSubjectMap[$ss->subject_id] = $ss;
+                $planSubjectRowsBySubject[$ss->subject_id][] = [
+                    'row' => $ss,
+                    'semester_index' => (int) $sem->semester_index,
+                ];
             }
         }
+
+        $coreqAdjacency = [];
+        $planSubjectIds = array_keys($planSubjectRowsBySubject);
+        $coreqRelations = SubjectRelation::where('type', 'corequisite')
+            ->where(function ($query) use ($planSubjectIds) {
+                $query->whereIn('subject_id', $planSubjectIds)
+                    ->orWhereIn('related_subject_id', $planSubjectIds);
+            })
+            ->get(['subject_id', 'related_subject_id']);
+        foreach ($coreqRelations as $relation) {
+            $left  = (int) $relation->subject_id;
+            $right = (int) $relation->related_subject_id;
+            $coreqAdjacency[$left][]  = $right;
+            $coreqAdjacency[$right][] = $left;
+        }
+        $subjectNames = Subject::whereIn(
+            'id',
+            array_unique(array_merge($planSubjectIds, ...array_values($coreqAdjacency ?: [[]])))
+        )->pluck('name', 'id');
 
         $movedCoreqNames = [];
         $coQueue  = [$subjectId];
         $coPulled = [$subjectId => true];
 
         while (!empty($coQueue)) {
-            $checkSs = $planSubjectMap[array_shift($coQueue)] ?? null;
-            if (!$checkSs) continue;
+            $checkId = (int) array_shift($coQueue);
 
-            foreach ($checkSs->subject->corequisites ?? [] as $coreq) {
-                if (isset($coPulled[$coreq->id])) continue;
-                $coPulled[$coreq->id] = true;
-                $coreqSs = $planSubjectMap[$coreq->id] ?? null;
-                if (!$coreqSs || $coreqSs->is_completed) continue;
+            foreach ($coreqAdjacency[$checkId] ?? [] as $coreqId) {
+                $coreqId = (int) $coreqId;
+                if (isset($coPulled[$coreqId])) continue;
+                $coPulled[$coreqId] = true;
+
+                $candidates = collect($planSubjectRowsBySubject[$coreqId] ?? [])
+                    ->filter(function ($candidate) use ($sourcePlanSubject) {
+                        $row = $candidate['row'];
+                        if ($row->is_completed) return false;
+
+                        return $sourcePlanSubject->is_retake
+                            ? (bool) $row->is_retake
+                            : (!$row->is_retake && $row->subject_grade === null);
+                    })
+                    ->sortByDesc(function ($candidate) use ($sourceSemIdx) {
+                        $row = $candidate['row'];
+
+                        return ($candidate['semester_index'] === $sourceSemIdx ? 100 : 0)
+                            + ($row->subject_grade === null ? 10 : 5);
+                    });
+                $coreqSs = $candidates->first()['row'] ?? null;
+                if (!$coreqSs) continue;
 
                 $coreqSs->update(['study_plan_semester_id' => $targetSemId]);
-                $movedCoreqNames[] = $coreq->name;
-                $coQueue[]         = $coreq->id;
+                $movedCoreqNames[] = $subjectNames[$coreqId] ?? "Môn #{$coreqId}";
+                $coQueue[]         = $coreqId;
             }
         }
 
@@ -141,18 +213,123 @@ class StudyPlanSubjectController extends Controller
         $userId  = Auth::id();
         $plan    = StudyPlan::where('id', $request->input('study_plan_id'))
             ->where('user_id', $userId)->firstOrFail();
+        $creditCap = max(1, min(22, (int) ($plan->tc_per_sem ?? 18)));
+        $selection = $this->limitSuggestionsToCreditCap(
+            $request->input('subject_ids'),
+            $creditCap,
+            $userId
+        );
+
+        if (empty($selection['ids'])) {
+            return response()->json([
+                'success' => false,
+                'message' => "Không có cụm môn phù hợp trong giới hạn {$creditCap} TC/kỳ.",
+            ], 422);
+        }
 
         $updated = $this->planService->redistributeFrom(
             $plan,
             (int) $request->input('target_semester_index'),
-            $request->input('subject_ids')
+            $selection['ids']
         );
+
+        $message = "Đã áp dụng {$selection['credits']}/{$creditCap} TC và rải lại lộ trình.";
+        if ($selection['skipped_count'] > 0) {
+            $message .= " {$selection['skipped_count']} môn được chuyển sang kỳ sau để không vượt giới hạn.";
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã áp dụng gợi ý và rải lại lộ trình.',
+            'message' => $message,
+            'applied_subject_ids' => $selection['ids'],
+            'applied_credits' => $selection['credits'],
+            'credit_limit' => $creditCap,
             'data'    => $this->attachGrades($updated, $userId),
         ]);
+    }
+
+    /**
+     * Chọn môn theo đúng trần tín chỉ. Quan hệ song hành được gom thành thành phần
+     * liên thông để không bao giờ ghim môn lý thuyết mà đẩy môn thực hành sang kỳ khác.
+     *
+     * @return array{ids: int[], credits: int, skipped_count: int}
+     */
+    private function limitSuggestionsToCreditCap(array $requestedIds, int $creditCap, int $userId): array
+    {
+        $requestedIds = array_values(array_unique(array_map('intval', $requestedIds)));
+        $relations = SubjectRelation::where('type', 'corequisite')
+            ->get(['subject_id', 'related_subject_id']);
+
+        $adjacency = [];
+        foreach ($relations as $relation) {
+            $left  = (int) $relation->subject_id;
+            $right = (int) $relation->related_subject_id;
+            $adjacency[$left][]  = $right;
+            $adjacency[$right][] = $left;
+        }
+
+        $allIds = array_values(array_unique(array_merge(
+            $requestedIds,
+            array_keys($adjacency),
+            ...array_values($adjacency)
+        )));
+        $creditMap = Subject::whereIn('id', $allIds)->pluck('credits', 'id');
+        $passedIds = UserGrade::where('user_id', $userId)
+            ->get()
+            ->filter(fn ($grade) =>
+                ($grade->grade !== null && $grade->grade >= 5.0)
+                || in_array($grade->status, ['passed', 'pass'], true)
+            )
+            ->pluck('subject_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
+        $selected = [];
+        $selectedSet = [];
+        $considered = [];
+        $usedCredits = 0;
+
+        foreach ($requestedIds as $requestedId) {
+            if (isset($considered[$requestedId])) continue;
+
+            $component = [];
+            $queue = [$requestedId];
+            while ($queue) {
+                $id = (int) array_shift($queue);
+                if (isset($component[$id])) continue;
+                $component[$id] = true;
+                foreach ($adjacency[$id] ?? [] as $neighbor) {
+                    $queue[] = (int) $neighbor;
+                }
+            }
+
+            foreach (array_keys($component) as $id) {
+                $considered[$id] = true;
+            }
+
+            $bundleIds = array_values(array_filter(
+                array_keys($component),
+                fn ($id) => !$passedIds->has((int) $id) && !isset($selectedSet[(int) $id])
+            ));
+            $bundleCredits = array_sum(array_map(
+                fn ($id) => (int) ($creditMap[$id] ?? 3),
+                $bundleIds
+            ));
+
+            if ($bundleIds && $usedCredits + $bundleCredits <= $creditCap) {
+                foreach ($bundleIds as $id) {
+                    $selected[] = (int) $id;
+                    $selectedSet[(int) $id] = true;
+                }
+                $usedCredits += $bundleCredits;
+            }
+        }
+
+        return [
+            'ids' => $selected,
+            'credits' => $usedCredits,
+            'skipped_count' => count(array_diff($requestedIds, $selected)),
+        ];
     }
 
     // POST /api/v1/study-plans/add-retake

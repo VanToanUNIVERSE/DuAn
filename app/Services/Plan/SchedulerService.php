@@ -50,18 +50,25 @@ class SchedulerService
 
             // ── Trần động: rải đều TC còn lại trên số học kỳ còn lại trong mục tiêu ──
             // balancedCap = TC còn lại / số kỳ còn lại = mức chia đều lý tưởng cho đúng
-            // số kỳ mục tiêu. Đây là trần CHÍNH, KHÔNG kẹp bởi tcPerSem:
+            // số kỳ mục tiêu. Tuy nhiên tcPerSem vẫn là TRẦN người dùng đã chọn:
             //  - Kỳ đầu bị tiên quyết chặn → nạp thiếu → các kỳ sau balancedCap tự tăng
-            //    để "đuổi kịp", nhờ vậy tổng vẫn khớp mục tiêu, không tràn sang kỳ dư.
-            //  - Nếu kẹp min(tcPerSem, …) như trước: khi tcPerSem thấp, trần không tăng nổi
-            //    → lịch tràn quá số kỳ mục tiêu, kỳ cuối bị đói TC (bug lệch tín chỉ).
-            // tcPerSem giờ chỉ dùng để CHỌN số kỳ mục tiêu (fast/normal/slow), không kẹp trần.
-            // hardMax chặn trên để tránh nhồi quá tải khi mục tiêu đặt quá ngắn.
+            //    để "đuổi kịp" nhưng không được vượt giới hạn hiện hành.
+            //  - Nếu giới hạn thấp khiến mục tiêu không khả thi, kế hoạch phải phát sinh thêm
+            //    học kỳ thay vì âm thầm nhồi 22 TC vào một kỳ 15 TC.
+            // hardMax là chốt an toàn toàn hệ thống.
             $remainingCredits = array_sum(array_map(fn($s) => (int)($s->credits ?? 3), $remaining));
             $semestersLeft    = max(1, $targetSemesters - $semIndex + 1);
             $balancedCap      = (int) ceil($remainingCredits / $semestersLeft);
             $hardMax          = 22;
-            $effectiveCap     = min($hardMax, max(1, $balancedCap));
+            $configuredCap    = min($hardMax, max(1, $tcPerSem));
+            // Không để phép chia đều tạo trần 1–2 TC khiến ngay cả một môn/khối
+            // thông thường cũng không vừa. Mốc 6 TC bao phủ môn lớn nhất và các
+            // nhóm tự chọn 6 TC của chương trình hiện tại.
+            $minimumUsableCap = min(6, $configuredCap);
+            $effectiveCap     = min(
+                $configuredCap,
+                max($minimumUsableCap, max(1, $balancedCap))
+            );
 
             $available = [];
             foreach ($remaining as $id => $subject) {
@@ -77,8 +84,6 @@ class SchedulerService
                 if ($consecutiveEmpty >= 2) break;
                 continue;
             }
-            $consecutiveEmpty = 0;
-
             usort($available, fn($a, $b) =>
                 $this->computePriority($b, $failedSet, $groupIds, $semIndex, $user)
                 <=> $this->computePriority($a, $failedSet, $groupIds, $semIndex, $user)
@@ -92,43 +97,66 @@ class SchedulerService
                 // cách môn song hành của môn xử lý trước đó → bỏ qua để không xếp LẶP.
                 if (isset($plannedSet[$subject->id]) || !isset($remaining[$subject->id])) continue;
 
-                $credits = (int)($subject->credits ?? 3);
-
-                // Gom các môn song hành TRỰC TIẾP (cùng chẵn/lẻ) sẽ bị kéo theo ngay,
-                // để tính ĐỦ tín chỉ vào trần — tránh kỳ đầu vượt trần rồi đói kỳ cuối.
-                $coreqIds     = [];
-                $coreqCredits = 0;
-                foreach ($subject->corequisites ?? [] as $coreq) {
-                    if (!isset($remaining[$coreq->id]) || isset($plannedSet[$coreq->id])) continue;
-                    $co        = $remaining[$coreq->id];
-                    $coOffered = $co->offered_in ?? null;
-                    if ($isOdd && $coOffered === '2') continue;   // môn TH chỉ mở kỳ chẵn
-                    if (!$isOdd && $coOffered === '1') continue;   // môn TH chỉ mở kỳ lẻ
-                    $coreqIds[]    = $coreq->id;
-                    $coreqCredits += (int)($co->credits ?? 3);
-                }
-
-                if ($semCredits + $credits + $coreqCredits <= $effectiveCap) {
-                    $semSubjectIds[]          = $subject->id;
-                    $semCredits              += $credits + $coreqCredits; // tính LUÔN môn song hành
-                    $plannedSet[$subject->id] = true;
-                    unset($remaining[$subject->id]);
-
-                    foreach ($coreqIds as $cid) {                  // kéo môn song hành vào cùng kỳ ngay
-                        $semSubjectIds[]  = $cid;
-                        $plannedSet[$cid] = true;
-                        unset($remaining[$cid]);
+                // Các phương án ĐÃ CHỌN trong cùng nhóm tự chọn là một khối tín chỉ:
+                // nếu kỳ này không chứa đủ cả khối thì dời nguyên khối sang kỳ sau.
+                $bundleIds = [$subject->id];
+                $electiveGroupId = $subject->elective_group_id ?? null;
+                $bundleReady = true;
+                if ($electiveGroupId) {
+                    foreach ($remaining as $peerId => $peer) {
+                        if (($peer->elective_group_id ?? null) != $electiveGroupId) continue;
+                        if (!$this->canPlace($peer, $plannedSet, $isOdd, $groupIds, $subjects)) {
+                            $bundleReady = false;
+                            break;
+                        }
+                        $bundleIds[] = (int) $peerId;
                     }
                 }
+                if (!$bundleReady) continue;
+
+                // Gom môn song hành trực tiếp của TẤT CẢ môn trong khối.
+                $coreqIds = [];
+                foreach (array_unique($bundleIds) as $bundleId) {
+                    $bundleSubject = $remaining[$bundleId] ?? null;
+                    if (!$bundleSubject) continue;
+                    foreach ($bundleSubject->corequisites ?? [] as $coreq) {
+                        if (!isset($remaining[$coreq->id]) || isset($plannedSet[$coreq->id])) continue;
+                        $coOffered = $remaining[$coreq->id]->offered_in ?? null;
+                        if (($isOdd && $coOffered === '2') || (!$isOdd && $coOffered === '1')) {
+                            $bundleReady = false;
+                            break 2;
+                        }
+                        $coreqIds[] = (int) $coreq->id;
+                    }
+                }
+                if (!$bundleReady) continue;
+
+                $atomicIds = array_values(array_unique(array_merge($bundleIds, $coreqIds)));
+                $atomicCredits = array_sum(array_map(
+                    fn ($id) => (int) ($remaining[$id]->credits ?? 3),
+                    $atomicIds
+                ));
+
+                if ($semCredits + $atomicCredits <= $effectiveCap) {
+                    foreach ($atomicIds as $id) {
+                        $semSubjectIds[] = $id;
+                        $plannedSet[$id] = true;
+                        unset($remaining[$id]);
+                    }
+                    $semCredits += $atomicCredits;
+                }
             }
 
-            // Tránh vòng lặp vô tận: nếu không môn nào vừa, nhét môn đầu tiên
+            // Không phá khối tự chọn chỉ để tránh vòng lặp. Hai kỳ liên tiếp không
+            // xếp được sẽ được assertCompleteSchedule chặn và rollback toàn kế hoạch.
             if (empty($semSubjectIds)) {
-                $first                  = reset($available);
-                $semSubjectIds[]        = $first->id;
-                $plannedSet[$first->id] = true;
-                unset($remaining[$first->id]);
+                Log::warning("[Planner] Không có khối môn nào vừa trần ở sem={$semIndex}, user={$user->id}.");
+                $consecutiveEmpty++;
+                $semIndex++;
+                if ($consecutiveEmpty >= 2) break;
+                continue;
             }
+            $consecutiveEmpty = 0;
 
             // ── Corequisite enforcement (BFS) ──────────────────────────────────
             $coQueue  = $semSubjectIds;

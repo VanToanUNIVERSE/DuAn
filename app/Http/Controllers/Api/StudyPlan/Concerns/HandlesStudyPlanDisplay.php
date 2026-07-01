@@ -231,6 +231,16 @@ trait HandlesStudyPlanDisplay
             $targetSem->setAttribute('elective_groups', $groups);
         }
 
+        $historySemesterSet = SemesterHistory::where('user_id', $userId)
+            ->pluck('semester_number')
+            ->mapWithKeys(fn ($semester) => [(int) $semester => true]);
+        foreach ($plan->semesters as $semester) {
+            $semester->setAttribute(
+                'is_history_semester',
+                $historySemesterSet->has((int) $semester->semester_index)
+            );
+        }
+
         return $plan;
     }
 

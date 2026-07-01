@@ -231,11 +231,17 @@ class RecommendationService
         }
 
         if (!$frameworkId) {
-            return Subject::with(['prerequisites', 'relatedRelations', 'skillGroup'])->get();
+            return Subject::with(['prerequisites', 'corequisites', 'relatedRelations', 'skillGroup'])->get();
         }
 
         $curriculumSubjects = \App\Models\CurriculumSubject::where('curriculum_framework_id', $frameworkId)
-            ->with(['subject.prerequisites', 'subject.relatedRelations', 'subject.skillGroup', 'semester'])
+            ->with([
+                'subject.prerequisites',
+                'subject.corequisites',
+                'subject.relatedRelations',
+                'subject.skillGroup',
+                'semester',
+            ])
             ->get();
 
         $subjects = collect();

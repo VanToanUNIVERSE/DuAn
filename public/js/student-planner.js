@@ -571,6 +571,63 @@ function getFailedSubjectIds() {
     return failed;
 }
 
+/**
+ * Chọn các gợi ý theo đúng trần TC/kỳ hiện tại.
+ * Môn song hành được xem như một cụm: hoặc cùng được chọn, hoặc cùng bị bỏ qua.
+ */
+function limitSuggestionsByCredits(subjects, maxCredits) {
+    const ordered = Array.isArray(subjects) ? subjects : [];
+    const cap = Math.max(1, Number(maxCredits) || 18);
+    const byId = new Map(ordered.map(subject => [Number(subject.id), subject]));
+    const adjacency = new Map();
+
+    const connect = (left, right) => {
+        if (!byId.has(left) || !byId.has(right)) return;
+        if (!adjacency.has(left)) adjacency.set(left, new Set());
+        if (!adjacency.has(right)) adjacency.set(right, new Set());
+        adjacency.get(left).add(right);
+        adjacency.get(right).add(left);
+    };
+
+    ordered.forEach(subject => {
+        const subjectId = Number(subject.id);
+        (subject.corequisites || []).forEach(coreq => connect(subjectId, Number(coreq.id)));
+    });
+
+    const considered = new Set();
+    const selectedIds = new Set();
+    let usedCredits = 0;
+
+    for (const subject of ordered) {
+        const startId = Number(subject.id);
+        if (considered.has(startId)) continue;
+
+        const component = [];
+        const queue = [startId];
+        const componentSet = new Set();
+        while (queue.length > 0) {
+            const id = queue.shift();
+            if (componentSet.has(id) || !byId.has(id)) continue;
+            componentSet.add(id);
+            component.push(id);
+            (adjacency.get(id) || []).forEach(neighbor => queue.push(neighbor));
+        }
+
+        component.forEach(id => considered.add(id));
+        const componentCredits = component.reduce(
+            (sum, id) => sum + (parseInt(byId.get(id)?.credits) || 3),
+            0
+        );
+
+        if (usedCredits + componentCredits <= cap) {
+            component.forEach(id => selectedIds.add(id));
+            usedCredits += componentCredits;
+        }
+    }
+
+    return ordered.filter(subject => selectedIds.has(Number(subject.id)));
+}
+
 async function fetchSuggestions() {
     const semester = getCurrentSemester();
     const loader = document.getElementById('loader');
@@ -594,21 +651,15 @@ async function fetchSuggestions() {
         const retakeSubjs  = mappedData.filter(s => s.is_failed_subject);
         const regularSubjs = mappedData.filter(s => !s.is_failed_subject && s.can_study !== false);
 
-        // Môn rớt chiếm credit trước; môn mới chỉ lấp phần còn lại trong giới hạn
-        const retakeCredits  = retakeSubjs.reduce((sum, s) => sum + (parseInt(s.credits) || 3), 0);
-        const remainingSlots = Math.max(0, maxCredits - retakeCredits);
-
-        let currentTotal = 0;
-        const limitedRegular = [];
-        for (const subj of regularSubjs) {
-            const cr = parseInt(subj.credits) || 3;
-            if (currentTotal + cr <= remainingSlots) {
-                limitedRegular.push(subj);
-                currentTotal += cr;
-            }
-        }
-
-        mappedData = [...retakeSubjs, ...limitedRegular];
+        // Môn rớt được xét trước, nhưng toàn bộ danh sách (kể cả học lại) vẫn phải
+        // nằm trong trần hiện tại. Môn song hành được chọn theo cụm.
+        mappedData = limitSuggestionsByCredits([...retakeSubjs, ...regularSubjs], maxCredits);
+        const retakeCredits = mappedData
+            .filter(s => s.is_failed_subject)
+            .reduce((sum, s) => sum + (parseInt(s.credits) || 3), 0);
+        const currentTotal = mappedData
+            .filter(s => !s.is_failed_subject)
+            .reduce((sum, s) => sum + (parseInt(s.credits) || 3), 0);
         window.currentSuggestions = mappedData;
         window._suggestionMeta = { retakeCredits, regularCredits: currentTotal, maxCredits };
 
@@ -1256,7 +1307,9 @@ function _updateConfigGoalPreview(sems) {
             .reduce((sum, g) => sum + (parseInt((window.subjectMap || {})[g.subject_id]?.credits || 0)), 0);
     }
     const remaining = Math.max(0, (window.TOTAL_CREDITS || 130) - earned);
-    const completedSems = (window.currentActivePlan?.semesters?.filter(s => s.subjects.every(ss => ss.is_completed))?.length) || 0;
+    const completedSems = (window.currentActivePlan?.semesters?.filter(
+        s => s.is_history_semester || s.subjects.every(ss => ss.is_completed)
+    )?.length) || 0;
     const remSems = Math.max(1, sems - completedSems);
     const tcPerSem = Math.min(22, Math.max(12, Math.ceil(remaining / remSems)));
     el.innerHTML = `Cần đạt <strong>~${tcPerSem} TC/kỳ</strong> trong <strong>${remSems}</strong> kỳ còn lại (${remaining} TC chưa học).`;
@@ -2056,7 +2109,9 @@ function renderStudyPlan(plan) {
     // ── Tính trạng thái tốt nghiệp ────────────────────────────────
     const targetSems      = plan.target_semesters || plan.target_semester_count || 8;
     const totalPlanned    = Math.max(...plan.semesters.map(s => Number(s.semester_index) || 0));
-    const completedSems   = plan.semesters.filter(s => s.subjects.length > 0 && s.subjects.every(ss => ss.is_completed)).length;
+    const completedSems   = plan.semesters.filter(
+        s => s.is_history_semester || (s.subjects.length > 0 && s.subjects.every(ss => ss.is_completed))
+    ).length;
     const delta           = totalPlanned - targetSems;
 
     const yearLabel = n => {
@@ -2117,10 +2172,17 @@ function renderStudyPlan(plan) {
 
 
     // Xác định học kỳ hiện tại = kỳ đầu tiên có môn chưa hoàn thành (không phải retake)
-    let currentSemIdx = -1;
-    for (const sem of plan.semesters) {
-        const hasIncomplete = sem.subjects.some(ss => !ss.is_completed && !ss.is_retake);
-        if (hasIncomplete) { currentSemIdx = sem.semester_index; break; }
+    const historySemesterIndexes = plan.semesters
+        .filter(sem => sem.is_history_semester)
+        .map(sem => Number(sem.semester_index));
+    let currentSemIdx = historySemesterIndexes.length > 0
+        ? Math.max(...historySemesterIndexes) + 1
+        : -1;
+    if (currentSemIdx < 0) {
+        for (const sem of plan.semesters) {
+            const hasIncomplete = sem.subjects.some(ss => !ss.is_completed && !ss.is_retake);
+            if (hasIncomplete) { currentSemIdx = sem.semester_index; break; }
+        }
     }
 
     const maxCr = plan.tc_per_sem || 18;
@@ -2213,7 +2275,7 @@ function renderStudyPlan(plan) {
             // các lần rớt vào chung một kỳ thay vì bị khóa rải rác mỗi kỳ một môn.
             const canDrag = !isPast && (!hasGrade || (ss.is_retake && isFailed));
             const draggableAttr = canDrag
-                ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
+                ? `draggable="true" ondragstart="handleDragStart(event, ${sub.id}, ${ss.id}, ${sem.semester_index})" ondragend="handleDragEnd(event)"`
                 : '';
 
             const isSuggested = window.currentSuggestions && window.currentSuggestions.some(s => s.id === sub.id);
@@ -2353,10 +2415,13 @@ function renderStudyPlan(plan) {
                 if (ss && opt.selected) selectedCr += opt.credits;
             });
 
-            // Plan subject ids (for group drag header)
-            const planIds = group.options.filter(o => o.selected).map(o => o.id);
             const isRetakeGroup  = !!group.is_retake_group;
             const isHistoryGroup = !!group.is_history_group; // khung "Đã học" read-only ở kỳ cũ
+            // Kéo tiêu đề phải lấy TOÀN BỘ phương án đang học của nhóm, kể cả
+            // các môn hiện bị rải ở học kỳ khác. Môn đã đậu là lịch sử nên loại ra.
+            const planIds = group.options
+                .filter(o => o.effective_selected && !o.passed)
+                .map(o => o.id);
 
             let cardsHtml = '';
             group.options.forEach(opt => {
@@ -2423,13 +2488,28 @@ function renderStudyPlan(plan) {
                     </div>`;
                 } else if (opt.effective_selected && opt.selected_sem) {
                     // Phương án này đang được học ở học kỳ KHÁC (vd môn thay thế cho môn rớt,
-                    // đã xếp sang kỳ tương lai). Hiển thị trạng thái — điểm nhập ở thẻ kỳ đó.
+                    // đã xếp sang kỳ tương lai). Đây là thẻ THAM CHIẾU trong khung nhóm,
+                    // không phải một bản môn học thứ hai.
+                    const earlierSemesters = plan.semesters.filter(candidate =>
+                        Number(candidate.semester_index) >= Number(sem.semester_index)
+                        && Number(candidate.semester_index) < Number(opt.selected_sem)
+                    );
+                    const noDirectSlot = earlierSemesters.length > 0 && earlierSemesters.every(candidate =>
+                        (Number(candidate.expected_credits) || 0) + Number(opt.credits) > Number(maxCr)
+                    );
+                    const placementReason = noDirectSlot
+                        ? `Các kỳ trước không còn đủ ${opt.credits} TC trống`
+                        : 'Được rải theo tải tín chỉ và thứ tự ưu tiên';
                     cardsHtml += `
-                    <div class="study-plan-subject" style="padding:12px;border:1.5px solid #93c5fd;border-radius:8px;background:#eff6ff;position:relative;">
-                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:4px;font-weight:700;">Đang học · HK ${opt.selected_sem}</span>
+                    <div class="study-plan-subject"
+                         onclick="scrollToSubject(${opt.id})"
+                         title="Nhấn để tới thẻ môn thật ở Học kỳ ${opt.selected_sem}"
+                         style="padding:12px;border:1.5px dashed #93c5fd;border-radius:8px;background:#eff6ff;position:relative;cursor:pointer;">
+                        <span style="position:absolute;top:7px;left:10px;font-size:0.62rem;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:4px;font-weight:700;">Đã xếp ở HK ${opt.selected_sem}</span>
                         <div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;padding-top:18px;">${opt.name}</div>
                         <div style="font-size:0.8rem;color:var(--muted);">${opt.credits} TC | ${opt.code || 'Chung'}</div>
-                        <div style="font-size:0.72rem;color:#2563eb;margin-top:8px;">📅 Nhập điểm tại thẻ môn ở Học kỳ ${opt.selected_sem}</div>
+                        <div style="font-size:0.72rem;color:#64748b;margin-top:8px;">ℹ️ ${placementReason}</div>
+                        <div style="font-size:0.72rem;color:#2563eb;margin-top:4px;font-weight:600;">↳ Xem thẻ môn thật ở Học kỳ ${opt.selected_sem}</div>
                     </div>`;
                 } else {
                     // Alternative — same card look, dashed border, "Chọn học" button.
@@ -2521,12 +2601,14 @@ function renderStudyPlan(plan) {
 
 // ─── Drag and Drop Handlers ───
 let draggedSubjectId      = null;
+let draggedPlanSubjectId  = null;
 let draggedGroupSubjectIds = null;
 let draggedSourceSemester = null;
 
-function handleDragStart(event, subjectId, semesterIndex) {
+function handleDragStart(event, subjectId, planSubjectId, semesterIndex) {
     draggedGroupSubjectIds = null;
     draggedSubjectId = subjectId;
+    draggedPlanSubjectId = planSubjectId;
     draggedSourceSemester = semesterIndex;
     event.dataTransfer.effectAllowed = 'move';
     setTimeout(() => event.target.classList.add('is-dragging'), 0);
@@ -2534,6 +2616,7 @@ function handleDragStart(event, subjectId, semesterIndex) {
 
 function handleGroupDragStart(event, subjectIds, semesterIndex) {
     draggedSubjectId = null;
+    draggedPlanSubjectId = null;
     draggedGroupSubjectIds = subjectIds;
     draggedSourceSemester = semesterIndex;
     event.dataTransfer.effectAllowed = 'move';
@@ -2583,6 +2666,7 @@ function handleDropToPast(event, planId, targetSemesterIndex) {
 
     // Lưu lại thông tin drag vì user cần thời gian xác nhận
     const subjectId   = draggedSubjectId;
+    const planSubjectId = draggedPlanSubjectId;
     const groupIds    = draggedGroupSubjectIds ? [...draggedGroupSubjectIds] : null;
     const sourceSem   = draggedSourceSemester;
 
@@ -2619,6 +2703,7 @@ function handleDropToPast(event, planId, targetSemesterIndex) {
     modal.querySelector('#past-drop-cancel').onclick = () => {
         modal.remove();
         draggedSubjectId      = null;
+        draggedPlanSubjectId  = null;
         draggedGroupSubjectIds = null;
         draggedSourceSemester = null;
     };
@@ -2628,9 +2713,11 @@ function handleDropToPast(event, planId, targetSemesterIndex) {
         if (groupIds && groupIds.length) {
             draggedGroupSubjectIds = groupIds;
             draggedSubjectId = null;
+            draggedPlanSubjectId = null;
             await executeGroupMove(planId, targetSemesterIndex);
         } else {
             draggedSubjectId = subjectId;
+            draggedPlanSubjectId = planSubjectId;
             draggedGroupSubjectIds = null;
             await executeSubjectMove(planId, targetSemesterIndex);
         }
@@ -2654,6 +2741,7 @@ async function executeSubjectMove(planId, targetSemesterIndex) {
             body: JSON.stringify({
                 study_plan_id: planId,
                 subject_id: draggedSubjectId,
+                plan_subject_id: draggedPlanSubjectId,
                 target_semester_index: targetSemesterIndex
             })
         });
@@ -2676,6 +2764,7 @@ async function executeSubjectMove(planId, targetSemesterIndex) {
         loader.style.display = 'none';
         container.style.opacity = '1';
         draggedSubjectId = null;
+        draggedPlanSubjectId = null;
         draggedSourceSemester = null;
     }
 }
@@ -2717,6 +2806,7 @@ async function executeGroupMove(planId, targetSemesterIndex) {
         loader.style.display = 'none';
         container.style.opacity = '1';
         draggedSubjectId = null;
+        draggedPlanSubjectId = null;
         draggedGroupSubjectIds = null;
         draggedSourceSemester = null;
     }
@@ -3015,7 +3105,8 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function scrollToSubject(id) {
-    const el = document.getElementById('plan-subject-' + id);
+    const el = document.getElementById('plan-subject-' + id)
+        || document.querySelector(`[id^="plan-subject-${id}-"]`);
     if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.style.transition = 'box-shadow 0.3s';
@@ -3041,7 +3132,18 @@ async function applySuggestionsToPlan() {
     }
 
     const plan = window.currentActivePlan;
-    const subjectIds = window.currentSuggestions.map(s => s.id);
+    const creditCap = Number(plan.tc_per_sem) || 18;
+    const suggestionsToApply = limitSuggestionsByCredits(window.currentSuggestions, creditCap);
+    const subjectIds = suggestionsToApply.map(s => s.id);
+    const selectedCredits = suggestionsToApply.reduce(
+        (sum, subject) => sum + (parseInt(subject.credits) || 3),
+        0
+    );
+
+    if (subjectIds.length === 0) {
+        showToast(`Không có cụm môn phù hợp trong giới hạn ${creditCap} TC/kỳ.`, 'warning');
+        return;
+    }
 
     // Tìm học kỳ mục tiêu: học kỳ đầu tiên có môn học nhưng chưa có điểm (grade === null)
     // Hoặc nếu tất cả đều có điểm, lấy học kỳ tiếp theo
@@ -3065,7 +3167,7 @@ async function applySuggestionsToPlan() {
 
     const confirmed = await showConfirm(
         `Áp dụng gợi ý cho Học kỳ ${targetSemesterIndex}`,
-        `Các môn tương lai sẽ được sắp xếp lại tự động. Môn học lại sẽ được chuyển sang học kỳ này. Bạn có chắc chắn muốn tiếp tục không?`
+        `Áp dụng ${selectedCredits}/${creditCap} TC. Các môn tương lai sẽ được sắp xếp lại tự động. Bạn có chắc chắn muốn tiếp tục không?`
     );
     if (!confirmed) return;
 
@@ -3092,12 +3194,14 @@ async function applySuggestionsToPlan() {
         const resData = await res.json();
 
         if (!res.ok) {
-            throw new Error(resData.error || 'Lỗi hệ thống');
+            throw new Error(resData.message || resData.error || 'Lỗi hệ thống');
         }
 
         if (resData.success && resData.data) {
+            window.currentActivePlan = resData.data;
             renderStudyPlan(resData.data);
-            showToast('Đã áp dụng môn học vào học kỳ ' + targetSemesterIndex + '!', 'success');
+            showToast(resData.message || ('Đã áp dụng môn học vào học kỳ ' + targetSemesterIndex + '!'), 'success');
+            fetchSuggestions();
 
             const drawer = document.getElementById('suggestion-drawer');
             if (drawer) {
@@ -3758,6 +3862,7 @@ async function applyAdvisoryAction(redistribute) {
             window.currentActivePlan = resData.data;
             renderStudyPlan(resData.data);
             showToast(redistribute ? `Đã rải lại lộ trình với ${tc} TC/kỳ` : `Đã cập nhật giới hạn ${tc} TC/kỳ`, 'success');
+            fetchSuggestions();
         } else {
             showToast('Lỗi khi áp dụng tư vấn', 'error');
         }

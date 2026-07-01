@@ -13,6 +13,7 @@ use App\Services\Plan\PlanDataService;
 use App\Services\Plan\SchedulerService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class StudyPlanService
 {
@@ -69,6 +70,7 @@ class StudyPlanService
             $startSem         = max(1, $lastHistorySem + 1);
 
             $schedule  = $this->scheduler->schedule($toSchedule, $alreadyPlanned, $failedIds, $startSem, $tcPerSem, $targetSemesters, $user, $groupIds);
+            $this->assertCompleteSchedule($toSchedule, $schedule);
             $totalSems = $this->persistSchedule($plan, $schedule, $passedIds, $failedIds);
             $plan->update(['target_semester_count' => max($totalSems, $targetSemesters)]);
 
@@ -187,6 +189,7 @@ class StudyPlanService
             $plan->load('semesters.subjects');
             $this->deduplicateRetakes($plan);
             $this->deduplicateSubjects($plan);
+            $this->restoreHistorySubjects($plan, $userId);
             $plan->load('semesters.subjects');
 
             // Gom subject_id đã có trong các kỳ TRƯỚC fromSem
@@ -223,25 +226,27 @@ class StudyPlanService
             $toSchedule = $this->pruneElectiveSubjects($toSchedule, $passedIds, $allSubjects);
 
             $startSem = $fromSem;
+            $failedIdsForScheduler = $failedIds;
 
             // Ghim môn được chỉ định vào đúng $fromSem (applySuggestions)
             if (!empty($pinnedSubjectIds)) {
-                $priorSemIds     = $plan->semesters->where('semester_index', '<', $fromSem)->pluck('id');
                 $pinnedCreditMap = Subject::whereIn('id', $pinnedSubjectIds)->pluck('credits', 'id')->toArray();
+                $pinnedCredits   = (int) array_sum(
+                    array_map(fn($id) => (int)($pinnedCreditMap[$id] ?? 3), $pinnedSubjectIds)
+                );
+                if ($pinnedCredits > $tcPerSem) {
+                    throw ValidationException::withMessages([
+                        'subject_ids' => "Tổng môn gợi ý {$pinnedCredits} TC vượt giới hạn {$tcPerSem} TC/kỳ.",
+                    ]);
+                }
                 $pinnedSem       = StudyPlanSemester::create([
                     'study_plan_id'    => $plan->id,
                     'semester_index'   => $fromSem,
-                    'expected_credits' => (int) array_sum(
-                        array_map(fn($id) => (int)($pinnedCreditMap[$id] ?? 3), $pinnedSubjectIds)
-                    ),
+                    'expected_credits' => $pinnedCredits,
                 ]);
 
                 foreach ($pinnedSubjectIds as $subjectId) {
                     $isRetake = in_array($subjectId, $failedIds);
-                    if ($isRetake && $priorSemIds->isNotEmpty()) {
-                        StudyPlanSubject::whereIn('study_plan_semester_id', $priorSemIds)
-                            ->where('subject_id', $subjectId)->delete();
-                    }
                     StudyPlanSubject::create([
                         'study_plan_semester_id' => $pinnedSem->id,
                         'subject_id'             => $subjectId,
@@ -252,10 +257,16 @@ class StudyPlanService
 
                 $alreadyPlanned = array_merge($alreadyPlanned, $pinnedSubjectIds);
                 $toSchedule     = $toSchedule->whereNotIn('id', $pinnedSubjectIds)->values();
+                // Môn rớt đã được ghim vào kỳ hiện tại giờ là một bước đã xếp trong
+                // chuỗi tiên quyết. Không truyền chúng như "failed chưa xếp" nữa,
+                // nếu không SchedulerService sẽ loại khỏi plannedSet và khóa toàn bộ
+                // các môn phụ thuộc ở những kỳ sau.
+                $failedIdsForScheduler = array_values(array_diff($failedIds, $pinnedSubjectIds));
                 $startSem       = $fromSem + 1;
             }
 
-            $rest      = $this->scheduler->schedule($toSchedule, $alreadyPlanned, $failedIds, $startSem, $tcPerSem, $scheduleUntil, $user, $groupIds);
+            $rest      = $this->scheduler->schedule($toSchedule, $alreadyPlanned, $failedIdsForScheduler, $startSem, $tcPerSem, $scheduleUntil, $user, $groupIds);
+            $this->assertCompleteSchedule($toSchedule, $rest);
             $totalSems = $this->persistSchedule($plan, $rest, $passedIds, $failedIds);
             $plan->update(['target_semester_count' => max($totalSems, $fromSem)]);
 
@@ -442,6 +453,75 @@ class StudyPlanService
         }
 
         return $lastSem;
+    }
+
+    /**
+     * Khôi phục các dòng lịch sử từng bị phiên bản cũ xóa khi chuyển môn rớt sang
+     * học kỳ học lại. Lần học cũ phải luôn nằm nguyên ở học kỳ đã hoàn thành.
+     */
+    private function restoreHistorySubjects(StudyPlan $plan, int $userId): void
+    {
+        $histories = SemesterHistory::where('user_id', $userId)
+            ->with('items.subject')
+            ->orderBy('semester_number')
+            ->get();
+
+        foreach ($histories as $history) {
+            $semester = StudyPlanSemester::firstOrCreate(
+                [
+                    'study_plan_id'  => $plan->id,
+                    'semester_index' => $history->semester_number,
+                ],
+                ['expected_credits' => $history->total_credits ?? 0]
+            );
+            $semester->update(['expected_credits' => $history->total_credits ?? 0]);
+
+            foreach ($history->items as $item) {
+                if (!$item->subject) continue;
+
+                $row = StudyPlanSubject::where('study_plan_semester_id', $semester->id)
+                    ->where('subject_id', $item->subject_id)
+                    ->where('is_retake', false)
+                    ->first();
+
+                $values = [
+                    'subject_grade' => $item->grade,
+                    'is_completed'  => $item->status === 'pass',
+                ];
+
+                if ($row) {
+                    $row->update($values);
+                } else {
+                    StudyPlanSubject::create([
+                        'study_plan_semester_id' => $semester->id,
+                        'subject_id'             => $item->subject_id,
+                        'is_retake'              => false,
+                        ...$values,
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Không bao giờ lưu một kế hoạch bị thiếu môn chỉ vì scheduler gặp deadlock.
+     * Toàn bộ thao tác đang nằm trong transaction nên exception sẽ khôi phục kế
+     * hoạch cũ thay vì để người dùng thấy một lộ trình 5–6 kỳ giả tạo.
+     */
+    private function assertCompleteSchedule(Collection $subjects, array $schedule): void
+    {
+        $scheduledIds = collect($schedule)->flatten()->map(fn ($id) => (int) $id)->unique();
+        $missing = $subjects->reject(fn ($subject) => $scheduledIds->contains((int) $subject->id));
+
+        if ($missing->isEmpty()) return;
+
+        $preview = $missing->take(5)->pluck('name')->implode(', ');
+        $remaining = max(0, $missing->count() - 5);
+        $suffix = $remaining > 0 ? " và {$remaining} môn khác" : '';
+
+        throw ValidationException::withMessages([
+            'schedule' => "Không thể xếp đủ {$missing->count()} môn ({$preview}{$suffix}). Kế hoạch cũ được giữ nguyên.",
+        ]);
     }
 
     private function cloneCurriculumFramework(StudyPlan $plan, Collection $allSubjects): void
