@@ -73,7 +73,7 @@ class StudyPlanService
             $toSchedule = $allSubjects->reject(fn($s) =>
                 in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds)
             );
-            $toSchedule = $this->pruneElectiveSubjects($toSchedule, $passedIds);
+            $toSchedule = $this->pruneElectiveSubjects($toSchedule, $passedIds, $allSubjects);
 
             $passedHistoryIds = array_diff($historySubjectIds, $failedIds);
             $alreadyPlanned   = array_unique(array_merge($passedIds, $passedHistoryIds));
@@ -142,7 +142,7 @@ class StudyPlanService
         $toSchedule = $allSubjects->reject(fn($s) =>
             in_array($s->id, $passedIds) && in_array($s->id, $historySubjectIds)
         );
-        $remainingCredits = $this->pruneElectiveSubjects($toSchedule, $passedIds)
+        $remainingCredits = $this->pruneElectiveSubjects($toSchedule, $passedIds, $allSubjects)
             ->sum(fn($s) => (int)($s->credits ?? 3));
 
         return max(12, min(22, (int) ceil($remainingCredits / $remainingSems)));
@@ -219,7 +219,7 @@ class StudyPlanService
             $toSchedule = $allSubjects->reject(fn($s) =>
                 in_array($s->id, $alreadyPlanned) && !in_array($s->id, $failedIds)
             );
-            $toSchedule = $this->pruneElectiveSubjects($toSchedule, $passedIds);
+            $toSchedule = $this->pruneElectiveSubjects($toSchedule, $passedIds, $allSubjects);
 
             $startSem = $fromSem;
 
@@ -538,10 +538,17 @@ class StudyPlanService
      * Lọc nhóm tự chọn: chỉ giữ đủ TC cần thiết cho mỗi nhóm.
      * Môn bắt buộc (elective_group_id = null) luôn được giữ.
      */
-    private function pruneElectiveSubjects(Collection $subjects, array $passedIds): Collection
+    private function pruneElectiveSubjects(Collection $subjects, array $passedIds, ?Collection $progressSource = null): Collection
     {
+        // TC đã đậu của mỗi nhóm phải đếm từ TOÀN BỘ danh sách môn ($progressSource),
+        // không chỉ từ $subjects sẽ được rải: ở redistributeFrom, môn tự chọn ĐÃ ĐẬU đã bị
+        // loại khỏi $subjects (nằm trong alreadyPlanned) → nếu chỉ đếm trong $subjects thì
+        // groupProgress = 0, prune tưởng nhóm chưa có TC nào và GIỮ THÊM môn thay thế
+        // → nhóm bị chọn dư (vd 8/4 TC). Mặc định dùng chính $subjects khi không truyền.
+        $progressSource ??= $subjects;
+
         $groupProgress = [];
-        foreach ($subjects as $subject) {
+        foreach ($progressSource as $subject) {
             if ($subject->elective_group_id && in_array($subject->id, $passedIds)) {
                 $gid = $subject->elective_group_id;
                 $groupProgress[$gid] = ($groupProgress[$gid] ?? 0) + (int)($subject->credits ?? 3);

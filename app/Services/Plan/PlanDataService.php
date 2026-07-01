@@ -34,11 +34,33 @@ class PlanDataService
 
         $allSubjects = $this->loadSubjectsForUser($userId);
 
-        $historySubjectIds = SemesterHistory::where('user_id', $userId)
+        // Môn trong LỊCH SỬ học kỳ cũng phải tính vào passed/failed như UserGrade:
+        // nếu không, môn đã đậu trong lịch sử (nhưng không có bản ghi UserGrade — vd sau
+        // khi reset demo) sẽ bị coi là "chưa học" → xếp LẶP (trùng kỳ lịch sử + kỳ mới) và
+        // nhóm tự chọn bị chọn DƯ (prune không đếm được TC đã đậu → giữ thêm môn thay thế).
+        $historyItems = SemesterHistory::where('user_id', $userId)
             ->with('items')
             ->get()
-            ->flatMap(fn($h) => $h->items->pluck('subject_id'))
-            ->unique()->toArray();
+            ->flatMap(fn($h) => $h->items);
+
+        $historySubjectIds = $historyItems->pluck('subject_id')->unique()->toArray();
+
+        $historyPassed = $historyItems
+            ->filter(fn($it) => ($it->grade !== null && $it->grade >= 5.0)
+                || in_array($it->status, ['pass', 'passed']))
+            ->pluck('subject_id')->toArray();
+
+        $historyFailed = $historyItems
+            ->filter(fn($it) => $it->grade !== null && $it->grade < 5.0
+                && !in_array($it->status, ['pass', 'passed']))
+            ->pluck('subject_id')->toArray();
+
+        $passedIds = array_values(array_unique(array_merge($passedIds, $historyPassed)));
+        // Rớt = rớt ở bất kỳ đâu, nhưng nếu ĐÃ đậu ở nơi khác (học lại đạt) thì bỏ khỏi failed.
+        $failedIds = array_values(array_diff(
+            array_unique(array_merge($failedIds, $historyFailed)),
+            $passedIds
+        ));
 
         return [$allSubjects, $passedIds, $failedIds, $historySubjectIds];
     }

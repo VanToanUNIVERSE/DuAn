@@ -97,46 +97,6 @@
                 </div>
             </div>
             
-            {{-- Advisor Section: Gợi ý điều chỉnh mode lộ trình --}}
-            <div class="srm-advisor-section" id="srm-advisor-section"
-                 style="display:none; background: linear-gradient(135deg, #fefce8 0%, #f0fdf4 100%); border: 1px solid #d1fae5; border-radius: 12px; margin: 0 24px 4px; overflow: hidden;">
-
-                {{-- Header phân biệt với phần gợi ý TC bên trên --}}
-                <div style="padding: 12px 16px 0; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1rem;">🧠</span>
-                    <div>
-                        <div style="font-size: 0.88rem; font-weight: 700; color: var(--ink);">Gợi Ý Thay Đổi Cường Độ Học</div>
-                        <div style="font-size: 0.75rem; color: var(--muted); margin-top: 1px;">Áp dụng cho <strong>toàn bộ lộ trình</strong> còn lại — khác với gợi ý TC/kỳ ở trên</div>
-                    </div>
-                </div>
-
-                <div id="srm-advisor-message" style="font-size: 0.88rem; color: var(--muted); padding: 10px 16px 0; line-height: 1.6;">
-                    <!-- Message goes here -->
-                </div>
-
-                <div id="srm-adjustment-prompt"
-                     style="display:none; padding: 12px 16px; margin-top: 10px; background: rgba(255,255,255,0.7); border-top: 1px solid #d1fae5; gap: 8px; justify-content: space-between; align-items: center;">
-                    {{-- Impact warning --}}
-                    <div style="font-size: 0.75rem; color: #6b7280; display: flex; align-items: center; gap: 5px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:14px;height:14px;color:#d97706;flex-shrink:0;">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"/>
-                        </svg>
-                        Sẽ tái phân bổ lại toàn bộ môn học còn lại
-                    </div>
-                    <div style="display: flex; gap: 8px; flex-shrink: 0;">
-                        <button class="btn-secondary" onclick="closeSemResultModal()"
-                                style="padding: 6px 14px; font-size: 0.82rem; border-radius: 8px;">
-                            Bỏ qua
-                        </button>
-                        <button class="btn-primary" onclick="applyAutoAdjustment()"
-                                style="padding: 6px 14px; font-size: 0.82rem; background: #10b981; border-radius: 8px; display: flex; align-items: center; gap: 5px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-                            Áp dụng & Tái lộ trình
-                        </button>
-                    </div>
-                </div>
-            </div>
-
             <div class="srm-subj-section" id="srm-subj-section"></div>
 
             <div class="srm-footer" style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--hairline);">
@@ -891,12 +851,31 @@
                             <div class="card-heading">✨ Tạo Kế Hoạch Học Tập</div>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:16px;">
-                            <p style="font-size:0.85rem; color:var(--muted); margin:0;">Mục tiêu tốt nghiệp được cài trong <strong>⚙️ Cấu Hình Chương Trình</strong>. Hệ thống sẽ tự động phân bổ tín chỉ theo mục tiêu đó.</p>
+                            <p style="font-size:0.85rem; color:var(--muted); margin:0;">Chọn mục tiêu tốt nghiệp — hệ thống sẽ tự động phân bổ tín chỉ cho từng học kỳ.</p>
                             <div>
-                                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Tên kế hoạch <span style="color:var(--red);">*</span></label>
-                                <input type="text" id="planner-name" class="ob-grade-input"
-                                    placeholder="Ví dụ: Kế hoạch ra trường 4 năm"
-                                    style="width: 100%; text-align:left; padding:0 12px; height:42px;">
+                                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:8px;">🎓 Mục tiêu tốt nghiệp <span style="color:var(--red);">*</span></label>
+                                <div id="plan-goal-cards" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                                    <div class="plan-goal-card" data-sems="6" onclick="selectPlanGoal(6,this)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                                        <div style="font-weight:700; font-size:0.88rem;">3 Năm</div>
+                                        <div style="font-size:0.75rem; color:var(--muted);">6 học kỳ</div>
+                                    </div>
+                                    <div class="plan-goal-card" data-sems="7" onclick="selectPlanGoal(7,this)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                                        <div style="font-weight:700; font-size:0.88rem;">3.5 Năm</div>
+                                        <div style="font-size:0.75rem; color:var(--muted);">7 học kỳ</div>
+                                    </div>
+                                    <div class="plan-goal-card selected" data-sems="8" onclick="selectPlanGoal(8,this)" style="padding:8px 10px; border:2px solid var(--brand-mint); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center; background:rgba(155,217,177,0.15);">
+                                        <div style="font-weight:700; font-size:0.88rem;">4 Năm <span style="font-size:0.68rem; background:var(--brand-mint); color:var(--ink); padding:1px 5px; border-radius:99px;">Chuẩn</span></div>
+                                        <div style="font-size:0.75rem; color:var(--muted);">8 học kỳ</div>
+                                    </div>
+                                    <div class="plan-goal-card" data-sems="9" onclick="selectPlanGoal(9,this)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                                        <div style="font-weight:700; font-size:0.88rem;">4.5 Năm</div>
+                                        <div style="font-size:0.75rem; color:var(--muted);">9 học kỳ</div>
+                                    </div>
+                                    <div class="plan-goal-card" data-sems="10" onclick="selectPlanGoal(10,this)" style="padding:8px 10px; border:2px solid var(--hairline); border-radius:10px; cursor:pointer; transition:all .15s; text-align:center;">
+                                        <div style="font-weight:700; font-size:0.88rem;">5 Năm</div>
+                                        <div style="font-size:0.75rem; color:var(--muted);">10 học kỳ</div>
+                                    </div>
+                                </div>
                             </div>
                             <button class="btn-primary" onclick="generateStudyPlan()" style="height: 42px; width:100%; justify-content:center; margin-top:4px;">✨ Tạo kế hoạch</button>
                         </div>

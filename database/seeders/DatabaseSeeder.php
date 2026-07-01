@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             SubjectSeeder::class,
             SkillGroupFocusSeeder::class,
             SubjectRelationSeeder::class,
+            ChuyenSauElectiveSeeder::class,
             UserSeeder::class,
             FacultyMajorClassSeeder::class,
             MajorStudentsSeeder::class,

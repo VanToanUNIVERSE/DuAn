@@ -941,40 +941,6 @@ function showSemResultModal(semNumber, snapshot) {
     const creditsThisSem = snapshot.reduce((s, c) => s + (c.credits || 0), 0);
     const passedCredits = passSubjects.reduce((s, c) => s + (c.credits || 0), 0);
     let totalEarned = 0;
-    
-    // Nếu có evaluation từ backend (gọi từ completeSemester)
-    if (_semEvaluation) {
-        const evalData = _semEvaluation;
-        const modeDisplayMap = {
-            fast:   { icon: '🚀', label: 'Tăng Tốc',  color: '#10b981' },
-            normal: { icon: '⚖️', label: 'Cân Bằng',  color: '#1a3a3a' },
-            slow:   { icon: '🌱', label: 'Học Nhẹ',   color: '#d97706' },
-        };
-        const modeInfo = modeDisplayMap[evalData.suggested_mode] || modeDisplayMap['normal'];
-        const currentMode = window.currentActivePlan?.mode || 'normal';
-        const currentInfo = modeDisplayMap[currentMode] || modeDisplayMap['normal'];
-        const needsChange = evalData.status !== 'KEEP' && evalData.suggested_mode !== currentMode;
-
-        document.getElementById('srm-advisor-section').style.display = 'block';
-        document.getElementById('srm-advisor-message').innerHTML = `
-            <p style="margin:0 0 10px 0;">${evalData.message}</p>
-            <div style="display:flex; align-items:center; gap:12px; background:#f8fafc; border-radius:8px; padding:10px 14px;">
-                <div style="font-size:0.85rem; color:var(--muted);">Mode hiện tại:</div>
-                <span style="font-weight:700; color:${currentInfo.color}">${currentInfo.icon} ${currentInfo.label}</span>
-                ${needsChange ? `<span style="color:var(--muted); font-size:1rem;">→</span>
-                <div style="font-size:0.85rem; color:var(--muted);">Gợi ý:</div>
-                <span style="font-weight:700; color:${modeInfo.color}">${modeInfo.icon} ${modeInfo.label}</span>` : ''}
-            </div>
-        `;
-
-        if (needsChange) {
-            document.getElementById('srm-adjustment-prompt').style.display = 'flex';
-        } else {
-            document.getElementById('srm-adjustment-prompt').style.display = 'none';
-        }
-    } else {
-        document.getElementById('srm-advisor-section').style.display = 'none';
-    }
 
     if (window.currentActivePlan && window.currentActivePlan.semesters) {
         window.currentActivePlan.semesters.forEach(sem => {
@@ -1260,6 +1226,17 @@ function _updateConfigGoalPreview(sems) {
 // Aliases for backward compat
 function selectGoal(sems) { selectConfigGoal(sems); }
 function selectAdjGoal(sems) { selectConfigGoal(sems); }
+
+// Chọn mục tiêu ngay trên thẻ "Tạo kế hoạch" (thay cho ô nhập tên kế hoạch)
+function selectPlanGoal(sems, el) {
+    window._selectedGoalSems = sems;
+    document.querySelectorAll('#plan-goal-cards .plan-goal-card').forEach(c => {
+        const isThis = +c.dataset.sems === sems;
+        c.style.border = isThis ? '2px solid var(--brand-mint)' : '2px solid var(--hairline)';
+        c.style.background = isThis ? 'rgba(155,217,177,0.15)' : '';
+        c.classList.toggle('selected', isThis);
+    });
+}
 
 async function applyTargetAdjustment() {
     if (!window.currentActivePlan) return;
@@ -1984,12 +1961,9 @@ async function deleteSavedPlan(planId, event) {
 
 async function generateStudyPlan() {
     const targetSemesters = window._selectedGoalSems || 8;
-    const name = document.getElementById('planner-name').value.trim();
+    // Mỗi sinh viên chỉ có một kế hoạch → tên đặt tự động theo mục tiêu (đã bỏ ô nhập tên).
+    const name = `Kế hoạch tốt nghiệp ${targetSemesters} kỳ`;
 
-    if (!name) {
-        showToast('Vui lòng nhập tên kế hoạch!', 'error');
-        return;
-    }
     const loader = document.getElementById('planner-loader');
     const container = document.getElementById('study-plan-results');
 

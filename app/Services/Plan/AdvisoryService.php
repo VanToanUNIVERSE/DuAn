@@ -105,11 +105,30 @@ class AdvisoryService
         $newTcPerSem = max(12, min(22, $newTcPerSem));
         $mode        = $newTcPerSem >= 20 ? 'fast' : ($newTcPerSem <= 14 ? 'slow' : 'normal');
 
-        $plan->update(['tc_per_sem' => $newTcPerSem, 'mode' => $mode]);
+        $lastHistory = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
+        $currentSem  = max(1, $lastHistory + 1);
+
+        $update = ['tc_per_sem' => $newTcPerSem, 'mode' => $mode];
 
         if ($redistribute) {
-            $lastHistory = SemesterHistory::where('user_id', $userId)->max('semester_number') ?? 0;
-            $currentSem  = max(1, $lastHistory + 1);
+            // Đổi TC/kỳ ⇒ TÍNH LẠI số kỳ mục tiêu: nhiều TC/kỳ hơn ⇒ ít kỳ hơn (rút ngắn lộ trình).
+            // Nếu giữ nguyên target cũ, trần động = TC còn lại / số kỳ cũ → rải đều ~18 TC dù đặt
+            // trần 22 → KHÔNG rút ngắn được (đây là lý do "đặt 21-22 nhưng chỉ rải 16-18").
+            $plan->loadMissing('semesters.subjects.subject');
+            $remainingCredits = 0;
+            foreach ($plan->semesters as $sem) {
+                if ($sem->semester_index < $currentSem) continue;   // các kỳ đã xong: giữ nguyên
+                foreach ($sem->subjects as $ss) {
+                    $remainingCredits += (int) ($ss->subject->credits ?? 3);
+                }
+            }
+            $neededSems = max(1, (int) ceil($remainingCredits / $newTcPerSem));
+            $update['target_semesters'] = ($currentSem - 1) + $neededSems;
+        }
+
+        $plan->update($update);
+
+        if ($redistribute) {
             return $this->planService->redistributeFrom($plan->fresh(), $currentSem);
         }
 

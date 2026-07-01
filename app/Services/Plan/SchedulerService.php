@@ -46,13 +46,19 @@ class SchedulerService
             $isOdd = ($semIndex % 2) !== 0;
 
             // ── Trần động: rải đều TC còn lại trên số học kỳ còn lại trong mục tiêu ──
-            // Tránh dồn tải vào các kỳ đầu (đầy trần) rồi để kỳ cuối quá ít TC.
-            // Khi còn dư công suất → cap thấp hơn tcPerSem để chia đều;
-            // khi tổng TC vượt khả năng của mục tiêu → balancedCap ≥ tcPerSem nên vẫn nhồi tới trần.
+            // balancedCap = TC còn lại / số kỳ còn lại = mức chia đều lý tưởng cho đúng
+            // số kỳ mục tiêu. Đây là trần CHÍNH, KHÔNG kẹp bởi tcPerSem:
+            //  - Kỳ đầu bị tiên quyết chặn → nạp thiếu → các kỳ sau balancedCap tự tăng
+            //    để "đuổi kịp", nhờ vậy tổng vẫn khớp mục tiêu, không tràn sang kỳ dư.
+            //  - Nếu kẹp min(tcPerSem, …) như trước: khi tcPerSem thấp, trần không tăng nổi
+            //    → lịch tràn quá số kỳ mục tiêu, kỳ cuối bị đói TC (bug lệch tín chỉ).
+            // tcPerSem giờ chỉ dùng để CHỌN số kỳ mục tiêu (fast/normal/slow), không kẹp trần.
+            // hardMax chặn trên để tránh nhồi quá tải khi mục tiêu đặt quá ngắn.
             $remainingCredits = array_sum(array_map(fn($s) => (int)($s->credits ?? 3), $remaining));
             $semestersLeft    = max(1, $targetSemesters - $semIndex + 1);
             $balancedCap      = (int) ceil($remainingCredits / $semestersLeft);
-            $effectiveCap     = min($tcPerSem, max(1, $balancedCap));
+            $hardMax          = max($tcPerSem, 24);
+            $effectiveCap     = min($hardMax, max(1, $balancedCap));
 
             $available = [];
             foreach ($remaining as $id => $subject) {
@@ -79,20 +85,37 @@ class SchedulerService
             $semCredits    = 0;
 
             foreach ($available as $subject) {
+                // $available là snapshot đầu kỳ; một môn có thể đã bị KÉO vào kỳ này với tư
+                // cách môn song hành của môn xử lý trước đó → bỏ qua để không xếp LẶP.
+                if (isset($plannedSet[$subject->id]) || !isset($remaining[$subject->id])) continue;
+
                 $credits = (int)($subject->credits ?? 3);
 
-                $coreqEstimate = 0;
+                // Gom các môn song hành TRỰC TIẾP (cùng chẵn/lẻ) sẽ bị kéo theo ngay,
+                // để tính ĐỦ tín chỉ vào trần — tránh kỳ đầu vượt trần rồi đói kỳ cuối.
+                $coreqIds     = [];
+                $coreqCredits = 0;
                 foreach ($subject->corequisites ?? [] as $coreq) {
-                    if (isset($remaining[$coreq->id]) && !isset($plannedSet[$coreq->id])) {
-                        $coreqEstimate += (int)($remaining[$coreq->id]->credits ?? 3);
-                    }
+                    if (!isset($remaining[$coreq->id]) || isset($plannedSet[$coreq->id])) continue;
+                    $co        = $remaining[$coreq->id];
+                    $coOffered = $co->offered_in ?? null;
+                    if ($isOdd && $coOffered === '2') continue;   // môn TH chỉ mở kỳ chẵn
+                    if (!$isOdd && $coOffered === '1') continue;   // môn TH chỉ mở kỳ lẻ
+                    $coreqIds[]    = $coreq->id;
+                    $coreqCredits += (int)($co->credits ?? 3);
                 }
 
-                if ($semCredits + $credits + $coreqEstimate <= $effectiveCap) {
+                if ($semCredits + $credits + $coreqCredits <= $effectiveCap) {
                     $semSubjectIds[]          = $subject->id;
-                    $semCredits              += $credits;
+                    $semCredits              += $credits + $coreqCredits; // tính LUÔN môn song hành
                     $plannedSet[$subject->id] = true;
                     unset($remaining[$subject->id]);
+
+                    foreach ($coreqIds as $cid) {                  // kéo môn song hành vào cùng kỳ ngay
+                        $semSubjectIds[]  = $cid;
+                        $plannedSet[$cid] = true;
+                        unset($remaining[$cid]);
+                    }
                 }
             }
 
@@ -140,6 +163,28 @@ class SchedulerService
                 }
             }
 
+            // ── Môn "chốt" đủ điều kiện NHỜ coursework vừa xếp kỳ này ────────────
+            // Thực tập/Khóa luận (requirement_type completed_*) trở nên khả thi ngay khi
+            // môn coursework cuối được xếp ở CHÍNH kỳ này. Vì $available được chốt từ ĐẦU kỳ
+            // (trước khi đặt), chúng sẽ bị đẩy sang kỳ SAU (dư ngoài mục tiêu). Xét lại với
+            // plannedSet đã cập nhật để xếp luôn vào kỳ này → gom vào cuối lộ trình, tránh
+            // đẻ thêm học kỳ chỉ để chứa khóa luận.
+            $lateChanged = true;
+            while ($lateChanged) {
+                $lateChanged = false;
+                foreach ($remaining as $id => $subject) {
+                    $req = $subject->requirement_type ?? null;
+                    if (!$req || $req === 'none') continue;               // chỉ môn chốt
+                    if (!$this->canPlace($subject, $plannedSet, $isOdd, $groupIds, $subjects)) continue;
+
+                    $semSubjectIds[]  = $id;
+                    $semCredits      += (int)($subject->credits ?? 3);
+                    $plannedSet[$id]  = true;
+                    unset($remaining[$id]);
+                    $lateChanged      = true;                             // mở khoá môn chốt phụ thuộc nhau
+                }
+            }
+
             $schedule[$semIndex] = $semSubjectIds;
             $semIndex++;
         }
@@ -164,13 +209,25 @@ class SchedulerService
         $req = $subject->requirement_type ?? null;
         if (!$req || $req === 'none') return true;
 
+        // Các môn "chốt" (Thực tập, Khóa luận…) có requirement_type completed_* và thường
+        // thuộc chính nhóm chuyên ngành. Chúng chỉ nên yêu cầu COURSEWORK thường hoàn thành,
+        // KHÔNG gate lẫn nhau — nếu không sẽ:
+        //  - tự yêu cầu chính mình (thuộc nhóm đang xét) → không bao giờ xếp được;
+        //  - Thực tập ⟷ Khóa luận yêu cầu chéo nhau → deadlock vòng → cả hai bị bỏ rơi.
+        // → Loại self VÀ mọi môn cũng có requirement_type (gated) khỏi tập yêu cầu.
+        $isGated = fn($s) => !empty($s->requirement_type) && $s->requirement_type !== 'none';
+
         $requiredIds = match ($req) {
-            'completed_basic'       => $allSubjects->whereIn('program_group_id', $groupIds['basic'])->pluck('id')->all(),
-            'completed_major'       => $allSubjects->whereIn('program_group_id', $groupIds['major'])->pluck('id')->all(),
-            'completed_specialized' => $allSubjects->whereIn('program_group_id', $groupIds['specialized'])->pluck('id')->all(),
-            'completed_all'         => $allSubjects->where('id', '!=', $subject->id)->pluck('id')->all(),
-            default                 => [],
+            'completed_basic'       => $allSubjects->whereIn('program_group_id', $groupIds['basic']),
+            'completed_major'       => $allSubjects->whereIn('program_group_id', $groupIds['major']),
+            'completed_specialized' => $allSubjects->whereIn('program_group_id', $groupIds['specialized']),
+            'completed_all'         => $allSubjects,
+            default                 => collect(),
         };
+        $requiredIds = $requiredIds
+            ->where('id', '!=', $subject->id)
+            ->reject($isGated)
+            ->pluck('id')->all();
 
         foreach ($requiredIds as $id) {
             if (!isset($plannedSet[$id])) return false;
